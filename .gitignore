@@ -1,8 +1,68 @@
-bin/
-obj/
-/packages/
+## Build
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Ll]og/
+[Ll]ogs/
+*.log
+artifacts/
+_buildcheck/
+compilecheck*/
+build_out*.txt
+build_rc.txt
+build_stdout.txt
+build_stderr.txt
+_build.ps1
+_gs.txt
+_lf.txt
+_ci.txt
+
+## NuGet / packages
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+project.lock.json
+project.fragment.lock.json
+*.nuget.props
+*.nuget.targets
+
+## IDE / OS
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.DotSettings.user
 riderModule.iml
 /_ReSharper.Caches/
-logs/
-_buildcheck/
-wwwroot/pdf_temp/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## ASP.NET / publish
+publish/
+out/
+*.publishproj
+*.pubxml.user
+**/Properties/PublishProfiles/*.pubxml.user
+**/App_Data/
+
+## Local temp / exports
+**/wwwroot/pdf_temp/**
+!**/wwwroot/pdf_temp/**/.gitkeep
+**/_tpl_unz/
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+## Secrets / local overrides (keep base appsettings tracked)
+**/appsettings.*.local.json
+**/secrets.json
+.env
+.env.*
+!*.example
