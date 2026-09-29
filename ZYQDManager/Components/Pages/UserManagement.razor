@@ -1,0 +1,963 @@
+@page "/UserManagement"
+@page "/personnel"
+@rendermode InteractiveServer
+@using ZYQDManager.Components.Pages.Contract
+@inject CentralAuthService Auth
+@inject CentralUserManagementService UsersApi
+@inject CentralUserInformationService UserInfo
+@inject UserCustomerAssignService CustomerAssign
+@inject CotractBaseService CotractBase
+
+<PageTitle>人员管理</PageTitle>
+
+<div class="personnel-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="personnel-filter">
+                <MudSelect T="string" @bind-Value="_filterColumn" Label="条件" Variant="Variant.Outlined" Margin="Margin.Dense" Class="personnel-filter-select">
+                    <MudSelectItem Value="@("EmpNo")">工号</MudSelectItem>
+                    <MudSelectItem Value="@("DisplayName")">姓名</MudSelectItem>
+                    <MudSelectItem Value="@("Role")">角色</MudSelectItem>
+                    <MudSelectItem Value="@("ViewAllCustomers")">数据范围</MudSelectItem>
+                    <MudSelectItem Value="@("Department")">部门</MudSelectItem>
+                    <MudSelectItem Value="@("Email")">邮箱</MudSelectItem>
+                    <MudSelectItem Value="@("Phone")">电话</MudSelectItem>
+                    <MudSelectItem Value="@("Customer")">客户</MudSelectItem>
+                    <MudSelectItem Value="@("Status")">状态</MudSelectItem>
+                </MudSelect>
+                <MudTextField @bind-Value="_keyword"
+                              Label="内容"
+                              Placeholder="输入关键词"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="personnel-filter-input"
+                              OnKeyUp="OnKeywordKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="ApplyFilter" Disabled="_busy">查询</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearFilter" Disabled="_busy">清空</MudButton>
+            </MudStack>
+            <MudSpacer/>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync" Disabled="_busy">刷新</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenCreate" Disabled="_busy">新建人员</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="personnel-table-wrap pa-0" Outlined="true">
+        <MudTable Items="FilteredRows"
+                  Hover="true"
+                  Dense="true"
+                  Striped="true"
+                  Loading="_busy"
+                  Breakpoint="Breakpoint.None"
+                  FixedHeader="true"
+                  Class="personnel-table"
+                  Height="100%"
+                  RowClassFunc="@InactiveRowClass">
+            <HeaderContent>
+                <MudTh>工号</MudTh>
+                <MudTh>姓名</MudTh>
+                <MudTh>角色</MudTh>
+                <MudTh>数据范围</MudTh>
+                <MudTh>部门</MudTh>
+                <MudTh>邮箱</MudTh>
+                <MudTh>电话</MudTh>
+                <MudTh>客户</MudTh>
+                <MudTh>操作</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="工号">@context.EmpNo</MudTd>
+                <MudTd DataLabel="姓名">@Dash(context.DisplayName)</MudTd>
+                <MudTd DataLabel="角色">@RoleText(context.Role, context.EmpNo)</MudTd>
+                <MudTd DataLabel="数据范围">@(context.ViewAllCustomers ? "全部客户" : "已分配客户")</MudTd>
+                <MudTd DataLabel="部门">@Dash(context.Department)</MudTd>
+                <MudTd DataLabel="邮箱">@Dash(context.Email)</MudTd>
+                <MudTd DataLabel="电话">@Dash(context.Phone)</MudTd>
+                <MudTd DataLabel="客户" Style="max-width:220px">
+                    <MudTooltip Text="@context.CustomersText">
+                        <MudText Typo="Typo.body2" Class="personnel-customers">@context.CustomersText</MudText>
+                    </MudTooltip>
+                </MudTd>
+                <MudTd DataLabel="操作">
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                        <button type="button"
+                                class="personnel-status-pill @(context.IsActive ? "on" : "off")"
+                                disabled="@_busy"
+                                @onclick="@(() => ToggleActiveAsync(context))"
+                                @onclick:stopPropagation="true">
+                            @(context.IsActive ? "启用" : "禁用")
+                        </button>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => OpenEdit(context))" Disabled="_busy">编辑</MudButton>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">暂无人员</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+</div>
+
+<MudDrawer @bind-Open="_dialogOpen" Anchor="Anchor.End" Variant="DrawerVariant.Temporary" OverlayAutoClose="true" Width="520px">
+    <div class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-3">@(_edit.IsCreate ? "新建人员" : "编辑人员")</MudText>
+        <MudTabs Elevation="0" Rounded="true" Class="personnel-tabs">
+            <MudTabPanel Text="基本信息" Icon="@Icons.Material.Filled.Badge">
+                <MudStack Spacing="2">
+                    <MudTextField @bind-Value="_edit.EmpNo" Label="工号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!_edit.IsCreate)"/>
+                    <MudTextField @bind-Value="_edit.DisplayName" Label="姓名" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="_edit.Password"
+                                  Label="@(_edit.IsCreate ? "密码" : "新密码（不填则不改）")"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  InputType="InputType.Password"/>
+                    <MudTextField @bind-Value="_edit.Department" Label="部门" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="_edit.Email" Label="邮箱" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="_edit.Phone" Label="电话" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudSelect T="string" @bind-Value="RoleBind" Label="本系统角色" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("operator")">操作员</MudSelectItem>
+                        <MudSelectItem Value="@("admin")">管理员</MudSelectItem>
+                    </MudSelect>
+                    <MudSwitch @bind-Value="_edit.IsActive" Color="Color.Primary"
+                               Label="@(_edit.IsCreate ? "立即启用（默认关闭，需管理员确认）" : "启用账号")"/>
+                    <MudSwitch T="bool" @bind-Value="ViewAllSwitch"
+                               Color="Color.Primary"
+                               Disabled="@IsAdminRole"
+                               Label="可查看全部客户"/>
+                    <MudSwitch T="bool" @bind-Value="_edit.CanViewInvoiceKp"
+                               Color="Color.Primary"
+                               Disabled="@IsAdminRole"
+                               Label="@(IsAdminRole ? "遮阳开票汇总（管理员默认可用）" : "可查看遮阳开票汇总")"/>
+                </MudStack>
+            </MudTabPanel>
+            <MudTabPanel Text="报价签名" Icon="@Icons.Material.Filled.Draw">
+                <MudStack Spacing="2">
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        签名挂在人员档案上（JcCommonApi UserInformation），报价录入时可按人选择，不再使用 T_ZYQD_Quotation_signature 表。
+                    </MudAlert>
+                    <MudTextField @bind-Value="_edit.Signature"
+                                  Label="签名名称"
+                                  Placeholder="默认可用姓名"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="_edit.SignatureUrl"
+                                  Label="签名图片路径"
+                                  Placeholder="/Img/..."
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  HelperText="可手工填写路径，或下方上传"/>
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                        <label class="personnel-sig-upload">
+                            <InputFile OnChange="OnSignatureFile" accept=".png,.jpg,.jpeg,.gif,.bmp,image/*" disabled="@(_busy || _sigUploading)"/>
+                            <MudButton Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.Upload"
+                                       Disabled="@(_busy || _sigUploading)"
+                                       HtmlTag="span">
+                                @(_sigUploading ? "上传中…" : "上传签名图")
+                            </MudButton>
+                        </label>
+                        @if (!string.IsNullOrWhiteSpace(_edit.SignatureUrl))
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="ClearSignature" Disabled="@(_busy || _sigUploading)">清除</MudButton>
+                        }
+                    </MudStack>
+                    @if (!string.IsNullOrWhiteSpace(_edit.SignatureUrl))
+                    {
+                        <LegacyRemoteImg Path="@_edit.SignatureUrl" CssClass="personnel-sig-preview"/>
+                    }
+                </MudStack>
+            </MudTabPanel>
+            <MudTabPanel Text="客户分配" Icon="@Icons.Material.Filled.People">
+                <MudStack Spacing="3">
+                    @if (EffectiveViewAll)
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true">当前可查看全部客户，无需逐条分配。</MudAlert>
+                    }
+                    else
+                    {
+                        <MudAutocomplete T="CustomerOptionDto"
+                                         @bind-Value="_picked"
+                                         SearchFunc="SearchCustomers"
+                                         ToStringFunc="@(x => x?.Label ?? "")"
+                                         Label="添加客户"
+                                         Placeholder="输入客户编号搜索或回车新增"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         CoerceText="true"
+                                         ResetValueOnEmptyText="true"
+                                         TextChanged="OnCustomerTextChanged"
+                                         OnKeyUp="OnCustomerKeyUp"
+                                         Adornment="Adornment.End"
+                                         AdornmentIcon="@Icons.Material.Filled.Add"
+                                         OnAdornmentClick="AddPickedOrTypedAsync"/>
+                        @if (_edit.Customers.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">尚未分配客户。可从已有项目中选择，也可直接输入新客户编号。</MudText>
+                        }
+                        else
+                        {
+                            <MudChipSet T="CustomerOptionDto">
+                                @foreach (var c in _edit.Customers)
+                                {
+                                    <MudChip T="CustomerOptionDto"
+                                             Value="@c"
+                                             Color="Color.Primary"
+                                             Variant="Variant.Outlined"
+                                             Closable="true"
+                                             OnClose="@(() => RemoveCustomer(c))">
+                                        @c.Label
+                                    </MudChip>
+                                }
+                            </MudChipSet>
+                        }
+                    }
+                </MudStack>
+            </MudTabPanel>
+        </MudTabs>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4" Spacing="2">
+            <MudButton OnClick="@(() => _dialogOpen = false)">取消</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">保存</MudButton>
+        </MudStack>
+    </div>
+</MudDrawer>
+
+<style>
+    .personnel-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .personnel-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .personnel-table {
+        height: 100%;
+    }
+
+    .personnel-customers {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 220px;
+    }
+
+    .personnel-filter {
+        flex: 0 0 auto !important;
+        width: auto !important;
+    }
+
+    .personnel-filter-select {
+        width: 140px;
+        flex: 0 0 140px !important;
+    }
+
+    .personnel-filter-input {
+        width: 220px;
+        flex: 0 0 220px !important;
+    }
+
+    .personnel-table tbody .personnel-row-inactive,
+    .personnel-table tbody .personnel-row-inactive td,
+    .personnel-table tbody .personnel-row-inactive .mud-table-cell {
+        color: #9e9e9e !important;
+        background-color: #f3f3f3 !important;
+    }
+
+    .personnel-table tbody .personnel-row-inactive .mud-button-root {
+        color: #9e9e9e !important;
+    }
+
+    .personnel-status-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        height: 24px;
+        padding: 0 14px;
+        border: none;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+        flex: 0 0 auto;
+    }
+
+    .personnel-status-pill.on {
+        background: #43a047;
+        color: #fff;
+    }
+
+    .personnel-status-pill.off {
+        background: #d9d9d9;
+        color: #9e9e9e;
+    }
+
+    .personnel-status-pill:disabled {
+        cursor: default;
+        opacity: 0.75;
+    }
+
+    .personnel-table tbody .personnel-row-inactive .personnel-status-pill.off {
+        background: #d9d9d9 !important;
+        color: #9e9e9e !important;
+    }
+
+    .personnel-sig-upload {
+        position: relative;
+        display: inline-flex;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .personnel-sig-upload input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+
+    .personnel-sig-preview {
+        max-width: 220px;
+        max-height: 100px;
+        object-fit: contain;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 4px;
+        background: #fff;
+        padding: 4px;
+    }
+</style>
+
+@code {
+    private bool _busy;
+    private bool _dialogOpen;
+    private bool _sigUploading;
+    private const long MaxSigBytes = 8L * 1024 * 1024;
+    private string _filterColumn = "EmpNo";
+    private string _keyword = "";
+    private string _appliedColumn = "EmpNo";
+    private string _appliedKeyword = "";
+    private List<ManagedUserRowDto> _rows = new();
+    private List<CustomerOptionDto> _catalog = new();
+    private SaveManagedUserDto _edit = new();
+    private Dictionary<string, ControlPermissionApiDto>? _existingControls;
+    private CustomerOptionDto? _picked;
+    private string _typedCustomer = "";
+
+    private IEnumerable<ManagedUserRowDto> FilteredRows
+    {
+        get
+        {
+            IEnumerable<ManagedUserRowDto> source = _rows;
+            var k = (_appliedKeyword ?? "").Trim();
+            if (k.Length > 0)
+                source = source.Where(x => MatchRow(x, _appliedColumn, k));
+            return source
+                .OrderByDescending(x => x.IsActive)
+                .ThenBy(x => x.EmpNo);
+        }
+    }
+
+    private static string InactiveRowClass(ManagedUserRowDto row, int _) =>
+        row.IsActive ? "" : "personnel-row-inactive";
+
+    private bool IsAdminRole =>
+        string.Equals(_edit.Role, "admin", StringComparison.OrdinalIgnoreCase);
+
+    private bool EffectiveViewAll => IsAdminRole || _edit.ViewAllCustomers;
+
+    private string RoleBind
+    {
+        get => _edit.Role;
+        set => OnRoleChanged(value);
+    }
+
+    private bool ViewAllSwitch
+    {
+        get => EffectiveViewAll;
+        set => OnViewAllChanged(value);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var auth = await Auth.GetStoredAsync();
+        if (!Auth.CanManageUsers(auth))
+        {
+            Notify.Show("没有人员管理权限", Severity.Warning);
+            NavManager.NavigateTo("/project-list");
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _busy = true;
+        try
+        {
+            _catalog = await CustomerAssign.GetCatalogAsync();
+            var grouped = await CustomerAssign.GetAllGroupedAsync();
+            var (ok, list, msg) = await UsersApi.ListUsersAsync(null);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "加载人员失败", Severity.Error);
+                return;
+            }
+
+            var rows = new List<ManagedUserRowDto>();
+            foreach (var u in list ?? [])
+            {
+                var role = "";
+                ZyqdUserInformationDto? p = null;
+                SystemPermissionEntryApiDto? appPerm = null;
+                var (dOk, detail, _) = await UsersApi.GetUserAsync(u.EmpNo);
+                if (dOk && detail is not null)
+                {
+                    if (detail.SystemPermissions != null)
+                    {
+                        var kv = detail.SystemPermissions.FirstOrDefault(x =>
+                            x.Key.Equals(CentralApiOptions.AppSystemKey, StringComparison.OrdinalIgnoreCase));
+                        if (!string.IsNullOrEmpty(kv.Key))
+                        {
+                            role = kv.Value.Role;
+                            appPerm = kv.Value;
+                        }
+                    }
+
+                    p = CentralUserInformationService.FromDetail(detail);
+                }
+
+                grouped.TryGetValue(u.EmpNo, out var customers);
+                var isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(u.EmpNo, "JcAdmin", StringComparison.OrdinalIgnoreCase);
+                rows.Add(new ManagedUserRowDto
+                {
+                    EmpNo = u.EmpNo,
+                    DisplayName = u.DisplayName,
+                    IsActive = u.IsActive,
+                    Role = role,
+                    ViewAllCustomers = isAdmin || p?.ViewAllCustomers == true,
+                    CanViewInvoiceKp = isAdmin || HasInvoiceKpVisible(appPerm),
+                    Department = p?.Department,
+                    Email = p?.Email,
+                    Phone = p?.Phone,
+                    Signature = p?.Signature,
+                    SignatureUrl = p?.SignatureUrl,
+                    Customers = customers ?? []
+                });
+            }
+
+            _rows = rows;
+            AdminNotify.RememberAdmins(_rows);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _edit = new SaveManagedUserDto { IsCreate = true, Role = "operator", IsActive = false, CanViewInvoiceKp = false };
+        _existingControls = null;
+        _picked = null;
+        _typedCustomer = "";
+        _dialogOpen = true;
+    }
+
+    private async Task OpenEdit(ManagedUserRowDto row)
+    {
+        Dictionary<string, ControlPermissionApiDto>? controls = null;
+        var (dOk, detail, _) = await UsersApi.GetUserAsync(row.EmpNo);
+        if (dOk && detail?.SystemPermissions != null)
+        {
+            var kv = detail.SystemPermissions.FirstOrDefault(x =>
+                x.Key.Equals(CentralApiOptions.AppSystemKey, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(kv.Key))
+                controls = kv.Value.Controls;
+        }
+
+        _existingControls = controls;
+        _edit = new SaveManagedUserDto
+        {
+            IsCreate = false,
+            EmpNo = row.EmpNo,
+            DisplayName = row.DisplayName,
+            Role = string.IsNullOrWhiteSpace(row.Role) ? "operator" : row.Role,
+            IsActive = row.IsActive,
+            ViewAllCustomers = row.ViewAllCustomers,
+            CanViewInvoiceKp = row.CanViewInvoiceKp,
+            Department = row.Department,
+            Email = row.Email,
+            Phone = row.Phone,
+            Signature = row.Signature,
+            SignatureUrl = row.SignatureUrl,
+            Customers = row.Customers.Select(x => new CustomerOptionDto { Code = x.Code, Name = x.Name }).ToList()
+        };
+        _picked = null;
+        _typedCustomer = "";
+        _dialogOpen = true;
+    }
+
+    private void OnRoleChanged(string role)
+    {
+        _edit.Role = role;
+        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
+        {
+            _edit.ViewAllCustomers = true;
+            _edit.CanViewInvoiceKp = true;
+        }
+    }
+
+    private void OnViewAllChanged(bool value)
+    {
+        if (IsAdminRole)
+        {
+            _edit.ViewAllCustomers = true;
+            return;
+        }
+
+        _edit.ViewAllCustomers = value;
+    }
+
+    private Task<IEnumerable<CustomerOptionDto>> SearchCustomers(string value, CancellationToken ct)
+    {
+        _typedCustomer = value ?? "";
+        var k = _typedCustomer.Trim();
+        IEnumerable<CustomerOptionDto> result = _catalog;
+        if (k.Length > 0)
+        {
+            result = _catalog.Where(x =>
+                x.Code.Contains(k, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(x.Name) && x.Name.Contains(k, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return Task.FromResult(result.Take(30));
+    }
+
+    private void OnCustomerTextChanged(string value) => _typedCustomer = value ?? "";
+
+    private async Task OnCustomerKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await AddPickedOrTypedAsync();
+    }
+
+    private Task AddPickedOrTypedAsync()
+    {
+        if (_picked is not null)
+        {
+            AddCustomer(_picked);
+            _picked = null;
+            return Task.CompletedTask;
+        }
+
+        var code = _typedCustomer.Trim();
+        if (string.IsNullOrEmpty(code))
+            return Task.CompletedTask;
+
+        var existing = _catalog.FirstOrDefault(x =>
+            string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
+        AddCustomer(existing ?? new CustomerOptionDto { Code = code });
+        _typedCustomer = "";
+        return Task.CompletedTask;
+    }
+
+    private void AddCustomer(CustomerOptionDto item)
+    {
+        var code = (item.Code ?? "").Trim();
+        if (string.IsNullOrEmpty(code) || code.Length > 50)
+        {
+            Notify.Show("客户编号无效", Severity.Warning);
+            return;
+        }
+
+        if (_edit.Customers.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        _edit.Customers.Add(new CustomerOptionDto { Code = code, Name = item.Name });
+        if (_catalog.All(x => !string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+            _catalog.Add(new CustomerOptionDto { Code = code, Name = item.Name });
+    }
+
+    private void RemoveCustomer(CustomerOptionDto item)
+        => _edit.Customers.RemoveAll(x => string.Equals(x.Code, item.Code, StringComparison.OrdinalIgnoreCase));
+
+    private void ClearSignature()
+    {
+        _edit.SignatureUrl = null;
+    }
+
+    private async Task OnSignatureFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+        if (file.Size > MaxSigBytes)
+        {
+            Notify.Show("签名图片不能超过 8MB", Severity.Warning);
+            return;
+        }
+
+        _sigUploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxSigBytes);
+            var path = await CotractBase.UploadImageAsync(stream, file.Name);
+            _edit.SignatureUrl = path;
+            if (string.IsNullOrWhiteSpace(_edit.Signature) && !string.IsNullOrWhiteSpace(_edit.DisplayName))
+                _edit.Signature = _edit.DisplayName.Trim();
+            Notify.Show("签名图片已上传", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _sigUploading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_edit.EmpNo))
+        {
+            Notify.Show("工号不能为空", Severity.Warning);
+            return;
+        }
+
+        if (_edit.IsCreate && string.IsNullOrWhiteSpace(_edit.Password))
+        {
+            Notify.Show("新建人员必须填写密码", Severity.Warning);
+            return;
+        }
+
+        var email = (_edit.Email ?? "").Trim();
+        if (email.Length > 0 && (email.Length < 5 || !email.Contains('@') || !email.Contains('.')))
+        {
+            Notify.Show("请输入有效邮箱", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var role = string.IsNullOrWhiteSpace(_edit.Role) ? "operator" : _edit.Role.Trim();
+            var isAdminRole = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+            var viewAll = isAdminRole || _edit.ViewAllCustomers;
+            var canInvoice = isAdminRole || _edit.CanViewInvoiceKp;
+            var controls = BuildAppControls(isAdminRole, canInvoice, _existingControls);
+            var created = _edit.IsCreate;
+            var empNo = _edit.EmpNo.Trim();
+            var displayName = _edit.DisplayName?.Trim() ?? "";
+            if (_edit.IsCreate)
+            {
+                var create = new CreateCentralUserRequestDto
+                {
+                    EmpNo = _edit.EmpNo.Trim(),
+                    DisplayName = _edit.DisplayName?.Trim() ?? "",
+                    Password = _edit.Password!,
+                    IsActive = _edit.IsActive,
+                    SystemPermissions = new Dictionary<string, SystemPermissionEntryApiDto>
+                    {
+                        [CentralApiOptions.AppSystemKey] = new()
+                        {
+                            Role = role,
+                            Controls = controls
+                        }
+                    }
+                };
+                var (ok, msg) = await UsersApi.CreateUserAsync(create);
+                if (!ok)
+                {
+                    Notify.Show(msg ?? "创建失败", Severity.Error);
+                    return;
+                }
+            }
+            else
+            {
+                var update = new UpdateCentralUserRequestDto
+                {
+                    DisplayName = _edit.DisplayName?.Trim() ?? "",
+                    Password = string.IsNullOrWhiteSpace(_edit.Password) ? null : _edit.Password,
+                    IsActive = _edit.IsActive
+                };
+                var (ok, msg) = await UsersApi.UpdateUserAsync(_edit.EmpNo, update);
+                if (!ok)
+                {
+                    Notify.Show(msg ?? "更新失败", Severity.Error);
+                    return;
+                }
+
+                var (roleOk, roleMsg) = await UsersApi.SaveAppPermissionsAsync(_edit.EmpNo, role, controls);
+                if (!roleOk)
+                {
+                    Notify.Show(roleMsg ?? "保存角色/页面权限失败", Severity.Error);
+                    return;
+                }
+            }
+
+            var (infoOk, infoMsg) = await UserInfo.SaveAsync(_edit.EmpNo, new ZyqdUserInformationDto
+            {
+                Department = _edit.Department,
+                Email = email,
+                Phone = _edit.Phone,
+                ViewAllCustomers = viewAll,
+                Signature = string.IsNullOrWhiteSpace(_edit.Signature) ? null : _edit.Signature.Trim(),
+                SignatureUrl = string.IsNullOrWhiteSpace(_edit.SignatureUrl) ? null : _edit.SignatureUrl.Trim()
+            }, _edit.DisplayName?.Trim());
+            if (!infoOk)
+                Notify.Show(infoMsg ?? "保存档案失败", Severity.Warning);
+
+            var assign = await CustomerAssign.ReplaceAsync(_edit.EmpNo.Trim(), _edit.Customers);
+            if (assign.Code != 1)
+                Notify.Show(assign.Message ?? "保存客户分配失败", Severity.Warning);
+
+            _dialogOpen = false;
+            Notify.Show("保存成功", Severity.Success);
+            if (created)
+            {
+                await AdminNotify.NotifyNewUserAsync(new NewUserNotifyDto
+                {
+                    EmpNo = empNo,
+                    DisplayName = displayName,
+                    Department = _edit.Department,
+                    Email = email,
+                    Phone = _edit.Phone,
+                    PersonnelUrl = NavManager.ToAbsoluteUri("personnel").AbsoluteUri,
+                    Source = "管理员新建",
+                    PendingReview = !_edit.IsActive
+                });
+            }
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ToggleActiveAsync(ManagedUserRowDto row)
+    {
+        if (_busy) return;
+
+        var enable = !row.IsActive;
+        var who = string.IsNullOrWhiteSpace(row.DisplayName)
+            ? row.EmpNo
+            : $"{row.DisplayName}（{row.EmpNo}）";
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            enable ? "确认启用" : "确认禁用",
+            enable
+                ? $"确定要启用 {who} 吗？启用后该账号可以登录系统，并会向员工邮箱发送通知。"
+                : $"确定要禁用 {who} 吗？禁用后该账号将无法登录，并会向员工邮箱发送通知。",
+            yesText: enable ? "启用" : "禁用",
+            cancelText: "取消");
+        if (confirmed != true)
+            return;
+
+        if (enable)
+            await ActivateAsync(row);
+        else
+            await DeactivateAsync(row);
+    }
+
+    private async Task ActivateAsync(ManagedUserRowDto row)
+    {
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await UsersApi.UpdateUserAsync(row.EmpNo, new UpdateCentralUserRequestDto
+            {
+                DisplayName = row.DisplayName,
+                IsActive = true
+            });
+            if (!ok)
+            {
+                Notify.Show(msg ?? "启用失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已启用，该账号可以登录", Severity.Success);
+            await NotifyAccountStatusAsync(row, enabled: true);
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeactivateAsync(ManagedUserRowDto row)
+    {
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await UsersApi.DeactivateUserAsync(row.EmpNo);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "停用失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已停用", Severity.Success);
+            await NotifyAccountStatusAsync(row, enabled: false);
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task NotifyAccountStatusAsync(ManagedUserRowDto row, bool enabled)
+    {
+        var email = (row.Email ?? "").Trim();
+        if (!IsNotifyEmail(email))
+        {
+            Notify.Show("状态已更新，但该员工未填写有效邮箱，未能发送通知", Severity.Warning);
+            return;
+        }
+
+        var mail = await EmailService.SendAsync(new SendEmailDto
+        {
+            To = [email],
+            Subject = MailTemplate.Subject(enabled ? "账号已启用" : "账号已禁用"),
+            Body = enabled
+                ? MailTemplate.AccountEnabled(
+                    row.DisplayName, row.EmpNo, row.Department, row.Email, row.Phone,
+                    NavManager.ToAbsoluteUri("login").AbsoluteUri)
+                : MailTemplate.AccountDisabled(row.DisplayName, row.EmpNo, row.Department, row.Email, row.Phone),
+            IsHtml = true
+        });
+        if (mail.Code != 1)
+            Notify.Show("状态已更新，但通知邮件发送失败：" + mail.Message, Severity.Warning);
+    }
+
+    private static bool IsNotifyEmail(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            v, @"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$");
+    }
+
+    private void ApplyFilter()
+    {
+        _appliedColumn = _filterColumn;
+        _appliedKeyword = _keyword ?? "";
+    }
+
+    private void ClearFilter()
+    {
+        _filterColumn = "EmpNo";
+        _keyword = "";
+        _appliedColumn = "EmpNo";
+        _appliedKeyword = "";
+    }
+
+    private void OnKeywordKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            ApplyFilter();
+    }
+
+    private static bool MatchRow(ManagedUserRowDto row, string column, string keyword)
+    {
+        return column switch
+        {
+            "DisplayName" => Contains(row.DisplayName, keyword),
+            "Role" => Contains(RoleText(row.Role, row.EmpNo), keyword) || Contains(row.Role, keyword),
+            "ViewAllCustomers" => Contains(row.ViewAllCustomers ? "全部客户" : "已分配客户", keyword),
+            "Department" => Contains(row.Department, keyword),
+            "Email" => Contains(row.Email, keyword),
+            "Phone" => Contains(row.Phone, keyword),
+            "Customer" => Contains(row.CustomersText, keyword),
+            "Status" => Contains(row.IsActive ? "启用" : "禁用", keyword)
+                        || Contains(row.IsActive ? "已启用" : "未启用", keyword),
+            _ => Contains(row.EmpNo, keyword)
+        };
+    }
+
+    private static bool Contains(string? value, string keyword) =>
+        !string.IsNullOrEmpty(value) && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+
+    private static string Dash(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    private static string RoleText(string? role, string empNo)
+    {
+        if (string.Equals(empNo, "JcAdmin", StringComparison.OrdinalIgnoreCase))
+            return "超级管理员";
+        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
+            return "管理员";
+        return "操作员";
+    }
+
+    private static bool HasInvoiceKpVisible(SystemPermissionEntryApiDto? entry)
+    {
+        if (entry?.Controls is null || entry.Controls.Count == 0)
+            return false;
+        var want = CentralApiOptions.NormalizeControlKey(CentralApiOptions.InvoiceKpRoute);
+        foreach (var kv in entry.Controls)
+        {
+            if (!string.Equals(CentralApiOptions.NormalizeControlKey(kv.Key), want, StringComparison.OrdinalIgnoreCase))
+                continue;
+            return kv.Value.Visible;
+        }
+
+        return false;
+    }
+
+    /// <summary>写入 JcCommonApi Controls；管理员可不带 Controls；操作员保留其它页权限并更新开票页。</summary>
+    private static Dictionary<string, ControlPermissionApiDto>? BuildAppControls(
+        bool isAdminRole,
+        bool canViewInvoiceKp,
+        Dictionary<string, ControlPermissionApiDto>? existing)
+    {
+        if (isAdminRole)
+            return null;
+
+        var map = new Dictionary<string, ControlPermissionApiDto>(StringComparer.OrdinalIgnoreCase);
+        var invoiceKey = CentralApiOptions.NormalizeControlKey(CentralApiOptions.InvoiceKpRoute);
+        if (existing != null)
+        {
+            foreach (var kv in existing)
+            {
+                var norm = CentralApiOptions.NormalizeControlKey(kv.Key);
+                if (norm.Length == 0) continue;
+                if (string.Equals(norm, invoiceKey, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var storeKey = kv.Key.StartsWith('/') ? kv.Key : "/" + kv.Key.TrimStart('/');
+                map[storeKey] = new ControlPermissionApiDto
+                {
+                    Visible = kv.Value.Visible,
+                    Disabled = kv.Value.Disabled
+                };
+            }
+        }
+
+        if (canViewInvoiceKp)
+        {
+            map[CentralApiOptions.InvoiceKpRoute] = new ControlPermissionApiDto
+            {
+                Visible = true,
+                Disabled = false
+            };
+        }
+
+        return map;
+    }
+}

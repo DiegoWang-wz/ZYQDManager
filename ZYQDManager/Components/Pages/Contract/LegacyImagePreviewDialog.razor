@@ -1,0 +1,77 @@
+<MudDialog Class="legacy-img-lightbox"
+           ContentClass="legacy-img-lightbox-content">
+    <DialogContent>
+        <div class="legacy-preview-wrap"
+             @onwheel="OnWheel"
+             @onwheel:preventDefault="true">
+            <img src="@Url"
+                 alt="预览"
+                 loading="eager"
+                 decoding="async"
+                 style="@ImgStyle"/>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+<style>
+    .mud-overlay.legacy-img-lightbox-overlay {
+        background-color: rgba(0, 0, 0, 0.72) !important;
+    }
+
+    .mud-dialog.legacy-img-lightbox {
+        background: rgba(0, 0, 0, 0.45) !important;
+        box-shadow: none !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        border-radius: 4px;
+    }
+
+    .mud-dialog.legacy-img-lightbox .mud-dialog-title,
+    .mud-dialog.legacy-img-lightbox .mud-dialog-actions {
+        display: none !important;
+    }
+
+    .legacy-img-lightbox-content.mud-dialog-content,
+    .mud-dialog.legacy-img-lightbox .mud-dialog-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        background: transparent !important;
+    }
+
+    .legacy-preview-wrap {
+        display: inline-flex;
+        line-height: 0;
+        cursor: default;
+    }
+
+    .legacy-preview-wrap img {
+        display: block;
+        width: auto;
+        height: auto;
+        max-width: 90vw;
+        max-height: 90vh;
+        object-fit: contain;
+        transform-origin: center center;
+        user-select: none;
+        -webkit-user-drag: none;
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Url { get; set; } = "";
+
+    private double _scale = 1;
+
+    private string ImgStyle => $"transform: scale({_scale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)});";
+
+    private void OnWheel(WheelEventArgs e)
+    {
+        var factor = e.DeltaY < 0 ? 1.12 : 1 / 1.12;
+        _scale = Math.Clamp(_scale * factor, 0.2, 8);
+    }
+}

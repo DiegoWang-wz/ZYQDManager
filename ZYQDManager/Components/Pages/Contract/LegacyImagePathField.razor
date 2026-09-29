@@ -1,0 +1,40 @@
+@inject IConfiguration Config
+
+<MudTextField T="string"
+              Value="@(Value ?? "")"
+              ValueChanged="OnChanged"
+              Label="@(HideLabel ? null : Label)"
+              Variant="Variant.Outlined"
+              Margin="Margin.Dense"
+              Immediate="true"
+              HelperText="@(HideLabel ? null : HelperText)"/>
+@if (!string.IsNullOrEmpty(PreviewUrl))
+{
+    <LegacyRemoteImg Path="@Value" CssClass="cb-preview"/>
+}
+
+<style>
+    .cb-preview {
+        max-height: 120px;
+        max-width: 200px;
+        object-fit: contain;
+        margin-top: 8px;
+        display: block;
+    }
+</style>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string HelperText { get; set; } = "相对路径如 /Img/...，图片从旧站点加载";
+    [Parameter] public bool HideLabel { get; set; }
+
+    private string PreviewUrl => LegacyFileUrl.Resolve(Value, Config["LegacyFiles:BaseUrl"]);
+
+    private Task OnChanged(string v)
+    {
+        Value = v;
+        return ValueChanged.InvokeAsync(v);
+    }
+}

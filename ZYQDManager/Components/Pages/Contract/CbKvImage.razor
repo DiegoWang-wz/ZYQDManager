@@ -1,0 +1,154 @@
+@inject CotractBaseService CotractBase
+
+<CbKvRow Label="@Label" Required="Required">
+    <div class="cb-kv-img-wrap">
+        @if (HasImage)
+        {
+            <LegacyRemoteImg Path="@Value" CssClass="cb-kv-img"/>
+        }
+        else if (IsNa)
+        {
+            <span>N/A</span>
+        }
+        else
+        {
+            <span>—</span>
+        }
+
+        @if (!ReadOnly)
+        {
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="cb-kv-img-actions">
+                <label class="cb-kv-upload">
+                    <InputFile OnChange="OnFile" accept=".png,.jpg,.jpeg,.gif,.bmp,image/*" disabled="@_uploading"/>
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Upload"
+                               Disabled="_uploading"
+                               HtmlTag="span">
+                        @(_uploading ? "上传中…" : HasImage ? "重新上传" : "上传图片")
+                    </MudButton>
+                </label>
+                @if (HasImage)
+                {
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Outlined"
+                               Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.Delete"
+                               Disabled="_uploading"
+                               OnClick="DeleteAsync">
+                        删除
+                    </MudButton>
+                }
+                @if (AllowNa)
+                {
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Text"
+                               Disabled="_uploading"
+                               OnClick="SetNa">
+                        设为 N/A
+                    </MudButton>
+                }
+            </MudStack>
+        }
+    </div>
+</CbKvRow>
+
+<style>
+    .cb-kv-img-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 4px 0;
+    }
+
+    .cb-kv-img {
+        max-height: 140px;
+        max-width: 240px;
+        object-fit: contain;
+        display: block;
+    }
+
+    .cb-kv-img-actions {
+        flex: 0 0 auto !important;
+    }
+
+    .cb-kv-upload {
+        position: relative;
+        display: inline-flex;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .cb-kv-upload input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+</style>
+
+@code {
+    private const long MaxBytes = 8L * 1024 * 1024;
+
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool AllowNa { get; set; }
+    [Parameter] public bool Required { get; set; }
+
+    private bool _uploading;
+    private bool IsNa => string.Equals(Value?.Trim(), "N/A", StringComparison.OrdinalIgnoreCase);
+    private bool HasImage => !string.IsNullOrWhiteSpace(Value) && !IsNa;
+
+    private async Task SetNa()
+    {
+        Value = "N/A";
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task DeleteAsync()
+    {
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "删除图片",
+            $"确定删除「{Label}」这张图片吗？",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+
+        Value = null;
+        await ValueChanged.InvokeAsync(null);
+    }
+
+    private async Task OnFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+        if (file.Size > MaxBytes)
+        {
+            Notify.Show("图片不能超过 8MB", Severity.Warning);
+            return;
+        }
+
+        _uploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxBytes);
+            var path = await CotractBase.UploadImageAsync(stream, file.Name);
+            Value = path;
+            await ValueChanged.InvokeAsync(path);
+            Notify.Show("图片已上传", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+}

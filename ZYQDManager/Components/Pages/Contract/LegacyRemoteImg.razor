@@ -1,0 +1,47 @@
+@inject IConfiguration Config
+
+@if (!string.IsNullOrEmpty(Url))
+{
+    <img src="@Url"
+         class="@CssClass legacy-img-zoom"
+         alt=""
+         title="点击查看大图"
+         loading="lazy"
+         decoding="async"
+         @onclick="OpenAsync"
+         @onclick:stopPropagation="true"/>
+}
+
+<style>
+    .legacy-img-zoom {
+        cursor: zoom-in;
+    }
+</style>
+
+@code {
+    [Parameter] public string? Path { get; set; }
+    [Parameter] public string CssClass { get; set; } = "cotract-thumb";
+
+    private string Url => LegacyFileUrl.Resolve(Path, Config["LegacyFiles:BaseUrl"]);
+
+    private static readonly DialogOptions PreviewOptions = new()
+    {
+        MaxWidth = MaxWidth.False,
+        FullWidth = false,
+        NoHeader = true,
+        CloseButton = false,
+        CloseOnEscapeKey = true,
+        BackdropClick = true,
+        BackgroundClass = "legacy-img-lightbox-overlay"
+    };
+
+    private async Task OpenAsync()
+    {
+        if (string.IsNullOrEmpty(Url)) return;
+        var parameters = new DialogParameters<LegacyImagePreviewDialog>
+        {
+            { x => x.Url, Url }
+        };
+        await DialogService.ShowAsync<LegacyImagePreviewDialog>(parameters, PreviewOptions);
+    }
+}

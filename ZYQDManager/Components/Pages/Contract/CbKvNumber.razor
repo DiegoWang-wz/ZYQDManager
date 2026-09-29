@@ -1,0 +1,25 @@
+<CbKvRow Label="@Label" Required="Required">
+    @if (ReadOnly)
+    {
+        <span>@Value.ToString("0.##")</span>
+    }
+    else
+    {
+        <MudNumericField T="double"
+                         Value="Value"
+                         ValueChanged="OnChanged"
+                         Variant="Variant.Outlined"
+                         Margin="Margin.Dense"
+                         HideSpinButtons="true"/>
+    }
+</CbKvRow>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public double Value { get; set; }
+    [Parameter] public EventCallback<double> ValueChanged { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool Required { get; set; }
+
+    private Task OnChanged(double v) => ValueChanged.InvokeAsync(v);
+}

@@ -1,0 +1,419 @@
+@page "/dev/motor-doc-schema-test"
+@rendermode InteractiveServer
+@inject SqlServerDbContext Db
+@inject SnackbarHelper Notify
+@using System.Reflection
+@using Microsoft.EntityFrameworkCore
+@using ZYQDManager.DataModels
+
+<PageTitle>电机文档表字段测试</PageTitle>
+
+<MudStack Spacing="3" Class="pa-2">
+    <MudText Typo="Typo.h5">电机 LX / GG / CR 字段映射测试</MudText>
+    <MudAlert Severity="Severity.Info" Dense="true">
+        校验 EF 能否读写规格书、承认书；并对照规格书模板关键字段是否已落库。测试数据 DocGuid 以 <code>test-</code> 开头，可一键清理。
+    </MudAlert>
+
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="RunAllAsync">运行全部检测</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="CleanupAsync">清理测试数据</MudButton>
+        <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="RefreshCountsAsync">刷新行数</MudButton>
+    </MudStack>
+
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">表行数</MudText>
+        <MudText>立项 LX：@_lxCount　规格书 GG：@_ggCount　承认书 CR：@_crCount</MudText>
+    </MudPaper>
+
+    @if (_checks.Count > 0)
+    {
+        <MudPaper Class="pa-3" Outlined="true">
+            <MudText Typo="Typo.subtitle1" Class="mb-2">
+                检测结果
+                <MudChip T="string" Size="Size.Small" Color="@(_failCount == 0 ? Color.Success : Color.Error)">
+                    通过 @_passCount / 失败 @_failCount
+                </MudChip>
+            </MudText>
+            <MudTable Items="_checks" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
+                <HeaderContent>
+                    <MudTh>分组</MudTh>
+                    <MudTh>项</MudTh>
+                    <MudTh>结果</MudTh>
+                    <MudTh>说明</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Group</MudTd>
+                    <MudTd>@context.Name</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@(context.Ok ? Color.Success : Color.Error)">
+                            @(context.Ok ? "通过" : "失败")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd Style="white-space:normal">@context.Detail</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_log))
+    {
+        <MudPaper Class="pa-3" Outlined="true">
+            <MudText Typo="Typo.subtitle2">日志</MudText>
+            <pre style="white-space:pre-wrap;font-size:12px;margin:0">@_log</pre>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    private bool _busy;
+    private int _lxCount;
+    private int _ggCount;
+    private int _crCount;
+    private string _log = "";
+    private readonly List<CheckItem> _checks = new();
+    private int _passCount => _checks.Count(x => x.Ok);
+    private int _failCount => _checks.Count(x => !x.Ok);
+
+    /// <summary>规格书模板需要覆盖的关键字段（模型属性名）</summary>
+    private static readonly (string Group, string Prop, string Label)[] SpecTemplateFields =
+    {
+        ("抬头", "Customer", "客户"),
+        ("抬头", "CustomerPartCode", "客户产品型号"),
+        ("抬头", "MotorModelSpec", "内部型号"),
+        ("抬头", "Description", "品名"),
+        ("参数", "InputVoltage", "输入电压"),
+        ("参数", "RatedPower", "额定功率"),
+        ("参数", "RatedTorque", "额定扭矩"),
+        ("参数", "ChargingMethod", "充电方式"),
+        ("参数", "CordCertified", "电线认证"),
+        ("参数", "CordColor", "电线颜色"),
+        ("参数", "CordType", "线芯"),
+        ("参数", "CordPlug", "是否带插头"),
+        ("参数", "CordLength", "电线长度"),
+        ("参数", "DefaultRunningSpeed", "运行速度"),
+        ("参数", "RemoteFrequency", "遥控频率"),
+        ("参数", "RemoteTechnology", "遥控技术"),
+        ("参数", "RemoteProtocol", "遥控协议"),
+        ("参数", "MotorFunction", "功能"),
+        ("参数", "SmartModule", "智能模块"),
+        ("参数", "IpLevel", "IP等级"),
+        ("参数", "OperatingNoise", "运行噪音"),
+        ("参数", "FastCharge", "快充"),
+        ("参数", "InputPower", "输入电源"),
+        ("电池", "BatteryEnduranceDesc", "电池续航性能"),
+        ("电池", "BatteryType", "电池类型"),
+        ("电池", "BatteryRatedCapacity", "电池额定容量"),
+        ("电池", "BatteryTestLoad", "续航测试-负载"),
+        ("电池", "BatteryTestDutyCycle", "续航测试-工作制"),
+        ("电池", "BatteryTestTravelHeight", "续航测试-运行高度"),
+        ("电池", "BatteryTestCycles", "续航测试-运行次数"),
+        ("结构", "OuterTubeColor", "外管颜色"),
+        ("结构", "MotorLength", "电机长度"),
+        ("结构", "MaxRunningTime", "持续运行时间"),
+        ("推荐", "MaxWidth", "最大宽度"),
+        ("推荐", "MaxHeight", "最大高度"),
+        ("推荐", "PayloadWeight", "负载重量"),
+        ("其它", "OtherRequirement", "客户特殊要求"),
+        ("丝印", "SilkScreenDrawingType", "丝印类型"),
+    };
+
+    private static readonly (string Group, string Prop, string Label)[] CrExtraFields =
+    {
+        ("承认部件", "MotorHeadModel", "行程头型号"),
+        ("承认部件", "ShaftModel", "输出轴型号"),
+        ("承认部件", "CrownModel", "皇冠型号"),
+        ("承认部件", "DriveAdaptorModel", "转轮型号"),
+        ("承认部件", "LabelModel", "标签型号"),
+        ("承认部件", "ManualModel", "说明书型号"),
+        ("包装", "PackageSize", "包装尺寸"),
+        ("包装", "MasterCartonSize", "外箱尺寸"),
+        ("包装", "ShippingMarkSize", "唛头尺寸"),
+        ("包装", "PalletSize", "托盘尺寸"),
+        ("关联", "SourceGgDocGuid", "来源规格书DocGuid"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshCountsAsync();
+    }
+
+    private async Task RefreshCountsAsync()
+    {
+        try
+        {
+            _lxCount = await Db.MotorLx.CountAsync();
+            _ggCount = await Db.MotorGg.CountAsync();
+            _crCount = await Db.MotorCr.CountAsync();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("读行数失败：" + ex.Message, Severity.Error);
+            AppendLog("Count error: " + ex);
+        }
+    }
+
+    private async Task RunAllAsync()
+    {
+        _busy = true;
+        _checks.Clear();
+        _log = "";
+        try
+        {
+            await CheckTableAccessAsync();
+            CheckModelHasTemplateFields(typeof(MotorGgModel), "规格书模型", SpecTemplateFields);
+            CheckModelHasTemplateFields(typeof(MotorCrModel), "承认书模型", SpecTemplateFields.Concat(CrExtraFields).ToArray());
+            await RoundTripGgAsync();
+            await RoundTripCrAsync();
+            await RefreshCountsAsync();
+            Notify.Show(_failCount == 0 ? "全部通过" : $"有 {_failCount} 项失败", _failCount == 0 ? Severity.Success : Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            AddCheck("系统", "未捕获异常", false, ex.Message);
+            AppendLog(ex.ToString());
+            Notify.Show("检测中断：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CheckTableAccessAsync()
+    {
+        try
+        {
+            _ = await Db.MotorLx.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+            AddCheck("连通", "立项表 MotorLx", true, "可查询");
+        }
+        catch (Exception ex)
+        {
+            AddCheck("连通", "立项表 MotorLx", false, ex.Message);
+        }
+
+        try
+        {
+            _ = await Db.MotorGg.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+            AddCheck("连通", "规格书表 MotorGg", true, "可查询");
+        }
+        catch (Exception ex)
+        {
+            AddCheck("连通", "规格书表 MotorGg", false, ex.Message);
+        }
+
+        try
+        {
+            _ = await Db.MotorCr.AsNoTracking().Select(x => x.Id).Take(1).ToListAsync();
+            AddCheck("连通", "承认书表 MotorCr", true, "可查询");
+        }
+        catch (Exception ex)
+        {
+            AddCheck("连通", "承认书表 MotorCr", false, ex.Message);
+        }
+    }
+
+    private void CheckModelHasTemplateFields(Type modelType, string group, (string Group, string Prop, string Label)[] fields)
+    {
+        var props = modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var f in fields)
+        {
+            var ok = props.Contains(f.Prop);
+            AddCheck(group + "/" + f.Group, f.Label + " (" + f.Prop + ")", ok,
+                ok ? "模型已有该属性" : "模型缺少属性，需补字段");
+        }
+    }
+
+    private async Task RoundTripGgAsync()
+    {
+        var projectGuid = "testproj" + Guid.NewGuid().ToString("N")[..16];
+        var docGuid = "testgg" + Guid.NewGuid().ToString("N")[..18];
+        var now = DateTime.Now;
+
+        var row = new MotorGgModel
+        {
+            ProjectGuid = projectGuid,
+            DocGuid = docGuid,
+            VersionNo = "vn",
+            IsDraft = true,
+            Status = "测试草稿",
+            Customer = "9111",
+            DemandPerson = "测试员",
+            CustomerPartCode = "ZM-TEST-01",
+            MotorModelSpec = "JCD25SLEU-TEST",
+            Description = "DC TUBULAR MOTOR",
+            InputVoltage = "24V",
+            RatedPower = "50",
+            RatedTorque = "6",
+            ChargingMethod = "Type-C",
+            CordCertified = "UL",
+            CordColor = "Black",
+            CordType = "2-core",
+            CordPlug = "Without Plug",
+            CordLength = "1.5",
+            DefaultRunningSpeed = "28",
+            RemoteFrequency = "433.92",
+            RemoteTechnology = "单向Single-way",
+            RemoteProtocol = "捷昌Standard",
+            MotorFunction = "None",
+            SmartModule = "ZigBee 3.0",
+            IpLevel = "IP44",
+            OperatingNoise = "37",
+            FastCharge = "否No",
+            InputPower = "AC230V/50Hz",
+            BatteryEnduranceDesc = "标准续航说明",
+            BatteryType = "Li-ion",
+            BatteryRatedCapacity = "2600mAh",
+            BatteryTestLoad = "70% Rated Load",
+            BatteryTestDutyCycle = "2 min up, 2 min down",
+            BatteryTestTravelHeight = "2M",
+            BatteryTestCycles = "322",
+            OuterTubeColor = "White",
+            MotorLength = "575",
+            MaxRunningTime = "4 minutes",
+            MaxWidth = "3",
+            MaxHeight = "4",
+            PayloadWeight = "17",
+            OtherRequirement = "无",
+            SilkScreenDrawingType = "制造商标准",
+            DocRemark = "schema-test",
+            CreateTime = now,
+            UpdateTime = now,
+            DeleteFlag = ""
+        };
+
+        try
+        {
+            Db.MotorGg.Add(row);
+            await Db.SaveChangesAsync();
+            AddCheck("读写", "规格书写入", true, "DocGuid=" + docGuid);
+
+            Db.ChangeTracker.Clear();
+            var loaded = await Db.MotorGg.AsNoTracking().FirstOrDefaultAsync(x => x.DocGuid == docGuid);
+            if (loaded == null)
+            {
+                AddCheck("读写", "规格书回读", false, "写入后查不到");
+                return;
+            }
+
+            AssertEqual("读写", "GG.Customer", "9111", loaded.Customer);
+            AssertEqual("读写", "GG.InputVoltage", "24V", loaded.InputVoltage);
+            AssertEqual("读写", "GG.FastCharge", "否No", loaded.FastCharge);
+            AssertEqual("读写", "GG.BatteryRatedCapacity", "2600mAh", loaded.BatteryRatedCapacity);
+            AssertEqual("读写", "GG.BatteryTestCycles", "322", loaded.BatteryTestCycles);
+            AssertEqual("读写", "GG.MotorLength", "575", loaded.MotorLength);
+            AssertEqual("读写", "GG.SilkScreenDrawingType", "制造商标准", loaded.SilkScreenDrawingType);
+        }
+        catch (Exception ex)
+        {
+            AddCheck("读写", "规格书写入/回读", false, ex.Message);
+            AppendLog(ex.ToString());
+        }
+    }
+
+    private async Task RoundTripCrAsync()
+    {
+        var projectGuid = "testproj" + Guid.NewGuid().ToString("N")[..16];
+        var docGuid = "testcr" + Guid.NewGuid().ToString("N")[..18];
+        var ggDoc = "testsrcgg" + Guid.NewGuid().ToString("N")[..14];
+        var now = DateTime.Now;
+
+        var row = new MotorCrModel
+        {
+            ProjectGuid = projectGuid,
+            DocGuid = docGuid,
+            VersionNo = "vn",
+            IsDraft = true,
+            Status = "测试草稿",
+            SourceGgDocGuid = ggDoc,
+            Customer = "10007122",
+            MotorModelSpec = "JCHR35W1A-6",
+            Description = "Curtain Motor",
+            InputVoltage = "12V",
+            RatedTorque = "3.2",
+            FastCharge = "是Yes",
+            BatteryType = "Li-ion",
+            MotorHeadModel = "MH-01",
+            ShaftModel = "SH-02",
+            CrownModel = "CR-03",
+            DriveAdaptorModel = "DA-04",
+            LabelModel = "LB-05",
+            ManualModel = "MN-06",
+            PackageSize = "300x200x100",
+            MasterCartonSize = "600x400x400",
+            ShippingMarkSize = "A4",
+            PalletSize = "1200x800",
+            DocRemark = "schema-test",
+            CreateTime = now,
+            UpdateTime = now,
+            DeleteFlag = ""
+        };
+
+        try
+        {
+            Db.MotorCr.Add(row);
+            await Db.SaveChangesAsync();
+            AddCheck("读写", "承认书写入", true, "DocGuid=" + docGuid);
+
+            Db.ChangeTracker.Clear();
+            var loaded = await Db.MotorCr.AsNoTracking().FirstOrDefaultAsync(x => x.DocGuid == docGuid);
+            if (loaded == null)
+            {
+                AddCheck("读写", "承认书回读", false, "写入后查不到");
+                return;
+            }
+
+            AssertEqual("读写", "CR.SourceGgDocGuid", ggDoc, loaded.SourceGgDocGuid);
+            AssertEqual("读写", "CR.MotorHeadModel", "MH-01", loaded.MotorHeadModel);
+            AssertEqual("读写", "CR.DriveAdaptorModel", "DA-04", loaded.DriveAdaptorModel);
+            AssertEqual("读写", "CR.PackageSize", "300x200x100", loaded.PackageSize);
+            AssertEqual("读写", "CR.PalletSize", "1200x800", loaded.PalletSize);
+            AssertEqual("读写", "CR.FastCharge", "是Yes", loaded.FastCharge);
+        }
+        catch (Exception ex)
+        {
+            AddCheck("读写", "承认书写入/回读", false, ex.Message);
+            AppendLog(ex.ToString());
+        }
+    }
+
+    private async Task CleanupAsync()
+    {
+        _busy = true;
+        try
+        {
+            var gg = await Db.MotorGg.Where(x => x.DocGuid.StartsWith("test") || x.DocRemark == "schema-test").ToListAsync();
+            var cr = await Db.MotorCr.Where(x => x.DocGuid.StartsWith("test") || x.DocRemark == "schema-test").ToListAsync();
+            Db.MotorGg.RemoveRange(gg);
+            Db.MotorCr.RemoveRange(cr);
+            var n = await Db.SaveChangesAsync();
+            await RefreshCountsAsync();
+            Notify.Show($"已清理 {n} 行测试数据", Severity.Success);
+            AppendLog($"Cleanup gg={gg.Count}, cr={cr.Count}, saved={n}");
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("清理失败：" + ex.Message, Severity.Error);
+            AppendLog(ex.ToString());
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AssertEqual(string group, string name, string? expected, string? actual)
+    {
+        var ok = string.Equals(expected, actual, StringComparison.Ordinal);
+        AddCheck(group, name, ok, ok ? $"值={actual}" : $"期望={expected}，实际={actual}");
+    }
+
+    private void AddCheck(string group, string name, bool ok, string detail)
+        => _checks.Add(new CheckItem(group, name, ok, detail));
+
+    private void AppendLog(string s)
+        => _log = string.IsNullOrEmpty(_log) ? s : _log + "\n" + s;
+
+    private sealed record CheckItem(string Group, string Name, bool Ok, string Detail);
+}

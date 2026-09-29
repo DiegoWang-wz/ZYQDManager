@@ -1,0 +1,282 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Nav
+@inject CentralAuthService Auth
+
+@if (!_authReady)
+{
+    <LayoutView Layout="typeof(InitLayout)">
+    </LayoutView>
+}
+else
+{
+    <MudThemeProvider/>
+    <MudPopoverProvider/>
+    <MudDialogProvider/>
+    <MudSnackbarProvider/>
+
+    <MudLayout>
+        <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
+            <MudMenu Label="遮阳项目管理"
+                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                     Variant="Variant.Text"
+                     Color="Color.Inherit"
+                     Dense="true"
+                     Class="zyqd-nav-menu"
+                     AnchorOrigin="Origin.BottomLeft"
+                     TransformOrigin="Origin.TopLeft">
+                <MudMenuItem OnClick="@(() => GoTo("/project-list"))">遮阳项目列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => GoTo("/dev/motor-doc-schema-test"))">电机文档字段测试</MudMenuItem>
+            </MudMenu>
+
+            <MudMenu Label="遮阳合同管理"
+                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                     Variant="Variant.Text"
+                     Color="Color.Inherit"
+                     Dense="true"
+                     Class="zyqd-nav-menu"
+                     AnchorOrigin="Origin.BottomLeft"
+                     TransformOrigin="Origin.TopLeft">
+                <MudMenuItem OnClick="@(() => GoTo("/contract-pi"))">客户PI列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("报关PI列表"))">报关PI列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("客户CI列表"))">客户CI列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("报关PI生成入口"))">报关PI生成入口</MudMenuItem>
+                <MudMenuItem OnClick="@(() => GoTo("/contract-ci/from-pi"))">客户CI生成入口</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("装箱单生成入口"))">装箱单生成入口</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("报关/装箱单列表"))">报关/装箱单列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => GoTo("/contract-base"))">合同基础数据</MudMenuItem>
+            </MudMenu>
+
+            <MudMenu Label="报价"
+                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                     Variant="Variant.Text"
+                     Color="Color.Inherit"
+                     Dense="true"
+                     Class="zyqd-nav-menu"
+                     AnchorOrigin="Origin.BottomLeft"
+                     TransformOrigin="Origin.TopLeft">
+                <MudMenuItem OnClick="@(() => NotReady("报价列表"))">报价列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("报价录入"))">报价录入</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("电机类基础数据维护"))">电机类基础数据维护</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("推杆类基础数据维护"))">推杆类基础数据维护</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("其他配件基础数据维护"))">其他配件基础数据维护</MudMenuItem>
+            </MudMenu>
+
+            @if (_canViewInvoiceKp)
+            {
+                <MudMenu Label="遮阳开票管理"
+                         EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                         Variant="Variant.Text"
+                         Color="Color.Inherit"
+                         Dense="true"
+                         Class="zyqd-nav-menu"
+                         AnchorOrigin="Origin.BottomLeft"
+                         TransformOrigin="Origin.TopLeft">
+                    <MudMenuItem OnClick="@(() => GoTo("/invoice-kp"))">遮阳开票汇总</MudMenuItem>
+                </MudMenu>
+            }
+
+            <MudMenu Label="检测报告管理"
+                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                     Variant="Variant.Text"
+                     Color="Color.Inherit"
+                     Dense="true"
+                     Class="zyqd-nav-menu"
+                     AnchorOrigin="Origin.BottomLeft"
+                     TransformOrigin="Origin.TopLeft">
+                <MudMenuItem OnClick="@(() => NotReady("检测报告管理"))">检测报告管理</MudMenuItem>
+                <MudMenuItem OnClick="@(() => NotReady("检测报告管理列表"))">检测报告管理列表</MudMenuItem>
+            </MudMenu>
+
+            @if (_canManageUsers)
+            {
+                <MudMenu Label="系统管理"
+                         EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                         Variant="Variant.Text"
+                         Color="Color.Inherit"
+                         Dense="true"
+                         Class="zyqd-nav-menu"
+                         AnchorOrigin="Origin.BottomLeft"
+                         TransformOrigin="Origin.TopLeft">
+                    <MudMenuItem OnClick="@(() => GoTo("/personnel"))">人员管理</MudMenuItem>
+                </MudMenu>
+            }
+
+            <MudSpacer/>
+            @if (!string.IsNullOrEmpty(_empNo))
+            {
+                <MudChip T="string" Size="Size.Small" Class="mr-2 zyqd-emp-chip">@_empNo</MudChip>
+            }
+            <MudMenu Label="菜单"
+                     StartIcon="@Icons.Material.Filled.Menu"
+                     Variant="Variant.Text"
+                     Color="Color.Inherit"
+                     Dense="true"
+                     Class="zyqd-nav-menu"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight">
+                <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo("/project-list"))"/>
+                <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
+                @if (_canManageUsers)
+                {
+                    <MudMenuItem Label="人员管理" Icon="@Icons.Material.Filled.ManageAccounts" OnClick="@(() => GoTo("/personnel"))"/>
+                }
+                <MudDivider/>
+                <MudMenuItem Label="登出" Icon="@Icons.Material.Filled.Logout" OnClick="LogoutAsync"/>
+            </MudMenu>
+        </MudAppBar>
+
+        <MudMainContent Class="zyqd-main">
+            @Body
+        </MudMainContent>
+    </MudLayout>
+}
+
+<div id="blazor-error-ui" data-nosnippet>
+    发生未处理错误。
+    <a href="." class="reload">重新加载</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+<style>
+    html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    .mud-layout {
+        height: 100%;
+        min-height: 100%;
+    }
+
+    /*
+      MudAppBar 为 fixed，MudMainContent 需用 padding-top 避开顶栏。
+      高度用 100dvh（含顶栏占位），避免再减一次 appbar 导致底部留白。
+    */
+    .mud-main-content.zyqd-main {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        max-height: 100dvh;
+        min-height: 0;
+        overflow: hidden;
+        box-sizing: border-box;
+        padding-top: calc(var(--mud-appbar-height, 48px)) !important;
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        padding-bottom: 16px !important;
+    }
+
+    .zyqd-appbar.mud-appbar {
+        background-color: #222 !important;
+        color: #fff !important;
+        border-bottom: 1px solid #111;
+    }
+
+    .zyqd-nav-menu .mud-button-root,
+    .zyqd-appbar .zyqd-nav-menu .mud-menu-button {
+        color: #fff !important;
+        text-transform: none !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0;
+        min-width: 0 !important;
+        padding: 0 10px !important;
+        height: 48px !important;
+        border-radius: 0 !important;
+    }
+
+    .zyqd-nav-menu .mud-button-root:hover,
+    .zyqd-appbar .zyqd-nav-menu .mud-menu-button:hover {
+        background-color: #808080 !important;
+        color: #000 !important;
+    }
+
+    .zyqd-emp-chip.mud-chip {
+        background-color: #fff !important;
+        color: #000 !important;
+        border: 1px solid #ddd;
+    }
+</style>
+
+@code {
+    private bool _checked;
+    private bool _authReady;
+    private string? _empNo;
+    private bool _canManageUsers;
+    private bool _canViewInvoiceKp;
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        if (IsPublicPath)
+            _authReady = true;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _checked) return;
+        _checked = true;
+        if (IsPublicPath) return;
+
+        var loggedIn = false;
+        try
+        {
+            loggedIn = await Auth.IsLoggedInAsync();
+        }
+        catch
+        {
+            loggedIn = false;
+        }
+
+        if (!loggedIn)
+        {
+            Nav.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        var auth = await Auth.GetStoredAsync();
+        _empNo = auth?.EmpNo;
+        _canManageUsers = Auth.CanManageUsers(auth);
+        try
+        {
+            await Auth.RefreshPermissionsAsync();
+            auth = await Auth.GetStoredAsync();
+            _canManageUsers = Auth.CanManageUsers(auth);
+        }
+        catch
+        {
+            // 刷新失败时沿用本地缓存
+        }
+
+        _canViewInvoiceKp = Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
+        _authReady = true;
+        StateHasChanged();
+    }
+
+    private bool IsPublicPath
+    {
+        get
+        {
+            var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+            return path.Equals("login", StringComparison.OrdinalIgnoreCase)
+                   || path.Equals("Error", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private void GoTo(string url) => Nav.NavigateTo(url, forceLoad: false);
+
+    private void NotReady(string name) => Notify.Show($"{name} 功能开发中", Severity.Info);
+
+    private async Task LogoutAsync()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/login", replace: true);
+    }
+}

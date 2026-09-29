@@ -1,0 +1,231 @@
+@page "/invoice-kp"
+@rendermode InteractiveServer
+@inject InvoiceKpService InvoiceKp
+@inject CentralAuthService Auth
+
+<PageTitle>遮阳开票汇总</PageTitle>
+
+<div class="invoice-kp-page">
+    @if (!_allowed)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2">
+            当前账号无权查看遮阳开票汇总。
+        </MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-3" Outlined="true">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="ikp-toolbar">
+                <MudText Typo="Typo.body2" Class="ikp-label">开票期间</MudText>
+                <input type="month" class="ikp-month" value="@_monthStart" @onchange="OnMonthStartChanged" disabled="@(_busy || _readOnly)"/>
+                <MudText Typo="Typo.body2" Class="ikp-label">至</MudText>
+                <input type="month" class="ikp-month" value="@_monthEnd" @onchange="OnMonthEndChanged" disabled="@(_busy || _readOnly)"/>
+                <MudTextField @bind-Value="_keyword"
+                              Label="客户"
+                              Placeholder="客户编码/名称"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="ikp-keyword"
+                              OnKeyUp="OnKeyUp"
+                              Disabled="@(_busy || _readOnly)"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Search"
+                           OnClick="SearchAsync"
+                           Disabled="@(_busy || _readOnly)">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="SearchAsync"
+                           Disabled="@(_busy || _readOnly)">刷新</MudButton>
+                <MudSpacer/>
+                <MudText Typo="Typo.body2" Class="ikp-summary">
+                    共 <b>@_rows.Count</b> 条
+                    ＜数量合计 <b>@FormatNum(_totalQty)</b>，
+                    金额合计-USD <b>@FormatNum(_totalAmount)</b>＞
+                </MudText>
+            </MudStack>
+        </MudPaper>
+
+        @if (_readOnly)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-0">当前为只读权限（Controls.disabled）。</MudAlert>
+        }
+
+        <MudPaper Class="invoice-kp-table-wrap pa-0" Outlined="true">
+            <MudTable T="InvoiceKpSummaryRow"
+                      Items="_rows"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      FixedFooter="true"
+                      Height="@_tableHeight"
+                      Class="invoice-kp-table"
+                      Style="min-width: 960px;">
+                <HeaderContent>
+                    <MudTh>Customer name 客户名称</MudTh>
+                    <MudTh>Month 月份</MudTh>
+                    <MudTh>Product series 产品大类</MudTh>
+                    <MudTh Style="text-align:right">Qty per month 当月开票数量</MudTh>
+                    <MudTh Style="text-align:right">Amount per month-USD 当月开票金额</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="客户名称">@context.CustomerName</MudTd>
+                    <MudTd DataLabel="月份">@context.Month</MudTd>
+                    <MudTd DataLabel="产品大类">@context.ProductSeries</MudTd>
+                    <MudTd DataLabel="数量" Style="text-align:right">@FormatNum(context.Qty)</MudTd>
+                    <MudTd DataLabel="金额" Style="text-align:right">@FormatNum(context.AmountUsd)</MudTd>
+                </RowTemplate>
+                <FooterContent>
+                    <MudTd><b>合计</b></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd Style="text-align:right"><b>@FormatNum(_totalQty)</b></MudTd>
+                    <MudTd Style="text-align:right"><b>@FormatNum(_totalAmount)</b></MudTd>
+                </FooterContent>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无数据")</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudPaper>
+    }
+</div>
+
+<style>
+    .invoice-kp-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .ikp-toolbar { width: 100%; }
+    .ikp-label {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        color: var(--mud-palette-text-secondary);
+        padding: 0 4px;
+    }
+    .ikp-month {
+        height: 36px;
+        min-width: 150px;
+        padding: 4px 8px;
+        border: 1px solid var(--mud-palette-lines-inputs);
+        border-radius: 4px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+    }
+    .ikp-keyword { width: 220px; min-width: 180px; }
+    .ikp-summary {
+        color: var(--mud-palette-text-secondary);
+        white-space: nowrap;
+        padding-right: 4px;
+    }
+
+    .invoice-kp-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .invoice-kp-table {
+        height: 100%;
+    }
+
+    .invoice-kp-table .mud-table-container {
+        overflow: auto !important;
+    }
+</style>
+
+@code {
+    private bool _ready;
+    private bool _allowed;
+    private bool _readOnly;
+    private bool _isAdmin;
+    private bool _busy;
+    private string _empNo = "";
+    private string _monthStart = DateTime.Today.ToString("yyyy-MM");
+    private string _monthEnd = DateTime.Today.ToString("yyyy-MM");
+    private string _keyword = "";
+    private List<InvoiceKpSummaryRow> _rows = [];
+    private double _totalQty;
+    private double _totalAmount;
+    private string _tableHeight = "calc(100vh - 220px)";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _ready) return;
+        _ready = true;
+
+        var auth = await Auth.GetStoredAsync();
+        try
+        {
+            await Auth.RefreshPermissionsAsync();
+            auth = await Auth.GetStoredAsync();
+        }
+        catch { /* keep cached */ }
+
+        _empNo = (auth?.EmpNo ?? "").Trim();
+        _isAdmin = Auth.CanManageUsers(auth);
+        _allowed = Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
+        _readOnly = Auth.IsPageDisabled(auth, CentralApiOptions.InvoiceKpRoute);
+
+        var now = DateTime.Today.ToString("yyyy-MM");
+        _monthStart = now;
+        _monthEnd = now;
+
+        StateHasChanged();
+        if (_allowed)
+            await SearchAsync();
+    }
+
+    private void OnMonthStartChanged(ChangeEventArgs e) => _monthStart = e.Value?.ToString() ?? _monthStart;
+    private void OnMonthEndChanged(ChangeEventArgs e) => _monthEnd = e.Value?.ToString() ?? _monthEnd;
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (!_allowed || _busy) return;
+        _busy = true;
+        try
+        {
+            var result = await InvoiceKp.QuerySummaryAsync(new InvoiceKpQueryRequest
+            {
+                MonthStart = _monthStart,
+                MonthEnd = _monthEnd,
+                CustomerKeyword = _keyword,
+                EmpNo = _empNo,
+                IsAdmin = _isAdmin
+            });
+            _rows = result.Rows;
+            _totalQty = result.TotalQty;
+            _totalAmount = result.TotalAmountUsd;
+        }
+        catch (Exception ex)
+        {
+            _rows = [];
+            _totalQty = 0;
+            _totalAmount = 0;
+            Notify.Show("查询失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string FormatNum(double value) => value.ToString("0.00");
+}

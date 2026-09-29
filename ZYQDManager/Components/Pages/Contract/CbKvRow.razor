@@ -1,0 +1,51 @@
+<div class="cb-kv">
+    <div class="cb-kv-label">
+        @Label
+        @if (Required)
+        {
+            <span class="cb-kv-req">*</span>
+        }
+    </div>
+    <div class="cb-kv-value">@ChildContent</div>
+</div>
+
+<style>
+    .cb-kv {
+        display: grid;
+        grid-template-columns: 140px minmax(0, 1fr);
+        gap: 4px 16px;
+        align-items: start;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .cb-kv-label {
+        color: var(--mud-palette-text-secondary);
+        font-size: 14px;
+        line-height: 36px;
+        white-space: nowrap;
+    }
+
+    .cb-kv-req {
+        color: var(--mud-palette-error);
+        margin-left: 2px;
+    }
+
+    .cb-kv-value {
+        min-width: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+
+    .cb-kv-value .mud-input-control {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+</style>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

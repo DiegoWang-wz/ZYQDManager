@@ -1,0 +1,276 @@
+@page "/Profile"
+@rendermode InteractiveServer
+@using ZYQDManager.Components.Pages.Contract
+@inject CentralAuthService Auth
+@inject CentralUserInformationService UserInfo
+@inject CotractBaseService CotractBase
+
+<PageTitle>个人信息</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small">
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h5">个人信息</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            可修改姓名、部门、邮箱、电话与报价签名。工号与角色不可更改。
+        </MudText>
+
+        <MudTextField @bind-Value="_empNo"
+                      Label="工号"
+                      Variant="Variant.Outlined"
+                      Disabled="true"/>
+        <MudTextField @bind-Value="_displayName"
+                      Label="姓名"
+                      Variant="Variant.Outlined"
+                      Disabled="@(_busy || _readOnly)"
+                      Immediate="true"/>
+        <MudTextField @bind-Value="_roleText"
+                      Label="角色"
+                      Variant="Variant.Outlined"
+                      Disabled="true"/>
+        <MudTextField @bind-Value="_department"
+                      Label="部门"
+                      Variant="Variant.Outlined"
+                      Disabled="@(_busy || _readOnly)"
+                      Immediate="true"/>
+        <MudTextField @bind-Value="_email"
+                      Label="邮箱"
+                      Variant="Variant.Outlined"
+                      Disabled="@(_busy || _readOnly)"
+                      Immediate="true"/>
+        <MudTextField @bind-Value="_phone"
+                      Label="电话"
+                      Variant="Variant.Outlined"
+                      Disabled="@(_busy || _readOnly)"
+                      Immediate="true"/>
+
+        <MudDivider Class="my-1"/>
+        <MudText Typo="Typo.subtitle1">报价签名</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            替代旧表 T_ZYQD_Quotation_signature；有签名图的人员会出现在报价签名下拉中。
+        </MudText>
+        <MudTextField @bind-Value="_signature"
+                      Label="签名名称"
+                      Placeholder="默认可用姓名"
+                      Variant="Variant.Outlined"
+                      Disabled="@(_busy || _readOnly || _sigUploading)"
+                      Immediate="true"/>
+        <MudTextField @bind-Value="_signatureUrl"
+                      Label="签名图片路径"
+                      Placeholder="/Img/..."
+                      Variant="Variant.Outlined"
+                      Disabled="@(_busy || _readOnly || _sigUploading)"
+                      Immediate="true"
+                      HelperText="可手工填写路径，或下方上传"/>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <label class="profile-sig-upload">
+                <InputFile OnChange="OnSignatureFile" accept=".png,.jpg,.jpeg,.gif,.bmp,image/*" disabled="@(_busy || _readOnly || _sigUploading)"/>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Upload"
+                           Disabled="@(_busy || _readOnly || _sigUploading)"
+                           HtmlTag="span">
+                    @(_sigUploading ? "上传中…" : "上传签名图")
+                </MudButton>
+            </label>
+            @if (!string.IsNullOrWhiteSpace(_signatureUrl))
+            {
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Error"
+                           Disabled="@(_busy || _readOnly || _sigUploading)"
+                           OnClick="ClearSignature">
+                    清除
+                </MudButton>
+            }
+        </MudStack>
+        @if (!string.IsNullOrWhiteSpace(_signatureUrl))
+        {
+            <LegacyRemoteImg Path="@_signatureUrl" CssClass="profile-sig-preview"/>
+        }
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="@(_busy || _readOnly || _sigUploading)"
+                   OnClick="SaveAsync">
+            @(_busy ? "保存中…" : "保存")
+        </MudButton>
+    </MudStack>
+</MudContainer>
+
+<style>
+    .profile-sig-upload {
+        position: relative;
+        display: inline-flex;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .profile-sig-upload input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+
+    .profile-sig-preview {
+        max-width: 220px;
+        max-height: 100px;
+        object-fit: contain;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 4px;
+        background: #fff;
+        padding: 4px;
+    }
+</style>
+
+@code {
+    private const long MaxSigBytes = 8L * 1024 * 1024;
+    private bool _busy;
+    private bool _readOnly;
+    private bool _loaded;
+    private bool _sigUploading;
+    private string _empNo = "";
+    private string _displayName = "";
+    private string _roleText = "";
+    private string _department = "";
+    private string _email = "";
+    private string _phone = "";
+    private string _signature = "";
+    private string _signatureUrl = "";
+    private bool _viewAllCustomers;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loaded)
+            return;
+        _loaded = true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            if (auth is null || string.IsNullOrWhiteSpace(auth.EmpNo))
+            {
+                Notify.Show("未登录", Severity.Warning);
+                NavManager.NavigateTo("/login", replace: true);
+                return;
+            }
+
+            _empNo = auth.EmpNo;
+            _roleText = RoleText(auth.Role, auth.EmpNo);
+
+            var (ok, displayName, info, msg) = await UserInfo.GetAsync(_empNo);
+            if (!ok)
+            {
+                _readOnly = true;
+                Notify.Show(msg ?? "读取个人信息失败", Severity.Error);
+                return;
+            }
+
+            _displayName = displayName;
+            _department = info?.Department ?? "";
+            _email = info?.Email ?? "";
+            _phone = info?.Phone ?? "";
+            _signature = info?.Signature ?? "";
+            _signatureUrl = info?.SignatureUrl ?? "";
+            _viewAllCustomers = info?.ViewAllCustomers == true;
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearSignature() => _signatureUrl = "";
+
+    private async Task OnSignatureFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null || _readOnly) return;
+        if (file.Size > MaxSigBytes)
+        {
+            Notify.Show("签名图片不能超过 8MB", Severity.Warning);
+            return;
+        }
+
+        _sigUploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxSigBytes);
+            var path = await CotractBase.UploadImageAsync(stream, file.Name);
+            _signatureUrl = path;
+            if (string.IsNullOrWhiteSpace(_signature) && !string.IsNullOrWhiteSpace(_displayName))
+                _signature = _displayName.Trim();
+            Notify.Show("签名图片已上传（请点保存写入档案）", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _sigUploading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || _readOnly)
+            return;
+
+        if (string.IsNullOrWhiteSpace(_displayName))
+        {
+            Notify.Show("请输入姓名", Severity.Warning);
+            return;
+        }
+
+        var email = (_email ?? "").Trim();
+        if (email.Length > 0 && (email.Length < 5 || !email.Contains('@') || !email.Contains('.')))
+        {
+            Notify.Show("请输入有效邮箱", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await UserInfo.SaveAsync(
+                _empNo,
+                new ZyqdUserInformationDto
+                {
+                    Department = (_department ?? "").Trim(),
+                    Email = email,
+                    Phone = (_phone ?? "").Trim(),
+                    ViewAllCustomers = _viewAllCustomers,
+                    Signature = string.IsNullOrWhiteSpace(_signature) ? null : _signature.Trim(),
+                    SignatureUrl = string.IsNullOrWhiteSpace(_signatureUrl) ? null : _signatureUrl.Trim()
+                },
+                _displayName.Trim());
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("个人信息已保存", Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string RoleText(string? role, string empNo)
+    {
+        if (string.Equals(empNo, "JcAdmin", StringComparison.OrdinalIgnoreCase))
+            return "超级管理员";
+        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
+            return "管理员";
+        return "操作员";
+    }
+}

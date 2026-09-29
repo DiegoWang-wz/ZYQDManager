@@ -1,0 +1,211 @@
+@page "/contract-base/new"
+@page "/contract-base/{Id:int}/copy"
+@page "/contract-base/{Id:int}/detail"
+@page "/contract-base/{Id:int}"
+@rendermode InteractiveServer
+@inject CotractBaseService CotractBase
+
+<PageTitle>@Title</PageTitle>
+
+<div class="cb-edit-page">
+    <div class="cb-edit-toolbar">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.h6">@Title</MudText>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/contract-base">返回列表</MudButton>
+                @if (!IsDetail)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
+                        @(IsCopy ? "创建" : "保存")
+                    </MudButton>
+                }
+            </MudStack>
+        </MudStack>
+    </div>
+
+    <div class="cb-edit-scroll">
+        <MudPaper Outlined="true" Class="pa-4 cb-edit-card">
+            <fieldset class="cb-form" disabled="@IsDetail">
+                <div class="cb-kv-list">
+                    <CbKvImage Label="客户外箱标志" @bind-Value="_model.Customer_outer_box_logo" ReadOnly="IsDetail" AllowNa="true" Required="true"/>
+                    <CbKvText Label="托唛" @bind-Value="_model.Tuo_Mark" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvImage Label="托唛图" @bind-Value="_model.Tuo_Mark_url" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="客户目的国" @bind-Value="_model.Customer_destination_country" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="客户编号" @bind-Value="_model.ClientNo" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="客户名称" @bind-Value="_model.ClientName" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="物料编号" @bind-Value="_model.materialNo" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="物料名称" @bind-Value="_model.materialName" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="物料类型" @bind-Value="_model.materialType" ReadOnly="IsDetail"/>
+                    <CbKvText Label="物料 Model" @bind-Value="_model.materialModel" ReadOnly="IsDetail"/>
+                    <CbKvText Label="物料 specs" @bind-Value="_model.materiaSpecs" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="物料 Powered" @bind-Value="_model.materiaPowered" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="物料 Cust" @bind-Value="_model.materiaCust" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="备注 Notes" @bind-Value="_model.Notes" ReadOnly="IsDetail" Multiline="true"/>
+                    <CbKvText Label="数量单位" @bind-Value="_model.Quantity_unit" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="货币单位" @bind-Value="_model.currency_unit" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvNumber Label="单价" @bind-Value="_model.price" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="单价单位" @bind-Value="_model.price_unit" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="箱唛1" @bind-Value="_model.Box_label" ReadOnly="IsDetail" Multiline="true" Required="true"/>
+                    <CbKvImage Label="箱唛图例1" @bind-Value="_model.Box_label_url" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="箱唛2" @bind-Value="_model.Box_label2" ReadOnly="IsDetail" Multiline="true"/>
+                    <CbKvImage Label="箱唛图例2" @bind-Value="_model.Box_label_url2" ReadOnly="IsDetail"/>
+                    <CbKvText Label="客户 PO 号" @bind-Value="_model.Client_poNo" ReadOnly="IsDetail"/>
+                    <CbKvText Label="客户型号" @bind-Value="_model.Client_Model" ReadOnly="IsDetail"/>
+                    <CbKvImage Label="铭牌图片" @bind-Value="_model.nameplate_url" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvImage Label="铭牌图片2" @bind-Value="_model.nameplate_url2" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="SAP 单号" @bind-Value="_model.SAP_order_NO" ReadOnly="IsDetail"/>
+                    <CbKvText Label="打包方式" @bind-Value="_model.Packing_method" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="打包方式单位" @bind-Value="_model.Packing_method_unit" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="纸箱尺寸" @bind-Value="_model.Carton_Size" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="托盘尺寸" @bind-Value="_model.Pallet_Size" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="打托方式" @bind-Value="_model.palletizing_method" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="打托方式单位" @bind-Value="_model.palletizing_method_unit" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvNumber Label="净重" @bind-Value="_model.Net_weight" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvNumber Label="毛重" @bind-Value="_model.gross_weight" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvText Label="负责人" @bind-Value="_model.Customer_Manager" ReadOnly="IsDetail" Required="true"/>
+                </div>
+            </fieldset>
+        </MudPaper>
+    </div>
+</div>
+
+<style>
+    .cb-edit-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .cb-edit-toolbar {
+        flex: 0 0 auto;
+    }
+
+    .cb-edit-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+    }
+
+    .cb-edit-card {
+        width: 100%;
+        max-width: 720px;
+        align-self: flex-start;
+        flex: 0 1 720px;
+    }
+
+    .cb-form {
+        border: 0;
+        padding: 0;
+        margin: 0;
+        min-inline-size: 0;
+    }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _busy;
+    private string? _loadedKey;
+    private ZyqdCotractBaseModel _model = new();
+
+    private bool IsCopy => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/copy", StringComparison.OrdinalIgnoreCase);
+    private bool IsDetail => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/detail", StringComparison.OrdinalIgnoreCase);
+    private bool IsCreate => Id == 0 || IsCopy;
+    private string Title => IsDetail ? "合同基础数据详情" : IsCopy ? "复制合同基础数据" : Id == 0 ? "新建合同基础数据" : "编辑合同基础数据";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{Id}:{IsCopy}:{IsDetail}";
+        if (_loadedKey == key) return;
+        _loadedKey = key;
+
+        if (Id == 0)
+        {
+            _model = new ZyqdCotractBaseModel();
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            _model.Customer_Manager = empNo;
+            _model.CreatePerson = empNo;
+            return;
+        }
+
+        var row = await CotractBase.GetAsync(Id);
+        if (row is null)
+        {
+            Notify.Show("记录不存在", Severity.Warning);
+            NavManager.NavigateTo("/contract-base");
+            return;
+        }
+
+        var scope = await BuildScopeAsync();
+        if (!CotractBase.CanAccess(row, scope))
+        {
+            Notify.Show("没有这条数据的权限", Severity.Warning);
+            NavManager.NavigateTo("/contract-base");
+            return;
+        }
+
+        _model = row;
+        if (IsCopy)
+        {
+            _model.Id = 0;
+            _model.CreatePerson = await Auth.GetCurrentEmpNoAsync();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (IsDetail) return;
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            var wasCreate = IsCreate;
+            var (ok, msg, id) = await CotractBase.SaveAsync(_model, empNo, wasCreate);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show(IsCopy ? "创建成功" : "保存成功", Severity.Success);
+            if (IsCopy)
+                NavManager.NavigateTo("/contract-base");
+            else if (wasCreate && id > 0)
+                NavManager.NavigateTo($"/contract-base/{id}", replace: true);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<CotractBaseQueryDto> BuildScopeAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        var viewAll = Auth.CanManageUsers(auth);
+        var assigned = new List<string>();
+        if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
+        {
+            var (_, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
+            viewAll = Auth.CanViewAllCustomers(auth, info);
+            if (!viewAll)
+                assigned = await CustomerAssign.GetCodesByEmpNoAsync(auth.EmpNo);
+        }
+
+        return new CotractBaseQueryDto
+        {
+            ViewAllCustomers = viewAll,
+            ViewerEmpNo = auth?.EmpNo,
+            AssignedCustomerCodes = assigned
+        };
+    }
+}

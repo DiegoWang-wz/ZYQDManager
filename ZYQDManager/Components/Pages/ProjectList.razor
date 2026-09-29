@@ -1,0 +1,402 @@
+@page "/project-list"
+@rendermode InteractiveServer
+@inject ProjectListService Projects
+@inject CentralAuthService Auth
+@inject CentralUserInformationService UserInfo
+@inject UserCustomerAssignService CustomerAssign
+
+<PageTitle>遮阳项目列表</PageTitle>
+
+<div class="project-list-page">
+    <div class="project-list-top">
+        <MudPaper Class="pa-3" Outlined="true">
+            <MudGrid Spacing="2">
+                <MudItem xs="3">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                        <MudDatePicker @bind-Date="_dateStart" Label="开始" Variant="Variant.Outlined" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Class="flex-grow-1"/>
+                        <MudDatePicker @bind-Date="_dateEnd" Label="结束" Variant="Variant.Outlined" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Class="flex-grow-1"/>
+                    </MudStack>
+                </MudItem>
+
+                <MudItem xs="3">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                        <MudSelect T="string" @bind-Value="_filterColumn" Label="条件" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1">
+                            <MudSelectItem Value="@("Customer")">客户</MudSelectItem>
+                            <MudSelectItem Value="@("DemandPerson")">需求人</MudSelectItem>
+                            <MudSelectItem Value="@("CustomerPartCode")">客户产品编号</MudSelectItem>
+                            <MudSelectItem Value="@("MotorModelSpec")">产品型号</MudSelectItem>
+                            <MudSelectItem Value="@("Description")">品名</MudSelectItem>
+                        </MudSelect>
+                        <MudTextField @bind-Value="_keyword"
+                                      Label="内容"
+                                      Placeholder="输入关键词"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="flex-grow-1"
+                                      Immediate="true"
+                                      OnKeyUp="OnKeywordKeyUp"/>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="6" Class="d-flex align-end">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Justify="Justify.FlexStart" Style="width:100%; height:100%">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">
+                            搜索
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="SearchAsync" Disabled="_busy">
+                            刷新
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/motor/new">新增电机</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/remote/new">新增遥控器</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/controlbox/new">新增控制盒</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/actuator/new">新增推杆</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="@(() => NotReady("拷贝"))" Disabled="_selected.Count == 0">拷贝</MudButton>
+                        <MudCheckBox T="bool" @bind-Value="_includeDraft" Label="草稿" Color="Color.Primary" Dense="true"/>
+                        <MudCheckBox T="bool" @bind-Value="_includeForwarded" Label="已转发" Color="Color.Primary" Dense="true"/>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    </div>
+
+    <MudPaper Class="project-list-table-wrap pa-0" Outlined="true">
+        <MudTable T="ProjectListItemDto"
+                  Items="_rows"
+                  Dense="true"
+                  Hover="true"
+                  Striped="true"
+                  Bordered="true"
+                  Loading="_busy"
+                  MultiSelection="true"
+                  @bind-SelectedItems="_selected"
+                  Breakpoint="Breakpoint.None"
+                  FixedHeader="true"
+                  OnRowClick="OnRowClick"
+                  Class="project-list-table">
+            <ColGroup>
+                <col style="width:42px"/>
+                <col style="width:4%"/>
+                <col style="width:4.5%"/>
+                <col style="width:7%"/>
+                <col style="width:4.5%"/>
+                <col style="width:9%"/>
+                <col style="width:7%"/>
+                <col style="width:5.5%"/>
+                <col style="width:6.5%"/>
+                <col style="width:6.5%"/>
+                <col style="width:5.5%"/>
+                <col style="width:6.5%"/>
+                <col style="width:6.5%"/>
+                <col style="width:5%"/>
+                <col style="width:6.5%"/>
+                <col style="width:6.5%"/>
+                <col style="width:7%"/>
+            </ColGroup>
+            <HeaderContent>
+                <MudTh>客户</MudTh>
+                <MudTh>需求人</MudTh>
+                <MudTh>客户产品编号</MudTh>
+                <MudTh>项目类型</MudTh>
+                <MudTh>产品型号</MudTh>
+                <MudTh>品名</MudTh>
+                <MudTh>研发审批1</MudTh>
+                <MudTh>研发审批意见</MudTh>
+                <MudTh>研发审批状态</MudTh>
+                <MudTh>研发审批2</MudTh>
+                <MudTh>研发审批意见</MudTh>
+                <MudTh>研发审批状态</MudTh>
+                <MudTh>最终审批</MudTh>
+                <MudTh>最终审批意见</MudTh>
+                <MudTh>最终审批状态</MudTh>
+                <MudTh>提出需求的时间</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="客户">@Dash(context.Customer)</MudTd>
+                <MudTd DataLabel="需求人">@Dash(context.DemandPerson)</MudTd>
+                <MudTd DataLabel="客户产品编号">@Dash(context.CustomerPartCode)</MudTd>
+                <MudTd DataLabel="项目类型">@context.ProductType</MudTd>
+                <MudTd DataLabel="产品型号">@Dash(context.ProductModel)</MudTd>
+                <MudTd DataLabel="品名">@Dash(context.Description)</MudTd>
+                <MudTd DataLabel="研发审批1">@Dash(context.RdApprove1Name)</MudTd>
+                <MudTd DataLabel="研发审批意见">@Dash(context.RdApprove1Comment)</MudTd>
+                <MudTd DataLabel="研发审批状态">@StatusText(context.RdApprove1Status)</MudTd>
+                <MudTd DataLabel="研发审批2">@Dash(context.RdApprove2Name)</MudTd>
+                <MudTd DataLabel="研发审批意见">@Dash(context.RdApprove2Comment)</MudTd>
+                <MudTd DataLabel="研发审批状态">@StatusText(context.RdApprove2Status)</MudTd>
+                <MudTd DataLabel="最终审批">@Dash(context.FinalApproveName)</MudTd>
+                <MudTd DataLabel="最终审批意见">@Dash(context.FinalApproveComment)</MudTd>
+                <MudTd DataLabel="最终审批状态">@StatusText(context.FinalApproveStatus)</MudTd>
+                <MudTd DataLabel="提出需求的时间">@FormatDate(context.TimeToRequest)</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">暂无项目，可点击「新增电机」创建草稿</MudText>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }" InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</div>
+
+<style>
+    .project-list-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 10px;
+        overflow: hidden;
+    }
+
+    .project-list-top {
+        flex: 0 0 auto;
+    }
+
+    .project-list-table-wrap.mud-paper {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .project-list-table.mud-table {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        width: 100%;
+        display: flex !important;
+        flex-direction: column !important;
+        background: transparent;
+        font-size: 0.75rem !important;
+    }
+
+    .project-list-table .mud-table-cell,
+    .project-list-table .mud-table-pagination,
+    .project-list-table .mud-table-pagination .mud-typography,
+    .project-list-table .mud-input,
+    .project-list-table .mud-button-root {
+        font-size: 0.75rem !important;
+    }
+
+    .project-list-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+    }
+
+    .project-list-table .mud-table-root {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+    }
+
+    /* 纵横网格线，接近旧系统列表 */
+    .project-list-table .mud-table-root .mud-table-head .mud-table-cell,
+    .project-list-table .mud-table-root .mud-table-body .mud-table-cell {
+        border: 1px solid #e0e0e0 !important;
+        vertical-align: middle !important;
+    }
+
+    .project-list-table .mud-table-head .mud-table-cell {
+        white-space: nowrap !important;
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+
+    /* MultiSelection 勾选列：固定宽度 + 行高变高时垂直居中 */
+    .project-list-table .mud-table-cell:first-child {
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        padding: 0 !important;
+        text-align: center !important;
+        vertical-align: middle !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }
+
+    .project-list-table .mud-table-cell:first-child .mud-input-control,
+    .project-list-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .project-list-table .mud-table-cell:first-child .mud-button-root,
+    .project-list-table .mud-table-cell:first-child .mud-icon-button {
+        padding: 4px !important;
+        margin: 0 !important;
+    }
+
+    .project-list-table .mud-table-body .mud-table-cell {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+
+    .project-list-table .mud-table-body .mud-table-cell:first-child {
+        white-space: nowrap !important;
+        overflow-wrap: normal;
+        word-break: normal;
+        padding: 0 !important;
+    }
+
+    .project-list-table .mud-table-pagination {
+        flex: 0 0 auto !important;
+        margin-top: auto;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .project-list-table .mud-table-body .mud-table-row {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private bool _busy;
+    private List<ProjectListItemDto> _rows = new();
+    private HashSet<ProjectListItemDto> _selected = new();
+    private bool _confirmDelete;
+
+    private DateTime? _dateStart = DateTime.Today.AddDays(-30);
+    private DateTime? _dateEnd = DateTime.Today;
+    private string _filterColumn = "Customer";
+    private string? _keyword;
+    private bool _includeDraft = true;
+    private bool _includeForwarded = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _busy = true;
+        _confirmDelete = false;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            var viewAll = Auth.CanManageUsers(auth);
+            var assigned = new List<string>();
+            if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
+            {
+                var (_, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
+                viewAll = Auth.CanViewAllCustomers(auth, info);
+                if (!viewAll)
+                    assigned = await CustomerAssign.GetCodesByEmpNoAsync(auth.EmpNo);
+            }
+
+            var query = new ProjectListQueryDto
+            {
+                DateStart = _dateStart,
+                DateEnd = _dateEnd,
+                FilterColumn = _filterColumn,
+                Keyword = _keyword,
+                IncludeDraft = _includeDraft,
+                IncludeForwarded = _includeForwarded,
+                ViewAllCustomers = viewAll,
+                ViewerEmpNo = auth?.EmpNo,
+                AssignedCustomerCodes = assigned
+            };
+            _rows = await Projects.QueryAsync(query);
+            _selected.Clear();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+            _rows = new();
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnKeywordKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0) return;
+
+        if (!_confirmDelete)
+        {
+            _confirmDelete = true;
+            Notify.Show($"再点一次「删除」确认删除选中的 {_selected.Count} 条", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            var guids = _selected.Select(x => x.DocGuid).ToList();
+            await Projects.SoftDeleteAsync(guids, auth?.EmpNo);
+            Notify.Show("已删除", Severity.Success);
+            _confirmDelete = false;
+            await SearchAsync();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("删除失败：" + ex.Message, Severity.Error);
+            _busy = false;
+            _confirmDelete = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearSelection()
+    {
+        _selected.Clear();
+        _confirmDelete = false;
+    }
+
+    private void OnRowClick(TableRowClickEventArgs<ProjectListItemDto> args)
+    {
+        // Detail==2 表示双击；单击仅用于勾选，不打开
+        if (args.MouseEventArgs.Detail != 2 || args.Item is null)
+            return;
+        OpenItem(args.Item);
+    }
+
+    private void OpenItem(ProjectListItemDto item)
+    {
+        if (item.ProductType == "电机")
+            NavManager.NavigateTo($"/project/motor/{item.DocGuid}?projectGuid={item.ProjectGuid}");
+        else
+            NotReady($"{item.ProductType}详情");
+    }
+
+    private void NotReady(string name) => Notify.Show($"{name} 功能开发中", Severity.Info);
+
+    private static string Dash(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string StatusText(string? status) =>
+        string.IsNullOrWhiteSpace(status) ? "-" : status;
+
+    private static string FormatDate(DateTime? dt) =>
+        dt.HasValue ? dt.Value.ToString("yyyy-MM-dd") : "-";
+}

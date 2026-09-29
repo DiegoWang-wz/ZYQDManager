@@ -1,0 +1,35 @@
+@page "/project/remote/new"
+@page "/project/controlbox/new"
+@page "/project/actuator/new"
+@rendermode InteractiveServer
+@inject NavigationManager Nav
+
+<PageTitle>立项单创建</PageTitle>
+
+<MudStack Spacing="3" Class="pa-2">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h5">@_title</MudText>
+        <MudButton Variant="Variant.Outlined" Href="/project-list">返回列表</MudButton>
+    </MudStack>
+
+    <MudAlert Severity="Severity.Info" Dense="true">
+        与电机一致：进入本页时<strong>不会</strong>生成 GUID；保存后才写入数据库。
+        当前品类立项表单开发中，请先使用「新增电机」。
+    </MudAlert>
+</MudStack>
+
+@code {
+    private string _title = "立项单创建";
+
+    protected override void OnInitialized()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Trim('/').ToLowerInvariant();
+        _title = path switch
+        {
+            "project/remote/new" => "新增遥控器立项单",
+            "project/controlbox/new" => "新增控制盒立项单",
+            "project/actuator/new" => "新增推杆立项单",
+            _ => "立项单创建"
+        };
+    }
+}

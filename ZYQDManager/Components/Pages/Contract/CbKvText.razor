@@ -1,0 +1,77 @@
+<CbKvRow Label="@Label" Required="Required">
+    @if (ReadOnly)
+    {
+        <span class="@(UseMultiline ? "cb-kv-pre" : null)">@DisplayText</span>
+    }
+    else if (UseMultiline)
+    {
+        <MudTextField T="string"
+                      Value="Value"
+                      ValueChanged="OnChanged"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Immediate="true"
+                      AutoGrow="true"
+                      Lines="3"
+                      MaxLines="16"/>
+    }
+    else
+    {
+        <MudTextField T="string"
+                      Value="Value"
+                      ValueChanged="OnChanged"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Immediate="true"/>
+    }
+</CbKvRow>
+
+<style>
+    .cb-kv-pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        display: block;
+        line-height: 1.5;
+        padding: 8px 0;
+    }
+</style>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool Multiline { get; set; }
+    [Parameter] public bool Required { get; set; }
+
+    private bool UseMultiline
+    {
+        get
+        {
+            if (Multiline) return true;
+            var v = Value ?? "";
+            if (v.Length >= 60) return true;
+            var lines = 0;
+            foreach (var part in v.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (part.Trim().Length > 0) lines++;
+                if (lines >= 3) return true;
+            }
+            return false;
+        }
+    }
+
+    private string DisplayText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Value)) return "—";
+            if (UseMultiline) return Value;
+            return string.Join(" ", Value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0));
+        }
+    }
+
+    private Task OnChanged(string v) => ValueChanged.InvokeAsync(v);
+}

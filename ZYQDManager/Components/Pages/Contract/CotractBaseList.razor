@@ -1,0 +1,763 @@
+@page "/contract-base"
+@rendermode InteractiveServer
+@inject CotractBaseService CotractBase
+@inject CentralAuthService Auth
+@inject CentralUserInformationService UserInfo
+@inject UserCustomerAssignService CustomerAssign
+@inject IConfiguration Config
+@inject IJSRuntime JS
+
+<PageTitle>合同基础数据</PageTitle>
+
+<div class="cotract-base-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="cb-toolbar">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cb-toolbar-left">
+                <MudSelect T="string"
+                           Value="_filterColumn"
+                           ValueChanged="OnFilterColumnChanged"
+                           Label="条件"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="cb-filter-select"
+                           MaxHeight="420">
+                    @foreach (var field in CotractBaseFilterFields.All)
+                    {
+                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (IsDateFilter)
+                {
+                    <MudDatePicker @bind-Date="_dateStart"
+                                   Label="开始"
+                                   DateFormat="yyyy-MM-dd"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="cb-filter-date"/>
+                    <MudDatePicker @bind-Date="_dateEnd"
+                                   Label="结束"
+                                   DateFormat="yyyy-MM-dd"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="cb-filter-date"/>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_keyword"
+                                  Label="内容"
+                                  Placeholder="输入查询内容"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  Class="cb-filter-input"
+                                  OnKeyUp="OnKeyUp"/>
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+            </MudStack>
+            <div class="cb-toolbar-spacer"></div>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cb-toolbar-right">
+                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_selected.Count == 0 || _busy">
+                    @(_selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
+                </MudButton>
+                <label class="cb-file-label">
+                    <InputFile OnChange="OnImportFile" accept=".xlsx" disabled="@_busy"/>
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Upload"
+                               Disabled="_busy"
+                               HtmlTag="span">
+                        上传
+                    </MudButton>
+                </label>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Description"
+                           OnClick="DownloadTemplateAsync"
+                           Disabled="_busy">
+                    下载模板
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-base/new">新建</MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="cotract-base-table-wrap pa-0" Outlined="true">
+        @if (_ready)
+        {
+        <MudTable @ref="_table"
+                  T="ZyqdCotractBaseModel"
+                  ServerData="LoadServerData"
+                  RowsPerPage="20"
+                  Dense="true"
+                  Hover="true"
+                  Striped="true"
+                  Bordered="true"
+                  Loading="_busy"
+                  MultiSelection="true"
+                  SelectOnRowClick="false"
+                  @bind-SelectedItems="_selected"
+                  Breakpoint="Breakpoint.None"
+                  FixedHeader="true"
+                  SortMode="SortMode.Single"
+                  Class="cotract-base-table">
+            <HeaderContent>
+                <MudTh Class="cb-no-cell">序号</MudTh>
+                <MudTh>客户外箱标志</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Tuo_Mark">托唛</MudTableSortLabel></MudTh>
+                <MudTh>托唛(图)</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_destination_country">客户目的国</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="ClientNo">客户编号</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="ClientName">客户名称</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialNo">物料号</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialName">物料名</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialType">物料类型</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialModel">物料model</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaSpecs">物料specs</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaPowered">物料Powered</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaCust">物料Cust</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Notes">备注Notes</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Quantity_unit">数量单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="currency_unit">货币单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price">单价</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price_unit">单价单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label">箱唛</MudTableSortLabel></MudTh>
+                <MudTh>箱唛图例</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label2">箱唛2</MudTableSortLabel></MudTh>
+                <MudTh>箱唛图例2</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Client_poNo">客户po号</MudTableSortLabel></MudTh>
+                <MudTh>铭牌图片</MudTh>
+                <MudTh>铭牌图片2</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="SAP_order_NO">sap单号</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method">打包方式</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method_unit">打包方式单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Carton_Size">纸箱尺寸</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Pallet_Size">托盘尺寸</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="palletizing_method">打托方式</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="palletizing_method_unit">打托方式单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Net_weight">净重</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="gross_weight">毛重</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_Manager">负责人</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建日期</MudTableSortLabel></MudTh>
+                <MudTh Class="cb-ops-cell">操作</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd Class="cb-no-cell">@RowNo(context)</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Customer_outer_box_logo"/></MudTd>
+                <MudTd>@context.Tuo_Mark</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Tuo_Mark_url"/></MudTd>
+                <MudTd>@context.Customer_destination_country</MudTd>
+                <MudTd>@context.ClientNo</MudTd>
+                <MudTd>@context.ClientName</MudTd>
+                <MudTd>@context.materialNo</MudTd>
+                <MudTd>@context.materialName</MudTd>
+                <MudTd>@context.materialType</MudTd>
+                <MudTd>@context.materialModel</MudTd>
+                <MudTd>@context.materiaSpecs</MudTd>
+                <MudTd>@context.materiaPowered</MudTd>
+                <MudTd>@context.materiaCust</MudTd>
+                <MudTd>@context.Notes</MudTd>
+                <MudTd>@context.Quantity_unit</MudTd>
+                <MudTd>@context.currency_unit</MudTd>
+                <MudTd>@context.price</MudTd>
+                <MudTd>@context.price_unit</MudTd>
+                <MudTd>@context.Box_label</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Box_label_url"/></MudTd>
+                <MudTd>@context.Box_label2</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Box_label_url2"/></MudTd>
+                <MudTd>@context.Client_poNo</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.nameplate_url"/></MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.nameplate_url2"/></MudTd>
+                <MudTd>@context.SAP_order_NO</MudTd>
+                <MudTd>@context.Packing_method</MudTd>
+                <MudTd>@context.Packing_method_unit</MudTd>
+                <MudTd>@context.Carton_Size</MudTd>
+                <MudTd>@context.Pallet_Size</MudTd>
+                <MudTd>@context.palletizing_method</MudTd>
+                <MudTd>@context.palletizing_method_unit</MudTd>
+                <MudTd>@context.Net_weight</MudTd>
+                <MudTd>@context.gross_weight</MudTd>
+                <MudTd>@context.Customer_Manager</MudTd>
+                <MudTd>@context.CreatePerson</MudTd>
+                <MudTd>@(context.CreateTime?.ToString("yyyy-MM-dd"))</MudTd>
+                <MudTd Class="cb-ops-cell">
+                    <div class="cb-ops-grid">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   Class="cb-ops-btn"
+                                   Href="@($"/contract-base/{context.Id}")">编辑</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text"
+                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                   Class="cb-ops-btn"
+                                   Href="@($"/contract-base/{context.Id}/detail")">详情</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text"
+                                   StartIcon="@Icons.Material.Filled.ContentCopy"
+                                   Class="cb-ops-btn"
+                                   Href="@($"/contract-base/{context.Id}/copy")">复制</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Delete"
+                                   Class="cb-ops-btn"
+                                   Disabled="_busy"
+                                   OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                    </div>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无可见数据")</MudText>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }"
+                               InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+            </PagerContent>
+        </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .cotract-base-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .cb-toolbar {
+        width: 100%;
+    }
+
+    .cb-toolbar-left,
+    .cb-toolbar-right {
+        flex: 0 0 auto;
+    }
+
+    .cb-toolbar-right {
+        margin-left: auto;
+    }
+
+    .cb-toolbar-spacer {
+        flex: 1 1 auto !important;
+        min-width: 8px;
+    }
+
+    .cb-filter-select {
+        width: 180px;
+        min-width: 180px;
+    }
+
+    .cb-filter-input {
+        width: 240px;
+        min-width: 240px;
+    }
+
+    .cb-filter-date {
+        width: 150px;
+        min-width: 150px;
+    }
+
+    .cb-file-label {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .cb-file-label input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+
+    .cotract-base-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .cotract-base-table {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .cotract-base-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+    }
+
+    .cotract-base-table .mud-table-pagination {
+        flex: 0 0 auto !important;
+        margin-top: auto;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .cotract-base-table .mud-table-root {
+        border-collapse: separate !important;
+        border-spacing: 0;
+    }
+
+    .cotract-base-table .mud-table-head .mud-table-cell:not(.cb-ops-cell):not(.cb-no-cell):not(:first-child),
+    .cotract-base-table .mud-table-body .mud-table-cell:not(.cb-ops-cell):not(.cb-no-cell):not(:first-child) {
+        white-space: nowrap;
+        min-width: 88px;
+        vertical-align: middle;
+    }
+
+    .cotract-base-table .mud-table-head .mud-table-sort-label {
+        white-space: nowrap;
+    }
+
+    .cotract-base-table .mud-table-cell:first-child,
+    .cotract-base-table .mud-table-cell.cb-no-cell {
+        position: sticky;
+        z-index: 4;
+        box-sizing: border-box;
+        vertical-align: middle !important;
+        overflow: hidden;
+        background-color: #fff !important;
+    }
+
+    .cotract-base-table .mud-table-head .mud-table-cell:first-child,
+    .cotract-base-table .mud-table-head .mud-table-cell.cb-no-cell {
+        z-index: 6;
+    }
+
+    .cotract-base-table .mud-table-cell:first-child {
+        left: 0;
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        padding: 0 !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+    }
+
+    .cotract-base-table .mud-table-cell:first-child .mud-input-control,
+    .cotract-base-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .cotract-base-table .mud-table-cell.cb-no-cell {
+        left: 42px;
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        padding: 0 2px !important;
+        text-align: center;
+        white-space: nowrap;
+        border-right: 1px solid #e0e0e0;
+    }
+
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-no-cell {
+        background-color: #f5f5f5 !important;
+    }
+
+    .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
+    .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-no-cell {
+        background-color: #eeeeee !important;
+    }
+
+    .cotract-base-table .mud-table-cell.cb-ops-cell {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        box-sizing: border-box;
+        padding: 6px 8px !important;
+        white-space: normal;
+        vertical-align: middle;
+        overflow: hidden;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .cotract-base-table .mud-table-head .mud-table-cell.cb-ops-cell {
+        z-index: 6;
+        background-color: #fff !important;
+    }
+
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+
+    .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-ops-cell {
+        background-color: #eeeeee !important;
+    }
+
+    .cb-ops-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 28px 28px;
+        gap: 2px 4px;
+        width: 100%;
+    }
+
+    .cb-ops-grid .cb-ops-btn.mud-button-root {
+        min-width: 0 !important;
+        width: 100%;
+        height: 28px;
+        padding: 0 2px !important;
+        margin: 0;
+        font-size: 12px;
+        line-height: 28px;
+        justify-content: center;
+    }
+
+    .cb-ops-grid .cb-ops-btn .mud-button-label {
+        font-size: 12px !important;
+    }
+
+    .cb-ops-grid .cb-ops-btn .mud-icon-root {
+        font-size: 16px !important;
+        margin-right: 2px !important;
+    }
+
+    .cotract-thumb {
+        max-height: 64px;
+        max-width: 96px;
+        object-fit: contain;
+        display: block;
+    }
+</style>
+
+@code {
+    private MudTable<ZyqdCotractBaseModel>? _table;
+    private bool _ready;
+    private bool _busy;
+    private string _filterColumn = "ClientNo";
+    private string? _keyword;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
+    private bool IsDateFilter => string.Equals(_filterColumn, "CreateTime", StringComparison.Ordinal);
+    private List<ZyqdCotractBaseModel> _rows = new();
+    private HashSet<ZyqdCotractBaseModel> _selected = new();
+    private int _skip;
+    private int _filteredTotal;
+    private bool _infoFailed;
+    private bool _infoWarned;
+    private string? _sortLabel;
+    private bool _sortDescending = true;
+    private const long MaxImportBytes = 32L * 1024 * 1024;
+    private string ImageBase => Config["LegacyFiles:BaseUrl"] ?? LegacyFileUrl.DefaultBase;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _ready) return;
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private int RowNo(ZyqdCotractBaseModel row) => _skip + _rows.IndexOf(row) + 1;
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        _filterColumn = "ClientNo";
+        _keyword = null;
+        _dateStart = null;
+        _dateEnd = null;
+        await SearchAsync();
+    }
+
+    private void OnFilterColumnChanged(string value)
+    {
+        var wasDate = IsDateFilter;
+        _filterColumn = value ?? "ClientNo";
+        if (IsDateFilter)
+            _keyword = null;
+        else if (wasDate)
+            _dateStart = _dateEnd = null;
+    }
+
+    private async Task SearchAsync()
+    {
+        _selected.Clear();
+        await ReloadTableAsync(resetPage: true);
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除选中的 {_selected.Count} 条合同基础数据吗？",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            foreach (var row in _selected.ToList())
+            {
+                var (success, msg) = await CotractBase.DeleteAsync(row.Id);
+                if (!success)
+                {
+                    Notify.Show(msg ?? "删除失败", Severity.Error);
+                    return;
+                }
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReloadTableAsync(bool resetPage)
+    {
+        if (_table is null) return;
+        if (resetPage && _table.CurrentPage != 0)
+        {
+            _table.NavigateTo(MudBlazor.Page.First);
+            return;
+        }
+
+        await _table.ReloadServerData();
+    }
+
+    private async Task<TableData<ZyqdCotractBaseModel>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        if (!_ready)
+            return new TableData<ZyqdCotractBaseModel> { Items = Array.Empty<ZyqdCotractBaseModel>(), TotalItems = 0 };
+
+        _busy = true;
+        try
+        {
+            var query = await BuildQueryAsync();
+            query.SortLabel = string.IsNullOrWhiteSpace(state.SortLabel) || state.SortDirection == SortDirection.None
+                ? null
+                : state.SortLabel;
+            query.SortDescending = state.SortDirection != SortDirection.Ascending;
+            _sortLabel = query.SortLabel;
+            _sortDescending = query.SortDescending;
+            var take = state.PageSize <= 0 ? 20 : state.PageSize;
+            _skip = state.Page * take;
+            var (rows, total) = await CotractBase.QueryPageAsync(query, _skip, take, ct);
+            _rows = rows;
+            _filteredTotal = total;
+            if (_infoFailed && !_infoWarned)
+            {
+                _infoWarned = true;
+                Notify.Show("读取人员档案失败，已按最小权限过滤", Severity.Warning);
+            }
+            return new TableData<ZyqdCotractBaseModel> { Items = rows, TotalItems = total };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new TableData<ZyqdCotractBaseModel> { Items = _rows, TotalItems = _filteredTotal };
+        }
+        catch (Exception ex)
+        {
+            if (ct.IsCancellationRequested)
+                return new TableData<ZyqdCotractBaseModel> { Items = _rows, TotalItems = _filteredTotal };
+
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+            return new TableData<ZyqdCotractBaseModel> { Items = Array.Empty<ZyqdCotractBaseModel>(), TotalItems = 0 };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        if (_selected.Count == 0) return;
+        _busy = true;
+        try
+        {
+            var query = await BuildQueryAsync();
+            query.SortLabel = _sortLabel;
+            query.SortDescending = _sortDescending;
+            var selectedIds = _selected.Count > 0 ? _selected.Select(x => x.Id).ToList() : null;
+            var bytes = await CotractBase.ExportAsync(query, ImageBase, selectedIds);
+            if (bytes.Length == 0)
+            {
+                Notify.Show("没有可导出的数据", Severity.Warning);
+                return;
+            }
+
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                $"合同基础数据_{DateTime.Now:yyyyMMddHHmmss}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+            Notify.Show(
+                selectedIds is { Count: > 0 } ? $"已导出选中的 {selectedIds.Count} 条" : "已按当前条件导出全部",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DownloadTemplateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var bytes = await CotractBase.GetTemplateBytesAsync();
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                CotractBaseService.TemplateFileName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("下载模板失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnImportFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            Notify.Show("请上传 xlsx 文件（请先下载模板）", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > MaxImportBytes)
+        {
+            Notify.Show("文件超过 32MB，请拆分后再导入", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxImportBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            if (string.IsNullOrWhiteSpace(empNo))
+            {
+                Notify.Show("无法获取当前登录工号，请重新登录后再导入", Severity.Error);
+                return;
+            }
+
+            var query = await BuildQueryAsync();
+            var result = await CotractBase.ImportAsync(ms, empNo, query);
+            if (!result.Ok)
+            {
+                Notify.Show(result.Message, Severity.Error);
+                return;
+            }
+
+            Notify.Show(result.Message, Severity.Success);
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: true);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导入失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(ZyqdCotractBaseModel row)
+    {
+        var who = $"{row.ClientNo} / {row.materialNo}";
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除 {who} 这条合同基础数据吗？",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var (success, msg) = await CotractBase.DeleteAsync(row.Id);
+            if (!success)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<CotractBaseQueryDto> BuildQueryAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        var viewAll = Auth.CanManageUsers(auth);
+        var assigned = new List<string>();
+        _infoFailed = false;
+        if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
+        {
+            var (ok, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
+            _infoFailed = !ok;
+            viewAll = Auth.CanViewAllCustomers(auth, info);
+            if (!viewAll)
+                assigned = await CustomerAssign.GetCodesByEmpNoAsync(auth.EmpNo);
+        }
+
+        return new CotractBaseQueryDto
+        {
+            FilterColumn = _filterColumn,
+            Keyword = IsDateFilter ? null : _keyword,
+            DateStart = IsDateFilter ? _dateStart : null,
+            DateEnd = IsDateFilter ? _dateEnd : null,
+            ViewAllCustomers = viewAll,
+            ViewerEmpNo = auth?.EmpNo,
+            AssignedCustomerCodes = assigned
+        };
+    }
+}

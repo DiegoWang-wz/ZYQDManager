@@ -1,0 +1,1145 @@
+@page "/login"
+@layout Layout.LoginLayout
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inject CentralAuthService Auth
+
+<PageTitle>登录 - 遮阳管理系统</PageTitle>
+
+<MudPaper Class="login-card pa-8" Elevation="8">
+    <MudStack Spacing="4">
+        <div class="login-brand">
+            <div class="login-section-header">
+                <MudText Class="login-section-title" Typo="Typo.h6">@_headerTitle</MudText>
+                <div class="login-section-line" aria-hidden="true"></div>
+            </div>
+        </div>
+
+        <div class="auth-viewport" style="height:@(_viewportHeight)px">
+            <div class="auth-track panel-@_panel">
+                <div class="auth-slide">
+                    <div class="login-fields">
+                        <MudTextField @bind-Value="RegEmpNo"
+                                      Label="工号"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="_reg.DisplayName"
+                                      Label="姓名"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="_reg.Password"
+                                      Label="密码"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      InputType="@PwdType(_regPwdVisible)"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@PwdIcon(_regPwdVisible)"
+                                      OnAdornmentClick="@(() => _regPwdVisible = !_regPwdVisible)"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="_reg.PasswordConfirm"
+                                      Label="确认密码"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      InputType="@PwdType(_regPwd2Visible)"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@PwdIcon(_regPwd2Visible)"
+                                      OnAdornmentClick="@(() => _regPwd2Visible = !_regPwd2Visible)"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="RegEmail"
+                                      Label="邮箱"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <div class="auth-code-row">
+                            <MudTextField @bind-Value="RegCode"
+                                          Label="邮箱验证码"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Disabled="@(_busy || _panel != 0)"
+                                          Immediate="true"
+                                          OnKeyDown="OnKeyDown"
+                                          Class="auth-code-field"/>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Class="auth-code-btn"
+                                       Disabled="@(_busy || _sendingCode || _panel != 0 || _codeCooldown > 0)"
+                                       OnClick="SendRegisterCodeAsync">
+                                @_sendCodeText
+                            </MudButton>
+                        </div>
+                        <MudTextField @bind-Value="_reg.Department"
+                                      Label="部门"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="_reg.Phone"
+                                      Label="电话"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 0)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                    </div>
+                </div>
+
+                <div class="auth-slide">
+                    <div class="login-fields">
+                        <MudTextField @bind-Value="_empNo"
+                                      Label="工号"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 1)"
+                                      AutoFocus="true"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="_password"
+                                      Label="密码"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      InputType="@PwdType(_pwdVisible)"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@PwdIcon(_pwdVisible)"
+                                      OnAdornmentClick="TogglePwd"
+                                      Disabled="@(_busy || _panel != 1)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                    </div>
+                </div>
+
+                <div class="auth-slide">
+                    <div class="login-fields">
+                        <MudTextField @bind-Value="FpEmpNo"
+                                      Label="工号"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 2)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="FpEmail"
+                                      Label="邮箱"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Disabled="@(_busy || _panel != 2)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <div class="auth-code-row">
+                            <MudTextField @bind-Value="FpCode"
+                                          Label="邮箱验证码"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Disabled="@(_busy || _panel != 2)"
+                                          Immediate="true"
+                                          OnKeyDown="OnKeyDown"
+                                          Class="auth-code-field"/>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Class="auth-code-btn"
+                                       Disabled="@(_busy || _sendingCode || _panel != 2 || _codeCooldown > 0)"
+                                       OnClick="SendResetCodeAsync">
+                                @_sendCodeText
+                            </MudButton>
+                        </div>
+                        <MudTextField @bind-Value="_fp.NewPassword"
+                                      Label="新密码"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="auth-locked-until-verify"
+                                      InputType="@PwdType(_fpPwdVisible)"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@PwdIcon(_fpPwdVisible)"
+                                      OnAdornmentClick="@(() => { if (_emailVerified) _fpPwdVisible = !_fpPwdVisible; })"
+                                      Disabled="@(_busy || _panel != 2 || !_emailVerified)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                        <MudTextField @bind-Value="_fp.NewPasswordConfirm"
+                                      Label="确认新密码"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="auth-locked-until-verify"
+                                      InputType="@PwdType(_fpPwd2Visible)"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@PwdIcon(_fpPwd2Visible)"
+                                      OnAdornmentClick="@(() => { if (_emailVerified) _fpPwd2Visible = !_fpPwd2Visible; })"
+                                      Disabled="@(_busy || _panel != 2 || !_emailVerified)"
+                                      Immediate="true"
+                                      OnKeyDown="OnKeyDown"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (_panel == PanelRegister)
+        {
+            <MudText Typo="Typo.caption" Class="reg-hint">
+                请先完成邮箱验证。新账号注册后需管理员审核启用才能登录。
+            </MudText>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Filled">@_error</MudAlert>
+        }
+        else if (!string.IsNullOrEmpty(_info))
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Variant="Variant.Filled">@_info</MudAlert>
+        }
+
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Class="login-submit"
+                   FullWidth="true"
+                   Disabled="@(_busy || (_panel == PanelForgot && !_emailVerified))"
+                   OnClick="@SubmitAsync">
+            @_submitText
+        </MudButton>
+
+        <div class="auth-footer footer-@_panel">
+            @if (_panel == PanelLogin)
+            {
+                <button type="button" class="auth-link" disabled="@_busy" @onclick="GoToRegister">
+                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowLeft" Size="Size.Small"/>
+                    <span>注册用户</span>
+                </button>
+                <button type="button" class="auth-link" disabled="@_busy" @onclick="GoToForgot">
+                    <span>重置密码</span>
+                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowRight" Size="Size.Small"/>
+                </button>
+            }
+            else if (_panel == PanelRegister)
+            {
+                <button type="button" class="auth-link" disabled="@_busy" @onclick="GoToLogin">
+                    <span>返回登录</span>
+                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowRight" Size="Size.Small"/>
+                </button>
+            }
+            else
+            {
+                <button type="button" class="auth-link" disabled="@_busy" @onclick="GoToLogin">
+                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowLeft" Size="Size.Small"/>
+                    <span>返回登录</span>
+                </button>
+            }
+        </div>
+    </MudStack>
+</MudPaper>
+
+<style>
+    .login-card {
+        width: 100%;
+        max-width: 420px;
+        border-radius: 14px;
+        border: 2px solid #1976d2;
+        box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.12), 0 8px 24px rgba(13, 71, 161, 0.18);
+        background: #fff !important;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .login-brand {
+        text-align: center;
+    }
+
+    .login-section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        color: var(--mud-palette-info) !important;
+    }
+
+    .login-section-title {
+        flex: 0 0 auto;
+        font-weight: 700 !important;
+        color: inherit !important;
+        letter-spacing: 0.02em;
+        text-align: left !important;
+        white-space: nowrap;
+    }
+
+    .login-section-line {
+        flex: 1 1 auto;
+        height: 2px;
+        background-color: currentColor !important;
+        border-radius: 1px;
+        min-width: 0;
+    }
+
+    .auth-viewport {
+        overflow: hidden;
+        width: 100%;
+        transition: height 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+
+    .auth-track {
+        display: flex;
+        width: 300%;
+        transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+        will-change: transform;
+    }
+
+    .auth-track.panel-0 { transform: translateX(0); }
+    .auth-track.panel-1 { transform: translateX(-33.3333%); }
+    .auth-track.panel-2 { transform: translateX(-66.6666%); }
+
+    .auth-slide {
+        width: 33.3333%;
+        box-sizing: border-box;
+        padding: 0 1px;
+    }
+
+    .login-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .login-fields .mud-input-outlined-border {
+        border-width: 2px !important;
+        border-color: #1976d2 !important;
+    }
+
+    .login-fields .mud-input:focus-within .mud-input-outlined-border {
+        border-color: #1565c0 !important;
+    }
+
+    .login-fields .mud-input.mud-disabled .mud-input-outlined-border,
+    .login-fields .mud-disabled .mud-input-outlined-border,
+    .login-fields .auth-locked-until-verify.mud-disabled .mud-input-outlined-border,
+    .login-fields .auth-locked-until-verify .mud-input.mud-disabled .mud-input-outlined-border {
+        border-color: #bdbdbd !important;
+        background-color: #f5f5f5 !important;
+    }
+
+    .login-fields .mud-disabled .mud-input-slot,
+    .login-fields .mud-disabled .mud-input-label,
+    .login-fields .mud-disabled .mud-input-adornment {
+        color: #9e9e9e !important;
+    }
+
+    .login-submit.mud-button-root {
+        height: 48px !important;
+        min-height: 48px !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        color: rgba(0, 0, 0, 0.87) !important;
+        background-color: #ffffff !important;
+        border: 2px solid #1976d2 !important;
+        border-radius: 10px !important;
+        text-transform: none !important;
+        box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.12) !important;
+    }
+
+    .login-submit:hover:not(:disabled) {
+        background-color: #f5f9ff !important;
+        border-color: #1565c0 !important;
+        box-shadow: 0 1px 4px rgba(25, 118, 210, 0.22) !important;
+    }
+
+    .login-submit:disabled,
+    .login-submit.mud-disabled {
+        border-color: #bdbdbd !important;
+        box-shadow: none !important;
+        opacity: 0.72 !important;
+    }
+
+    .reg-hint {
+        margin-top: -8px !important;
+        margin-bottom: -4px !important;
+        line-height: 1.4;
+        color: #9e9e9e !important;
+    }
+
+    .auth-footer {
+        display: flex;
+        align-items: center;
+        margin-top: -4px;
+        min-height: 28px;
+    }
+
+    .auth-footer.footer-0 {
+        justify-content: flex-end;
+    }
+
+    .auth-footer.footer-1 {
+        justify-content: space-between;
+    }
+
+    .auth-footer.footer-2 {
+        justify-content: flex-start;
+    }
+
+    .auth-link {
+        background: none;
+        border: none;
+        padding: 4px 2px;
+        color: #1976d2;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .auth-link:hover:not(:disabled) {
+        color: #0d47a1;
+        text-decoration: underline;
+    }
+
+    .auth-link:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .auth-code-row {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .auth-code-row .auth-code-field {
+        flex: 1 1 auto;
+        min-width: 0;
+        width: auto !important;
+    }
+
+    .auth-code-btn.mud-button-root {
+        flex: 0 0 auto;
+        align-self: stretch;
+        height: auto !important;
+        min-height: 0 !important;
+        min-width: 112px !important;
+        margin: 0 !important;
+        text-transform: none !important;
+        border: 2px solid #1976d2 !important;
+        color: #1976d2 !important;
+        border-radius: 4px !important;
+        white-space: nowrap;
+        padding: 0 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-sizing: border-box !important;
+    }
+
+    .login-fields .flex-grow-1 {
+        flex: 1 1 auto !important;
+        min-width: 0;
+    }
+</style>
+
+@code {
+    private const int PanelRegister = 0;
+    private const int PanelLogin = 1;
+    private const int PanelForgot = 2;
+
+    private int _panel = PanelLogin;
+    private string _empNo = "";
+    private string _password = "";
+    private string? _error;
+    private string? _info;
+    private bool _busy;
+    private bool _sendingCode;
+    private bool _pwdVisible;
+    private bool _regPwdVisible;
+    private bool _regPwd2Visible;
+    private bool _fpPwdVisible;
+    private bool _fpPwd2Visible;
+    private bool _emailVerified;
+    private bool _regEmailVerified;
+    private bool _checkedRedirect;
+    private int _codeCooldown;
+    private CancellationTokenSource? _cooldownCts;
+
+    private readonly RegisterForm _reg = new();
+    private readonly ForgotForm _fp = new();
+
+    private string _headerTitle => _panel switch
+    {
+        PanelRegister => "注册账号",
+        PanelForgot => "找回密码",
+        _ => "遮阳管理系统"
+    };
+
+    private string _submitText => _busy
+        ? _panel switch
+        {
+            PanelRegister => "提交中…",
+            PanelForgot => "重置中…",
+            _ => "登录中…"
+        }
+        : _panel switch
+        {
+            PanelRegister => "注册",
+            PanelForgot => "重置密码",
+            _ => "登录"
+        };
+
+    private string _sendCodeText => _sendingCode
+        ? "发送中…"
+        : _codeCooldown > 0 ? $"{_codeCooldown}s" : "发送验证码";
+
+    private int _viewportHeight => _panel == PanelRegister ? 470 : _panel == PanelForgot ? 328 : 128;
+
+    private void GoToRegister()
+    {
+        if (_busy) return;
+        GoTo(PanelRegister);
+    }
+
+    private void GoToForgot()
+    {
+        if (_busy) return;
+        GoTo(PanelForgot);
+    }
+
+    private void GoToLogin()
+    {
+        if (_busy) return;
+        GoTo(PanelLogin);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _checkedRedirect)
+            return;
+
+        _checkedRedirect = true;
+        try
+        {
+            if (await Auth.IsLoggedInAsync())
+                NavManager.NavigateTo("/project-list", replace: true);
+        }
+        catch
+        {
+        }
+    }
+
+    private static InputType PwdType(bool visible) => visible ? InputType.Text : InputType.Password;
+    private static string PwdIcon(bool visible) => visible ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility;
+
+    private void TogglePwd() => _pwdVisible = !_pwdVisible;
+
+    private string RegEmpNo
+    {
+        get => _reg.EmpNo;
+        set
+        {
+            _reg.EmpNo = value;
+            ClearRegEmailVerified();
+        }
+    }
+
+    private string RegEmail
+    {
+        get => _reg.Email;
+        set
+        {
+            _reg.Email = value;
+            ClearRegEmailVerified();
+        }
+    }
+
+    private string RegCode
+    {
+        get => _reg.Code;
+        set
+        {
+            _reg.Code = value;
+            RefreshRegEmailVerified();
+        }
+    }
+
+    private string FpEmpNo
+    {
+        get => _fp.EmpNo;
+        set
+        {
+            _fp.EmpNo = value;
+            ClearEmailVerified();
+        }
+    }
+
+    private string FpEmail
+    {
+        get => _fp.Email;
+        set
+        {
+            _fp.Email = value;
+            ClearEmailVerified();
+        }
+    }
+
+    private string FpCode
+    {
+        get => _fp.Code;
+        set
+        {
+            _fp.Code = value;
+            RefreshEmailVerified();
+        }
+    }
+
+    private void ClearRegEmailVerified()
+    {
+        if (!_regEmailVerified)
+            return;
+        _regEmailVerified = false;
+    }
+
+    private void RefreshRegEmailVerified()
+    {
+        var ok = !string.IsNullOrWhiteSpace(_reg.EmpNo)
+                 && !string.IsNullOrWhiteSpace(_reg.Email)
+                 && !string.IsNullOrWhiteSpace(_reg.Code)
+                 && ResetCodeStore.Verify(_reg.EmpNo.Trim(), _reg.Email.Trim(), _reg.Code.Trim());
+        if (ok == _regEmailVerified)
+            return;
+        _regEmailVerified = ok;
+        if (ok)
+        {
+            _error = null;
+            _info = "邮箱验证成功，可以提交注册";
+        }
+    }
+
+    private void ClearEmailVerified()
+    {
+        if (!_emailVerified)
+            return;
+        _emailVerified = false;
+        _fp.NewPassword = "";
+        _fp.NewPasswordConfirm = "";
+    }
+
+    private void RefreshEmailVerified()
+    {
+        var ok = !string.IsNullOrWhiteSpace(_fp.EmpNo)
+                 && !string.IsNullOrWhiteSpace(_fp.Email)
+                 && !string.IsNullOrWhiteSpace(_fp.Code)
+                 && ResetCodeStore.Verify(_fp.EmpNo.Trim(), _fp.Email.Trim(), _fp.Code.Trim());
+        if (ok == _emailVerified)
+            return;
+        _emailVerified = ok;
+        if (ok)
+        {
+            _error = null;
+            _info = "邮箱验证成功，请设置新密码";
+        }
+    }
+
+    private void GoTo(int panel, string? keepInfo = null)
+    {
+        if (_panel == panel) return;
+        if (_panel == PanelForgot && panel != PanelForgot)
+            ClearEmailVerified();
+        if (_panel == PanelRegister && panel != PanelRegister)
+            ClearRegEmailVerified();
+        _error = null;
+        _info = keepInfo;
+        if (panel == PanelRegister && string.IsNullOrWhiteSpace(_reg.EmpNo))
+            _reg.EmpNo = _empNo;
+        if (panel == PanelForgot && string.IsNullOrWhiteSpace(_fp.EmpNo))
+            _fp.EmpNo = _empNo;
+        if (panel == PanelLogin && string.IsNullOrWhiteSpace(_empNo))
+            _empNo = !string.IsNullOrWhiteSpace(_reg.EmpNo) ? _reg.EmpNo : _fp.EmpNo;
+        _panel = panel;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SubmitAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy) return;
+        switch (_panel)
+        {
+            case PanelRegister:
+                await RegisterAsync();
+                break;
+            case PanelForgot:
+                if (!_emailVerified)
+                {
+                    _error = "请先完成邮箱验证";
+                    return;
+                }
+                await ResetPasswordAsync();
+                break;
+            default:
+                await LoginAsync();
+                break;
+        }
+    }
+
+    private async Task LoginAsync()
+    {
+        _error = null;
+        _info = null;
+        if (string.IsNullOrWhiteSpace(_empNo))
+        {
+            _error = "请输入工号";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_password))
+        {
+            _error = "请输入密码";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await Auth.LoginAsync(_empNo, _password);
+            if (!ok)
+            {
+                _error = msg ?? "登录失败";
+                Notify.Show(_error, Severity.Error);
+                return;
+            }
+
+            Notify.Show("登录成功", Severity.Success);
+            NavManager.NavigateTo("/project-list", replace: true);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Notify.Show("登录异常：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RegisterAsync()
+    {
+        _error = null;
+        _info = null;
+
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(_reg.EmpNo)) missing.Add("工号");
+        if (string.IsNullOrWhiteSpace(_reg.DisplayName)) missing.Add("姓名");
+        if (string.IsNullOrEmpty(_reg.Password)) missing.Add("密码");
+        if (string.IsNullOrEmpty(_reg.PasswordConfirm)) missing.Add("确认密码");
+        if (string.IsNullOrWhiteSpace(_reg.Email)) missing.Add("邮箱");
+        if (string.IsNullOrWhiteSpace(_reg.Code)) missing.Add("邮箱验证码");
+        if (string.IsNullOrWhiteSpace(_reg.Department)) missing.Add("部门");
+        if (missing.Count > 0)
+        {
+            _error = "请填写" + string.Join("、", missing);
+            return;
+        }
+
+        if (_reg.Password != _reg.PasswordConfirm)
+        {
+            _error = "两次输入的密码不一致";
+            return;
+        }
+
+        if (!IsEmail(_reg.Email))
+        {
+            _error = "请输入有效邮箱";
+            return;
+        }
+
+        if (!_regEmailVerified || !ResetCodeStore.Verify(_reg.EmpNo.Trim(), _reg.Email.Trim(), _reg.Code.Trim()))
+        {
+            _error = "请先完成邮箱验证，验证码无效或已过期请重新发送";
+            _regEmailVerified = false;
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (ok, data, msg) = await Auth.JoinSystemAsync(
+                _reg.EmpNo,
+                _reg.Password,
+                _reg.DisplayName,
+                new ZyqdUserInformationDto
+                {
+                    Department = _reg.Department,
+                    Email = _reg.Email,
+                    Phone = _reg.Phone
+                });
+            if (!ok)
+            {
+                _error = msg ?? "注册失败";
+                Notify.Show(_error, Severity.Error);
+                return;
+            }
+
+            var pending = data is null || !data.IsActive;
+            string tip;
+            if (pending)
+            {
+                tip = data?.Created == true
+                    ? "注册成功，请等待系统管理员审核启用后再登录。"
+                    : "账号已登记，请等待系统管理员审核启用后再登录。";
+            }
+            else
+            {
+                tip = data?.PermissionAdded == true
+                    ? "该工号已有统一账号，已开通遮阳系统权限，请用原密码登录。"
+                    : "该账号已开通本系统，档案已更新，请登录。";
+            }
+
+            var mail = await EmailService.SendAsync(new SendEmailDto
+            {
+                To = [_reg.Email.Trim()],
+                Subject = MailTemplate.Subject(pending ? "注册已提交" : "账号已开通"),
+                Body = pending
+                    ? MailTemplate.RegisterSubmitted(_reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, _reg.Phone)
+                    : MailTemplate.AccountOpened(
+                        _reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, _reg.Phone,
+                        NavManager.ToAbsoluteUri("login").AbsoluteUri),
+                IsHtml = true
+            });
+
+            if (mail.Code != 1)
+                tip += " （确认邮件发送失败：" + mail.Message + "）";
+
+            if (pending || data?.Created == true || data?.PermissionAdded == true)
+            {
+                await AdminNotify.NotifyNewUserAsync(new NewUserNotifyDto
+                {
+                    EmpNo = _reg.EmpNo,
+                    DisplayName = _reg.DisplayName,
+                    Department = _reg.Department,
+                    Email = _reg.Email,
+                    Phone = _reg.Phone,
+                    PersonnelUrl = NavManager.ToAbsoluteUri("personnel").AbsoluteUri,
+                    Source = "用户自助注册",
+                    PendingReview = pending
+                });
+            }
+
+            Notify.Show(tip, pending ? Severity.Info : Severity.Success);
+            ResetCodeStore.Consume(_reg.EmpNo.Trim());
+            _regEmailVerified = false;
+            _empNo = _reg.EmpNo.Trim();
+            GoTo(PanelLogin, tip);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Notify.Show("注册异常：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SendRegisterCodeAsync()
+    {
+        if (_busy || _sendingCode || _panel != PanelRegister || _codeCooldown > 0)
+            return;
+
+        _error = null;
+        _info = null;
+        var sent = false;
+        if (string.IsNullOrWhiteSpace(_reg.EmpNo))
+        {
+            _error = "请输入工号";
+            return;
+        }
+
+        if (!IsEmail(_reg.Email))
+        {
+            _error = "请输入有效邮箱";
+            return;
+        }
+
+        _sendingCode = true;
+        try
+        {
+            var code = Random.Shared.Next(100000, 999999).ToString();
+            ResetCodeStore.Save(_reg.EmpNo.Trim(), _reg.Email.Trim(), code);
+
+            var mail = await EmailService.SendAsync(new SendEmailDto
+            {
+                To = [_reg.Email.Trim()],
+                Subject = MailTemplate.Subject("注册验证码"),
+                Body = MailTemplate.RegisterCode(_reg.DisplayName, _reg.EmpNo, _reg.Email, code),
+                IsHtml = true
+            });
+
+            if (mail.Code != 1)
+            {
+                _error = "验证码发送失败：" + mail.Message;
+                Notify.Show(_error, Severity.Error);
+                return;
+            }
+
+            Notify.Show("验证码已发送到邮箱，请查收后再注册。", Severity.Success);
+            _regEmailVerified = false;
+            _reg.Code = "";
+            sent = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Notify.Show("发送验证码失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _sendingCode = false;
+        }
+
+        if (sent)
+            await StartCooldownAsync(60);
+    }
+
+    private async Task SendResetCodeAsync()
+    {
+        if (_busy || _sendingCode || _panel != PanelForgot || _codeCooldown > 0)
+            return;
+
+        _error = null;
+        _info = null;
+        var sent = false;
+        if (string.IsNullOrWhiteSpace(_fp.EmpNo))
+        {
+            _error = "请输入工号";
+            return;
+        }
+
+        if (!IsEmail(_fp.Email))
+        {
+            _error = "请输入有效邮箱";
+            return;
+        }
+
+        _sendingCode = true;
+        try
+        {
+            var (emailOk, emailMsg) = await Auth.VerifyUserEmailAsync(_fp.EmpNo, _fp.Email);
+            if (!emailOk)
+            {
+                _error = emailMsg ?? "工号与邮箱不匹配，或尚未登记档案。请先注册或联系管理员。";
+                Notify.Show(_error, Severity.Warning);
+                return;
+            }
+
+            var code = Random.Shared.Next(100000, 999999).ToString();
+            ResetCodeStore.Save(_fp.EmpNo.Trim(), _fp.Email.Trim(), code);
+
+            var mail = await EmailService.SendAsync(new SendEmailDto
+            {
+                To = [_fp.Email.Trim()],
+                Subject = MailTemplate.Subject("密码找回验证码"),
+                Body = MailTemplate.ResetCode(_fp.EmpNo, _fp.Email, code),
+                IsHtml = true
+            });
+
+            if (mail.Code != 1)
+            {
+                _error = "验证码发送失败：" + mail.Message;
+                Notify.Show(_error, Severity.Error);
+                return;
+            }
+
+            Notify.Show("验证码已发送到邮箱，请查收。", Severity.Success);
+            _emailVerified = false;
+            _fp.Code = "";
+            _fp.NewPassword = "";
+            _fp.NewPasswordConfirm = "";
+            sent = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Notify.Show("发送验证码失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _sendingCode = false;
+        }
+
+        if (sent)
+            await StartCooldownAsync(60);
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        _error = null;
+        _info = null;
+        if (!_emailVerified)
+        {
+            _error = "请先完成邮箱验证";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_fp.EmpNo))
+        {
+            _error = "请输入工号";
+            return;
+        }
+
+        if (!IsEmail(_fp.Email))
+        {
+            _error = "请输入有效邮箱";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_fp.Code))
+        {
+            _error = "请输入邮箱验证码";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_fp.NewPassword))
+        {
+            _error = "请输入新密码";
+            return;
+        }
+
+        if (_fp.NewPassword != _fp.NewPasswordConfirm)
+        {
+            _error = "两次输入的新密码不一致";
+            return;
+        }
+
+        if (!ResetCodeStore.Verify(_fp.EmpNo.Trim(), _fp.Email.Trim(), _fp.Code.Trim()))
+        {
+            _error = "验证码无效或已过期，请重新发送";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await Auth.ResetPasswordAsync(_fp.EmpNo, _fp.Email, _fp.NewPassword);
+            if (!ok)
+            {
+                _error = msg ?? "重置密码失败";
+                Notify.Show(_error, Severity.Error);
+                return;
+            }
+
+            ResetCodeStore.Consume(_fp.EmpNo.Trim());
+            _emailVerified = false;
+            var tip = "密码已重置，请使用新密码登录。";
+            Notify.Show(tip, Severity.Success);
+            _empNo = _fp.EmpNo.Trim();
+            _password = "";
+            GoTo(PanelLogin, tip);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Notify.Show("找回密码异常：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task StartCooldownAsync(int seconds)
+    {
+        _cooldownCts?.Cancel();
+        _cooldownCts = new CancellationTokenSource();
+        var token = _cooldownCts.Token;
+        _codeCooldown = seconds;
+        try
+        {
+            while (_codeCooldown > 0 && !token.IsCancellationRequested)
+            {
+                await Task.Delay(1000, token);
+                _codeCooldown--;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private static bool IsEmail(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            v, @"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$");
+    }
+
+    public void Dispose()
+    {
+        _cooldownCts?.Cancel();
+        _cooldownCts?.Dispose();
+    }
+
+    private sealed class RegisterForm
+    {
+        public string EmpNo { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string PasswordConfirm { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Code { get; set; } = "";
+        public string Department { get; set; } = "";
+        public string Phone { get; set; } = "";
+    }
+
+    private sealed class ForgotForm
+    {
+        public string EmpNo { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Code { get; set; } = "";
+        public string NewPassword { get; set; } = "";
+        public string NewPasswordConfirm { get; set; } = "";
+    }
+
+    private static class ResetCodeStore
+    {
+        private static readonly Dictionary<string, (string Email, string Code, DateTime Expires)> Map = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly object Gate = new();
+
+        public static void Save(string empNo, string email, string code)
+        {
+            lock (Gate)
+                Map[empNo] = (email, code, DateTime.UtcNow.AddMinutes(10));
+        }
+
+        public static bool Verify(string empNo, string email, string code)
+        {
+            lock (Gate)
+            {
+                if (!Map.TryGetValue(empNo, out var row))
+                    return false;
+                if (row.Expires < DateTime.UtcNow)
+                    return false;
+                return string.Equals(row.Email, email, StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(row.Code, code, StringComparison.Ordinal);
+            }
+        }
+
+        public static void Consume(string empNo)
+        {
+            lock (Gate)
+                Map.Remove(empNo);
+        }
+    }
+}

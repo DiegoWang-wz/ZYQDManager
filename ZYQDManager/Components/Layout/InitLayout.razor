@@ -1,0 +1,66 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<div class="init-layout-root">
+    <MudPaper Class="init-card pa-8" Elevation="8">
+        <MudStack AlignItems="AlignItems.Center" Spacing="4">
+            <div class="init-header">
+                <MudText Class="init-title" Typo="Typo.h6">遮阳管理系统</MudText>
+                <div class="init-line" aria-hidden="true"></div>
+            </div>
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large"/>
+            <MudText Typo="Typo.body2" Style="color:#546e7a;">正在验证登录状态…</MudText>
+            @Body
+        </MudStack>
+    </MudPaper>
+</div>
+
+<style>
+    .init-layout-root {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        background: linear-gradient(160deg, #0d47a1 0%, #1565c0 38%, #42a5f5 100%);
+    }
+
+    .init-card {
+        width: 100%;
+        max-width: 360px;
+        border-radius: 14px !important;
+        border: 2px solid #1976d2;
+        box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.12), 0 8px 24px rgba(13, 71, 161, 0.18) !important;
+        background: #fff !important;
+        box-sizing: border-box;
+    }
+
+    .init-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        color: #1976d2;
+    }
+
+    .init-title {
+        flex: 0 0 auto;
+        font-weight: 700 !important;
+        color: inherit !important;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+
+    .init-line {
+        flex: 1 1 auto;
+        height: 2px;
+        background-color: currentColor;
+        border-radius: 1px;
+        min-width: 0;
+    }
+</style>

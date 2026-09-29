@@ -1,0 +1,1392 @@
+@page "/contract-pi/new"
+@page "/contract-pi/{DocumentGuid}"
+@page "/contract-ci/new"
+@page "/contract-ci/{DocumentGuid}"
+@rendermode InteractiveServer
+@inject CotractPiService CotractPi
+@inject CotractPiExcelService PiExcel
+@inject LibreOfficePdfService LibreOffice
+@inject ExcelComPdfService ExcelPdf
+@inject CotractBaseService CotractBase
+@inject CrmCustomerService Crm
+@inject IJSRuntime JS
+
+<PageTitle>@Title</PageTitle>
+
+<div class="cpi-edit-page">
+    <div class="cpi-topbar">
+        <label>订单类型：</label>
+        <select class="cpi-topbar-select" value="@_header.var6" @onchange="OnOrderTypeNative" disabled="@(_busy || IsCustomerCi)">
+            @foreach (var t in OrderTypeOptions)
+            {
+                <option value="@t">@t</option>
+            }
+        </select>
+        <button type="button" class="cpi-btn" disabled="@_busy" @onclick="SaveAsync">保存</button>
+        <button type="button" class="cpi-btn" disabled="@(_busy || IsCreate)" @onclick="ExportExcelAsync">导出Excel</button>
+        <button type="button" class="cpi-btn cpi-btn-lo" disabled="@(_busy || IsCreate)" @onclick="() => ExportPdfAsync(false)">导出PDF(LO)</button>
+        <button type="button" class="cpi-btn cpi-btn-xl" disabled="@(_busy || IsCreate)" @onclick="() => ExportPdfAsync(true)">导出PDF(Excel)</button>
+        <button type="button" class="cpi-btn cpi-btn-lo" disabled="@_busy" @onclick="TestLibreOfficeAsync">测试LibreOffice</button>
+        @if (_loStatus.Length > 0)
+        {
+            <span class="cpi-lo-status @(_loOk ? "ok" : "bad")" title="@_loStatus">@_loStatus</span>
+        }
+        <button type="button" class="cpi-btn cpi-btn-freeze" @onclick="ToggleFreeze">@(_freeze ? "取消冻结" : "冻结表头")</button>
+        <a class="cpi-link" href="@ListHref">返回列表</a>
+        <span class="cpi-topbar-split"></span>
+        <input class="cpi-cell cpi-edit cpi-picker-client cpi-lookup" placeholder="选择客户编号" @bind="_productClientNo" @bind:event="oninput" @onkeydown="OnProductKey" @onblur="LoadProductsAsync"/>
+        <label>选择产品信息</label>
+        <select class="cpi-cell cpi-edit cpi-picker-product" value="@_productId" @onchange="OnProductNative" @onfocus="EnsureProductsAsync">
+            <option value="0">@(_products.Count == 0 ? "未选择（先填客户编号回车）" : "未选择")</option>
+            @foreach (var p in _products)
+            {
+                <option value="@p.Id">@ProductLabel(p)</option>
+            }
+        </select>
+        <button type="button" class="cpi-btn cpi-btn-add" disabled="@(_busy || _productId == 0)" @onclick="AddLineAsync">+</button>
+    </div>
+
+    <div class="cpi-sheet-wrap @(_freeze ? "cpi-frozen" : null)">
+        <table class="cpi-sheet">
+            <colgroup>
+                @for (var c = 0; c < 28; c++)
+                {
+                    <col/>
+                }
+            </colgroup>
+            <thead>
+            <tr class="cpi-stick cpi-stick-0">
+                <th colspan="28" class="cpi-title1">@_company.Title1</th>
+            </tr>
+            <tr class="cpi-stick cpi-stick-1">
+                <th colspan="28" class="cpi-title2">@_company.Title2</th>
+            </tr>
+            <tr class="cpi-stick cpi-stick-2">
+                <th colspan="28" class="cpi-title3">@_company.Title3</th>
+            </tr>
+            <tr class="cpi-stick cpi-stick-3" style="@(_company.ShowTitle4 ? null : "display:none")">
+                <th colspan="28" class="cpi-title3">@_company.Title4</th>
+            </tr>
+            <tr class="cpi-stick cpi-stick-4">
+                <th colspan="28" class="cpi-title-pi">@InvoiceTitle</th>
+            </tr>
+
+            <tr class="cpi-stick cpi-stick-5">
+                <td colspan="2">
+                    <input class="cpi-cell cpi-edit cpi-lookup" placeholder="付款客户编号" @bind="_billClientNo" @bind:event="oninput" @onkeydown="OnBillKey"/>
+                </td>
+                <td colspan="16">
+                    <input class="cpi-cell cpi-edit" placeholder="付款客户名称" @bind="_header.BILL_TO_info1" @bind:event="oninput"/>
+                </td>
+                <td colspan="4" class="cpi-label">INVOICE NO.:</td>
+                <td colspan="6">
+                    <input class="cpi-cell cpi-edit" placeholder="INVOICE NO" @bind="_header.INVOICE_NO" @bind:event="oninput"/>
+                </td>
+            </tr>
+            <tr class="cpi-stick cpi-stick-6">
+                <td colspan="2" rowspan="2" class="cpi-label">BILL TO:</td>
+                <td colspan="16">
+                    <input class="cpi-cell cpi-edit" placeholder="付款客户地址" @bind="_header.BILL_TO_info3" @bind:event="oninput"/>
+                </td>
+                <td colspan="4" class="cpi-label">DATE:</td>
+                <td colspan="6">
+                    <div class="cpi-date-wrap">
+                        <div class="cpi-date-show">@FmtDate(_billDate)</div>
+                        <input class="cpi-date" type="date" value="@FmtDate(_billDate)" @onclick="OpenDatePickerAsync" @onchange="e => OnBillDateChanged(ParseDate(Conv(e)))"/>
+                    </div>
+                </td>
+            </tr>
+            <tr class="cpi-stick cpi-stick-7">
+                <td colspan="16">
+                    <input class="cpi-cell cpi-edit" placeholder="付款客户联系方式" @bind="_header.BILL_TO_info4" @bind:event="oninput"/>
+                </td>
+                <td colspan="10"></td>
+            </tr>
+
+            <tr class="cpi-stick cpi-stick-8">
+                <td colspan="2">
+                    <input class="cpi-cell cpi-edit cpi-lookup" placeholder="收货客户编号" @bind="_shipClientNo" @bind:event="oninput" @onkeydown="OnShipKey"/>
+                </td>
+                <td colspan="8">
+                    <input class="cpi-cell cpi-edit" placeholder="收货客户名称" @bind="_header.SHIP_TO_info1" @bind:event="oninput"/>
+                </td>
+                <td colspan="8" class="cpi-pay-cell">
+                    <div class="cpi-pay-full">@ShipSelectTitle</div>
+                    <select class="cpi-pay-ghost" value="@_shipIndex" @onchange="OnShipNative" title="@ShipSelectTitle">
+                        @if (_shipOptions.Count == 0)
+                        {
+                            <option value="0">选择收货地址（客户编号回车后从 CRM 加载）</option>
+                        }
+                        @for (var i = 0; i < _shipOptions.Count; i++)
+                        {
+                            <option value="@i">@_shipOptions[i].OptionLabel</option>
+                        }
+                    </select>
+                </td>
+                <td colspan="4" class="cpi-label">PO REF.:</td>
+                <td colspan="6">
+                    <input class="cpi-cell cpi-edit" placeholder="采购订单参考值" @bind="_header.BILL_TO_PO_REF" @bind:event="oninput"/>
+                </td>
+            </tr>
+            <tr class="cpi-stick cpi-stick-9">
+                <td colspan="2" rowspan="2" class="cpi-label">SHIP TO:</td>
+                <td colspan="16">
+                    <input class="cpi-cell cpi-edit" placeholder="收货客户地址" @bind="_header.SHIP_TO_info3" @bind:event="oninput"/>
+                </td>
+                <td colspan="10"></td>
+            </tr>
+            <tr class="cpi-stick cpi-stick-10">
+                <td colspan="16">
+                    <input class="cpi-cell cpi-edit" placeholder="收货客户联系方式" @bind="_header.SHIP_TO_info4" @bind:event="oninput"/>
+                </td>
+                <td colspan="4" class="cpi-label">Mode_of_trade:</td>
+                <td colspan="6">
+                    <select class="cpi-cell cpi-edit" value="@_header.BILL_TO_FOB" @onchange="OnTradeTermNative">
+                        @foreach (var t in CotractPiTypes.TradeTerms)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </td>
+            </tr>
+
+            <tr class="cpi-stick cpi-stick-11">
+                <td colspan="17"></td>
+                <td colspan="3" class="cpi-center">QTY</td>
+                <td colspan="5" class="cpi-center">UNIT</td>
+                <td colspan="3" class="cpi-center">EXT</td>
+            </tr>
+            </thead>
+
+            <tbody>
+            @for (var i = 0; i < _lines.Count; i++)
+            {
+                var idx = i;
+                var line = _lines[idx];
+                <tr @key="@(line.Uid + "-a")">
+                    <td colspan="1" rowspan="4" class="cpi-center">@(idx + 1)</td>
+                    <td colspan="1" class="cpi-label">Cust#:</td>
+                    <td colspan="7"><input class="cpi-cell" readonly value="@line.materiaCust"/></td>
+                    <td colspan="1" class="cpi-label">Model#:</td>
+                    <td colspan="7"><input class="cpi-cell" readonly value="@line.materialModel"/></td>
+                    <td colspan="2">
+                        <input class="cpi-cell cpi-edit cpi-center" type="number" step="@QtyStep(line.var7)" min="1" value="@QtyText(line.qty, line.var7)" @onchange="e => OnNativeQty(e, idx)"/>
+                    </td>
+                    <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@line.var7"/></td>
+                    <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.price.ToString("0.00")"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.var8"/></td>
+                    <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.ext.ToString("0.00")"/></td>
+                </tr>
+                <tr @key="@(line.Uid + "-b")">
+                    <td colspan="1" class="cpi-label">Specs:</td>
+                    <td colspan="26"><input class="cpi-cell" readonly value="@line.materiaSpecs"/></td>
+                </tr>
+                <tr @key="@(line.Uid + "-c")">
+                    <td colspan="1" class="cpi-label">Powered:</td>
+                    <td colspan="26"><input class="cpi-cell" readonly value="@line.materiaPowered"/></td>
+                </tr>
+                <tr @key="@(line.Uid + "-d")">
+                    <td colspan="1" class="cpi-label">Notes:</td>
+                    <td colspan="24">
+                        <input class="cpi-cell cpi-edit" placeholder="Notes" @bind="_lines[idx].Notes" @bind:event="oninput"/>
+                    </td>
+                    <td colspan="2" class="cpi-center">
+                        <button type="button" class="cpi-btn cpi-btn-del" @onclick="() => RemoveLine(idx)">删除此行</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+            <tfoot>
+
+            <tr>
+                <td colspan="16">
+                    <input class="cpi-cell cpi-edit cpi-remark" placeholder="备注" @bind="_header.var4" @bind:event="oninput"/>
+                </td>
+                <td colspan="2" class="cpi-label cpi-right">Estimated Time of Completion</td>
+                <td colspan="2">
+                    <div class="cpi-date-wrap">
+                        <div class="cpi-date-show">@FmtDate(_etcDate)</div>
+                        <input class="cpi-date" type="date" value="@FmtDate(_etcDate)" @onclick="OpenDatePickerAsync" @onchange="e => OnEtcChanged(ParseDate(Conv(e)))"/>
+                    </div>
+                </td>
+                @if (ShowShipping)
+                {
+                    <td colspan="4">
+                        <input class="cpi-cell cpi-edit" placeholder="Shipping_Fee" @bind="_header.Shipping_Fee" @bind:event="oninput"/>
+                    </td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2">
+                        <input class="cpi-cell cpi-edit cpi-center" value="@_shipFeeAmt" @onchange="OnNativeShipFee"/>
+                    </td>
+                }
+                else
+                {
+                    <td colspan="8"></td>
+                }
+            </tr>
+            @if (ShowInsurance)
+            {
+            <tr>
+                <td colspan="18"></td>
+                <td colspan="6" class="cpi-right">Insurance premium</td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                <td colspan="2">
+                    <input class="cpi-cell cpi-edit cpi-center" value="@_header.Insurance_premium" @onchange="OnNativeInsurance"/>
+                </td>
+            </tr>
+            }
+            <tr>
+                <td colspan="18"></td>
+                <td colspan="6" class="cpi-right">SUB-TOTAL</td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.TOTAL.ToString("0.00")"/></td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@_company.Bank1</td>
+                <td colspan="2" class="cpi-right">DEPOSIT DUE AT TIME OF ORDER</td>
+                <td colspan="2">
+                    <input class="cpi-cell cpi-edit cpi-center" value="@_header.Payment_ratio" @onchange="OnNativeRatio"/>
+                </td>
+                <td colspan="2" class="cpi-center">%</td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.Payment_ratio_Ext.ToString("0.00")"/></td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@_company.Bank2</td>
+                <td colspan="6" class="cpi-pay-cell">
+                    <div class="cpi-pay-full">@SelectedPaymentDisplay</div>
+                    <select class="cpi-pay-ghost" @bind="_header.var3" title="@SelectedPaymentDisplay">
+                        <option value="">未选择-null</option>
+                        @foreach (var p in CotractPiTypes.PaymentMethods)
+                        {
+                            <option value="@p.Value">@p.Display</option>
+                        }
+                    </select>
+                </td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.balance_before_delivery.ToString("0.00")"/></td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@_company.Bank3</td>
+                <td colspan="10" class="cpi-warn">Payer is responsible for all wire fees.</td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@_company.Bank4</td>
+                <td colspan="10" class="cpi-warn">Please ensure that all funds remitted equal the amount of the invoice.</td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@_company.Bank5</td>
+                <td colspan="10"></td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@_company.Bank6</td>
+                <td colspan="10"></td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">@(IsJs ? "THE COUNTRY OF ORIGIN:CHINA" : "NOTE: OUR FULL UNABBREVIATED NAME MUST APPEAR IN THE WIRE PAPERWORK.")</td>
+                <td colspan="10"></td>
+            </tr>
+            <tr>
+                <td colspan="18" class="cpi-bank">NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP OR SCREENSHOT TO</td>
+                <td colspan="4" class="cpi-label">邮箱</td>
+                <td colspan="6"><input class="cpi-cell" readonly value="@_header.email"/></td>
+            </tr>
+            <tr>
+                <td colspan="4" class="cpi-label">Customer Signature：</td>
+                <td colspan="14"></td>
+                <td colspan="4" class="cpi-label">DATE:</td>
+                <td colspan="6">
+                    <div class="cpi-date-wrap">
+                        <div class="cpi-date-show">@FmtDate(_signDate)</div>
+                        <input class="cpi-date" type="date" value="@FmtDate(_signDate)" @onclick="OpenDatePickerAsync" @onchange="e => OnSignDateChanged(ParseDate(Conv(e)))"/>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="28" class="cpi-foot-warn">NO CHANGES MAY BE MADE TO THIS ORDER ONCE SIGNED AND SUBMITTED</td>
+            </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<style>
+    .cpi-edit-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 8px;
+        color: #111;
+    }
+    .cpi-topbar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 8px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .cpi-topbar-select {
+        height: 30px;
+        min-width: 160px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        padding: 0 6px;
+    }
+    .cpi-btn {
+        background: #409eff;
+        color: #fff;
+        border: none;
+        padding: 5px 12px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .cpi-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .cpi-btn-freeze { background: #F56C6C; }
+    .cpi-btn-lo { background: #67c23a; }
+    .cpi-btn-xl { background: #e6a23c; }
+    .cpi-lo-status {
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 12px;
+        color: #606266;
+    }
+    .cpi-lo-status.ok { color: #67c23a; }
+    .cpi-lo-status.bad { color: #f56c6c; }
+    .cpi-btn-add { padding: 5px 12px; }
+    .cpi-btn-del { background: #409eff; padding: 2px 8px; font-size: 12px; }
+    .cpi-link { color: #409eff; white-space: nowrap; }
+    .cpi-topbar-split {
+        width: 1px;
+        align-self: stretch;
+        background: #dcdfe6;
+        margin: 0 4px;
+    }
+    .cpi-picker-client { width: 120px; flex: 0 0 120px; }
+    .cpi-picker-product { flex: 1 1 280px; min-width: 180px; }
+    .cpi-sheet-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+        position: relative;
+        background: #fff;
+    }
+    .cpi-sheet {
+        width: 100%;
+        min-width: 1280px;
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: #fff;
+    }
+    .cpi-sheet th, .cpi-sheet td {
+        border: 1px solid #000;
+        border-top: none;
+        border-left: none;
+        padding: 1px;
+        background: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        color: #111;
+        word-break: break-word;
+        box-sizing: border-box;
+        vertical-align: middle;
+    }
+    .cpi-sheet tr > :first-child {
+        border-left: 1px solid #000;
+    }
+    .cpi-sheet thead tr:first-child > * {
+        border-top: 1px solid #000;
+    }
+    .cpi-title1 { text-align: center; font-size: 28px !important; font-weight: 700; }
+    .cpi-title2 { text-align: center; font-size: 20px !important; }
+    .cpi-title3 { text-align: center; font-size: 14px !important; font-weight: 600; }
+    .cpi-title-pi { text-align: center; font-size: 18px !important; }
+    .cpi-label { text-align: left; padding: 2px 4px !important; white-space: nowrap; }
+    .cpi-center { text-align: center; }
+    .cpi-right { text-align: right; padding-right: 6px !important; }
+    .cpi-bank {
+        text-align: left;
+        padding: 4px 6px !important;
+        font-weight: 600;
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.4;
+        height: auto !important;
+        vertical-align: top;
+    }
+    .cpi-warn {
+        text-align: right;
+        color: #c62828;
+        padding: 4px 6px !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.4;
+        height: auto !important;
+        vertical-align: top;
+    }
+    .cpi-pay-cell {
+        position: relative;
+        vertical-align: top;
+        padding: 2px !important;
+    }
+    .cpi-pay-full {
+        position: relative;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.35;
+        min-height: 28px;
+        padding: 4px 22px 4px 6px;
+        border: 1px solid #dcdfe6;
+        border-radius: 2px;
+        background: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        color: #303133;
+    }
+    .cpi-pay-full::after {
+        content: "";
+        position: absolute;
+        right: 10px;
+        top: 12px;
+        border: 4px solid transparent;
+        border-top-color: #606266;
+    }
+    .cpi-pay-ghost {
+        position: absolute;
+        inset: 2px;
+        width: calc(100% - 4px);
+        height: calc(100% - 4px);
+        opacity: 0;
+        cursor: pointer;
+        z-index: 2;
+    }
+    .cpi-foot-warn { text-align: center; color: #c62828; }
+    .cpi-sheet tfoot .cpi-label,
+    .cpi-sheet tfoot .cpi-right {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.3;
+        height: auto !important;
+    }
+    .cpi-sheet td { padding: 2px; }
+    .cpi-cell {
+        width: 100%;
+        border: none !important;
+        outline: none;
+        background: transparent;
+        box-shadow: none !important;
+        font-size: 12px;
+        font-weight: 700;
+        color: #303133;
+        padding: 2px 4px;
+        min-height: 26px;
+        box-sizing: border-box;
+    }
+    .cpi-cell[readonly],
+    .cpi-cell:read-only {
+        cursor: default;
+        color: #111;
+    }
+    .cpi-cell.cpi-edit {
+        border: 1px solid #dcdfe6 !important;
+        background: #fff;
+        border-radius: 2px;
+        height: 28px;
+        min-height: 28px;
+        font-weight: 600;
+        color: #303133;
+    }
+    .cpi-cell.cpi-edit::placeholder {
+        color: #c0c4cc;
+        font-weight: 400;
+    }
+    .cpi-cell.cpi-edit:focus {
+        outline: none;
+        border-color: #409eff !important;
+        background: #fff;
+    }
+    select.cpi-cell.cpi-edit {
+        appearance: auto;
+        padding-right: 20px;
+    }
+    .cpi-date-wrap {
+        position: relative;
+        width: 100%;
+        min-height: 28px;
+    }
+    .cpi-date-show {
+        width: 100%;
+        height: 28px;
+        line-height: 24px;
+        padding: 2px 4px;
+        border: 1px solid #dcdfe6;
+        border-radius: 2px;
+        background: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        color: #303133;
+        box-sizing: border-box;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+    .cpi-date-wrap:focus-within .cpi-date-show {
+        border-color: #409eff;
+    }
+    input.cpi-date {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 2;
+        border: none;
+        background: transparent;
+        color: transparent;
+    }
+    input.cpi-date::-webkit-calendar-picker-indicator {
+        position: absolute;
+        inset: 0;
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        cursor: pointer;
+        opacity: 0;
+    }
+    .cpi-remark { color: mediumvioletred; }
+    .cpi-frozen thead {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: #fff;
+    }
+    .cpi-frozen thead th,
+    .cpi-frozen thead td {
+        background: #fff !important;
+        background-clip: padding-box;
+    }
+    .cpi-frozen thead tr:last-child th,
+    .cpi-frozen thead tr:last-child td {
+        box-shadow: 0 1px 0 #000;
+    }
+</style>
+
+@code {
+    [Parameter] public string? DocumentGuid { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? SourceGuids { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? CiOrderType { get; set; }
+
+    private bool _busy;
+    private bool _freeze;
+    private string? _loadedKey;
+    private ZyqdCotractPiModel _header = NewHeader();
+    private List<CotractPiLineDto> _lines = [];
+    private List<CrmClientDto> _shipOptions = [];
+    private List<ZyqdCotractBaseModel> _products = [];
+    private CotractPiCompanyInfo _company = CotractPiCompanyInfo.For("JC", "CNY");
+    private string _billClientNo = "";
+    private string _shipClientNo = "";
+    private string _productClientNo = "";
+    private int _shipIndex;
+    private int _productId;
+    private DateTime? _billDate = DateTime.Today;
+    private DateTime? _signDate = DateTime.Today;
+    private DateTime? _etcDate;
+    private double _shipFeeAmt;
+    private bool _invoiceLocked;
+
+    private bool IsCreate => string.IsNullOrWhiteSpace(DocumentGuid)
+        || string.Equals(DocumentGuid, "new", StringComparison.OrdinalIgnoreCase);
+    private bool IsCiRoute
+    {
+        get
+        {
+            var path = NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0];
+            return path.StartsWith("contract-ci", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+    private bool IsCustomerCi => IsCiRoute || CotractPiTypes.IsCustomerCi(_header.var6);
+    private string Title => IsCustomerCi
+        ? (IsCreate ? "生成客户CI" : "编辑客户CI")
+        : (IsCreate ? "新增客户PI" : "编辑客户PI");
+    private string InvoiceTitle => CotractPiTypes.InvoiceTitle(_header.var6);
+    private string ListHref => IsCustomerCi ? "/contract-ci/from-pi" : "/contract-pi";
+    private IReadOnlyList<string> OrderTypeOptions
+    {
+        get
+        {
+            if (!IsCustomerCi)
+                return CotractPiTypes.CustomerPi;
+            var current = (_header.var6 ?? "").Trim();
+            return current.Length > 0 ? [current] : CotractPiTypes.CustomerCi;
+        }
+    }
+    private string TemplateType => CotractPiTypes.ResolveTemplateType(_header.var6, _header.ClientNo);
+    private bool IsJs => TemplateType == "JS";
+    private bool ShowShipping => CotractPiTypes.ShowShippingFee(_header.BILL_TO_FOB);
+    private bool ShowInsurance => CotractPiTypes.ShowInsurance(_header.BILL_TO_FOB);
+    private string Curr => CotractPiTypes.CurrencySymbol(_lines.FirstOrDefault()?.currency_unit ?? _header.currency_unit);
+    private string SelectedPaymentDisplay
+    {
+        get
+        {
+            var v = (_header.var3 ?? "").Trim();
+            if (v.Length == 0) return "未选择";
+            var hit = CotractPiTypes.PaymentMethods.FirstOrDefault(p => p.Value == v);
+            return string.IsNullOrWhiteSpace(hit?.Display) ? v : hit.Display;
+        }
+    }
+    private bool _unfreezeAfterRender;
+    private string _loStatus = "";
+    private bool _loOk;
+
+    private async Task OpenDatePickerAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("cpiOpenActiveDatePicker");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private void ToggleFreeze()
+    {
+        _freeze = !_freeze;
+        if (!_freeze)
+            _unfreezeAfterRender = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_freeze && !_unfreezeAfterRender)
+            return;
+        try
+        {
+            if (_freeze)
+                await JS.InvokeVoidAsync("cpiFreezeHeader", ".cpi-sheet-wrap");
+            else
+            {
+                await JS.InvokeVoidAsync("cpiUnfreezeHeader", ".cpi-sheet-wrap");
+                _unfreezeAfterRender = false;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!RendererInfo.IsInteractive) return;
+
+        var key = $"{(IsCiRoute ? "ci" : "pi")}|{DocumentGuid ?? "new"}|{SourceGuids}|{CiOrderType}";
+        if (_loadedKey == key) return;
+        _loadedKey = key;
+
+        if (IsCiRoute && IsCreate)
+        {
+            await LoadCiDraftAsync();
+            return;
+        }
+
+        if (IsCreate)
+        {
+            _header = NewHeader();
+            _lines = [];
+            _invoiceLocked = false;
+            try
+            {
+                var empNo = await Auth.GetCurrentEmpNoAsync();
+                _header.Person = empNo;
+                _header.CreatePerson = empNo;
+                await FillEmailAsync(empNo);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            RefreshCompany();
+            return;
+        }
+
+        var rows = await CotractPi.GetByGuidAsync(DocumentGuid);
+        if (rows.Count == 0)
+        {
+            Notify.Show("记录不存在", Severity.Warning);
+            NavManager.NavigateTo(ListHref);
+            return;
+        }
+
+        var scope = await BuildScopeAsync();
+        if (!CotractPi.CanAccess(rows[0], scope))
+        {
+            Notify.Show("没有这条数据的权限", Severity.Warning);
+            NavManager.NavigateTo(ListHref);
+            return;
+        }
+
+        ApplyRows(rows);
+        _invoiceLocked = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_header.email))
+                await FillEmailAsync(await Auth.GetCurrentEmpNoAsync());
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        await LoadProductsAsync();
+        await LoadShipToAsync(applyFirst: false);
+        RefreshCompany();
+    }
+
+    private async Task LoadCiDraftAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SourceGuids))
+        {
+            Notify.Show("请先在客户CI生成入口勾选客户PI", Severity.Warning);
+            NavManager.NavigateTo("/contract-ci/from-pi");
+            return;
+        }
+
+        var rows = await CotractPi.LoadCustomerCiDraftAsync(SourceGuids, CiOrderType);
+        if (rows.Count == 0)
+        {
+            Notify.Show("未找到选中的客户PI", Severity.Warning);
+            NavManager.NavigateTo("/contract-ci/from-pi");
+            return;
+        }
+
+        var scope = await BuildScopeAsync();
+        if (!CotractPi.CanAccess(rows[0], scope))
+        {
+            Notify.Show("没有这条数据的权限", Severity.Warning);
+            NavManager.NavigateTo("/contract-ci/from-pi");
+            return;
+        }
+
+        ApplyRows(rows);
+        _invoiceLocked = false;
+        _header.DocumentGuid = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_header.email))
+                await FillEmailAsync(await Auth.GetCurrentEmpNoAsync());
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        await RefreshInvoiceNoAsync();
+        await LoadProductsAsync();
+        await LoadShipToAsync(applyFirst: false);
+        RefreshCompany();
+    }
+
+    private static ZyqdCotractPiModel NewHeader()
+    {
+        var today = CotractPiTypes.FormatDate(DateTime.Today);
+        return new ZyqdCotractPiModel
+        {
+            var6 = CotractPiTypes.CustomerPi[0],
+            Cotract_PI_type = "JC",
+            BILL_TO_FOB = CotractPiTypes.DefaultTradeTerm,
+            BILL_TO_DATE = today,
+            var5 = today,
+            Shipping_Fee = "Shipping_Fee",
+            percent = 1,
+            var10 = "0"
+        };
+    }
+
+    private async Task FillEmailAsync(string? empNo)
+    {
+        empNo = (empNo ?? "").Trim();
+        if (empNo.Length == 0) return;
+        try
+        {
+            var (ok, _, info, _) = await UserInfo.GetAsync(empNo);
+            var email = (ok ? info?.Email : null)?.Trim() ?? "";
+            if (email.Length == 0)
+            {
+                Notify.Show("当前账号在员工表没有邮箱，请先在用户管理里维护", Severity.Warning);
+                return;
+            }
+            _header.email = email;
+        }
+        catch (Exception)
+        {
+            Notify.Show("读取员工邮箱失败", Severity.Warning);
+        }
+    }
+
+    private void ApplyRows(List<ZyqdCotractPiModel> rows)
+    {
+        _header = rows[0];
+        _billClientNo = _header.ClientNo ?? "";
+        _shipClientNo = _header.ClientNo ?? "";
+        _productClientNo = _header.ClientNo ?? "";
+        _billDate = ParseDate(_header.BILL_TO_DATE) ?? DateTime.Today;
+        _signDate = ParseDate(_header.var5);
+        _etcDate = ParseDate(_header.var2);
+        _shipFeeAmt = double.TryParse(_header.var10, out var fee) ? fee : 0;
+        _lines = rows.Select(x => new CotractPiLineDto
+        {
+            materiaCust = x.materiaCust,
+            materialNo = x.materialNo,
+            materialName = x.materialName,
+            materialModel = x.materialModel,
+            materiaSpecs = x.materiaSpecs,
+            materiaPowered = x.materiaPowered,
+            Notes = x.Notes,
+            qty = x.qty,
+            var7 = x.var7,
+            currency_unit = x.currency_unit,
+            origin_price = ParseOrigin(x),
+            price = DisplayPrice(x),
+            var8 = x.var8,
+            ext = x.ext
+        }).ToList();
+        RecalcTotals();
+    }
+
+    private static double ParseOrigin(ZyqdCotractPiModel x)
+        => double.TryParse(x.var9, out var n) && n != 0 ? n : x.price;
+
+    private static double DisplayPrice(ZyqdCotractPiModel x)
+    {
+        var origin = ParseOrigin(x);
+        var percent = x.percent == 0 ? 1 : x.percent;
+        return Math.Round(origin * percent, 2);
+    }
+
+    private static string? Conv(ChangeEventArgs e) => e.Value?.ToString();
+    private static string FmtDate(DateTime? d) => CotractPiTypes.FormatDate(d);
+    private static DateTime? ParseDate(string? s)
+    {
+        var t = CotractPiTypes.FormatDate(s);
+        return DateTime.TryParseExact(t, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var d) ? d.Date : null;
+    }
+
+    private async Task OnBillKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter")
+            await LoadBillToAsync();
+    }
+
+    private async Task OnShipKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter")
+            await LoadShipToAsync();
+    }
+
+    private async Task OnProductKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter")
+            await LoadProductsAsync();
+    }
+
+    private async Task EnsureProductsAsync()
+    {
+        if (_products.Count > 0) return;
+        await LoadProductsAsync();
+    }
+
+    private static string ProductLabel(ZyqdCotractBaseModel p)
+    {
+        var no = (p.materialNo ?? "").Trim();
+        var model = (p.materialModel ?? "").Trim();
+        if (model.Length == 0) model = (p.materiaCust ?? "").Trim();
+        if (no.Length == 0) return model.Length == 0 ? $"#{p.Id}" : model;
+        return model.Length == 0 ? no : $"{no}/{model}";
+    }
+
+    private async Task OnOrderTypeNative(ChangeEventArgs e)
+        => await OnOrderTypeChanged(e.Value?.ToString() ?? "");
+
+    private void OnShipNative(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var idx))
+            OnShipIndexChanged(idx);
+    }
+
+    private void OnProductNative(ChangeEventArgs e)
+    {
+        _productId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+    }
+
+    private void OnNativeQty(ChangeEventArgs e, int idx)
+    {
+        if (idx < 0 || idx >= _lines.Count) return;
+        if (!TryNum(e, out var q))
+            q = 1;
+        OnQtyChanged(idx, q);
+    }
+
+    private static bool IsPieceQty(string? unit)
+    {
+        var u = (unit ?? "").Trim().ToUpperInvariant().Replace(" ", "").Replace(".", "");
+        return u is "" or "PC" or "PCS" or "PC(S)" or "PC（S）" or "PCE" or "只" or "件" or "个";
+    }
+
+    private static string QtyStep(string? unit) => IsPieceQty(unit) ? "1" : "0.01";
+
+    private static string QtyText(double qty, string? unit)
+        => IsPieceQty(unit) ? Math.Max(1, Math.Round(qty, 0)).ToString("0") : qty.ToString("0.##");
+
+    private static double NormalizeQty(string? unit, double qty)
+    {
+        if (IsPieceQty(unit))
+            return Math.Max(1, Math.Round(qty, 0, MidpointRounding.AwayFromZero));
+        return Math.Max(1, Math.Round(qty, 2));
+    }
+
+    private void OnNativeShipFee(ChangeEventArgs e)
+    {
+        if (TryNum(e, out var n)) OnShipFeeChanged(n);
+    }
+
+    private void OnNativeInsurance(ChangeEventArgs e)
+    {
+        if (TryNum(e, out var n)) OnInsuranceChanged(n);
+    }
+
+    private void OnNativeRatio(ChangeEventArgs e)
+    {
+        if (TryNum(e, out var n)) OnRatioChanged(n);
+    }
+
+    private static bool TryNum(ChangeEventArgs e, out double value)
+    {
+        var s = e.Value?.ToString();
+        return double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out value)
+               || double.TryParse(s, out value);
+    }
+
+    private async Task LoadBillToAsync()
+    {
+        _busy = true;
+        try
+        {
+            _billClientNo = CotractPiTypes.NormalizeClientNo(_billClientNo);
+            var data = await Crm.GetBillToAsync(_billClientNo);
+            if (data is null || string.IsNullOrWhiteSpace(data.ClientName))
+            {
+                Notify.Show("CRM 未找到该客户", Severity.Warning);
+                return;
+            }
+
+            _header.ClientNo = _billClientNo;
+            _header.BILL_TO_info1 = data.ClientName;
+            _header.ClientName_old = data.ClientName;
+            _header.ClientName = data.ClientName;
+            _header.BILL_TO_info3 = data.CombinedAddress;
+            _header.BILL_TO_info4 = data.CombinedTel;
+            if (string.IsNullOrWhiteSpace(_shipClientNo))
+                _shipClientNo = _billClientNo;
+            if (string.IsNullOrWhiteSpace(_productClientNo))
+                _productClientNo = _billClientNo;
+            await LoadShipToAsync();
+            await LoadProductsAsync();
+            await RefreshInvoiceNoAsync();
+            RefreshCompany();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string ShipSelectTitle
+        => _shipOptions.Count == 0
+            ? "从 CRM 选择该客户的收货地址"
+            : (_shipIndex >= 0 && _shipIndex < _shipOptions.Count ? _shipOptions[_shipIndex].OptionLabel : "从 CRM 选择该客户的收货地址");
+
+    private async Task LoadShipToAsync(bool applyFirst = true)
+    {
+        var no = string.IsNullOrWhiteSpace(_shipClientNo) ? _billClientNo : _shipClientNo;
+        no = CotractPiTypes.NormalizeClientNo(no);
+        _shipClientNo = no;
+        if (no.Length == 0)
+        {
+            _shipOptions = [];
+            _shipIndex = 0;
+            return;
+        }
+        try
+        {
+            _shipOptions = await Crm.GetShipToAsync(no);
+            if (_shipOptions.Count == 0)
+            {
+                _shipIndex = 0;
+                return;
+            }
+
+            if (!applyFirst)
+            {
+                _shipIndex = MatchShipIndex();
+                return;
+            }
+
+            _shipIndex = 0;
+            ApplyShip(_shipOptions[0]);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show(ex.Message, Severity.Error);
+        }
+    }
+
+    private int MatchShipIndex()
+    {
+        var name = (_header.SHIP_TO_info1 ?? "").Trim();
+        var addr = (_header.SHIP_TO_info3 ?? "").Trim();
+        for (var i = 0; i < _shipOptions.Count; i++)
+        {
+            var n = (_shipOptions[i].ClientName ?? "").Trim();
+            var a = (_shipOptions[i].Address ?? "").Trim();
+            if (name.Length > 0 && string.Equals(n, name, StringComparison.OrdinalIgnoreCase))
+                return i;
+            if (addr.Length > 0 && a.Length > 0 && addr.Contains(a, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return 0;
+    }
+
+    private void OnShipIndexChanged(int idx)
+    {
+        _shipIndex = idx;
+        if (idx >= 0 && idx < _shipOptions.Count)
+            ApplyShip(_shipOptions[idx]);
+    }
+
+    private void ApplyShip(CrmClientDto data)
+    {
+        _header.SHIP_TO_info1 = data.ClientName;
+        _header.SHIP_TO_info3 = data.CombinedAddress;
+        _header.SHIP_TO_info4 = data.CombinedTel;
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        var no = string.IsNullOrWhiteSpace(_productClientNo) ? _billClientNo : _productClientNo;
+        no = CotractPiTypes.NormalizeClientNo(no);
+        _productClientNo = no;
+        _productId = 0;
+        if (no.Length == 0)
+        {
+            _products = [];
+            return;
+        }
+        _products = await CotractBase.ListByClientNoAsync(no);
+        if (_products.Count == 0)
+            Notify.Show("该客户没有合同基础数据", Severity.Info);
+    }
+
+    private async Task AddLineAsync()
+    {
+        if (_productId == 0) return;
+        var row = _products.FirstOrDefault(x => x.Id == _productId) ?? await CotractBase.GetAsync(_productId);
+        if (row is null)
+        {
+            Notify.Show("产品不存在", Severity.Warning);
+            return;
+        }
+
+        var origin = row.price;
+        var qty = NormalizeQty(row.Quantity_unit, 1);
+        _lines.Add(new CotractPiLineDto
+        {
+            materiaCust = row.materiaCust,
+            materialNo = row.materialNo,
+            materialName = row.materialName,
+            materialModel = row.materialModel,
+            materiaSpecs = row.materiaSpecs,
+            materiaPowered = row.materiaPowered,
+            Notes = row.Notes,
+            qty = qty,
+            var7 = row.Quantity_unit,
+            currency_unit = row.currency_unit,
+            origin_price = origin,
+            price = origin,
+            var8 = row.price_unit,
+            ext = Math.Round(qty * origin, 2)
+        });
+        _header.currency_unit = row.currency_unit;
+        RecalcTotals();
+        RefreshCompany();
+    }
+
+    private void RemoveLine(int idx)
+    {
+        if (idx < 0 || idx >= _lines.Count) return;
+        _lines.RemoveAt(idx);
+        RecalcTotals();
+        RefreshCompany();
+    }
+
+    private void OnQtyChanged(int idx, double qty)
+    {
+        var line = _lines[idx];
+        line.qty = NormalizeQty(line.var7, qty);
+        line.ext = Math.Round(line.qty * line.price, 2);
+        RecalcTotals();
+    }
+
+    private async Task OnOrderTypeChanged(string value)
+    {
+        _header.var6 = value;
+        RefreshCompany();
+        await RefreshInvoiceNoAsync();
+    }
+
+    private void OnBillDateChanged(DateTime? value)
+    {
+        _billDate = value;
+        _header.BILL_TO_DATE = CotractPiTypes.FormatDate(value);
+    }
+
+    private void OnSignDateChanged(DateTime? value)
+    {
+        _signDate = value;
+        _header.var5 = CotractPiTypes.FormatDate(value);
+    }
+
+    private void OnEtcChanged(DateTime? value)
+    {
+        _etcDate = value;
+        _header.var2 = CotractPiTypes.FormatDate(value);
+    }
+
+    private void OnTradeTermNative(ChangeEventArgs e)
+    {
+        _header.BILL_TO_FOB = Conv(e);
+        RecalcTotals();
+    }
+
+    private void OnShipFeeChanged(double value)
+    {
+        _shipFeeAmt = value;
+        _header.var10 = value.ToString("0.##");
+        RecalcTotals();
+    }
+
+    private void OnInsuranceChanged(double value)
+    {
+        _header.Insurance_premium = value;
+        RecalcTotals();
+    }
+
+    private void OnRatioChanged(double value)
+    {
+        _header.Payment_ratio = value;
+        RecalcTotals();
+    }
+
+    private void RecalcTotals()
+    {
+        var ship = ShowShipping ? _shipFeeAmt : 0;
+        var insure = ShowInsurance ? _header.Insurance_premium : 0;
+        var total = _lines.Sum(x => x.ext) + ship + insure;
+        _header.TOTAL = Math.Round(total, 2);
+        _header.Payment_ratio_Ext = Math.Round(total * _header.Payment_ratio / 100.0, 2);
+        _header.balance_before_delivery = Math.Round(total - _header.Payment_ratio_Ext, 2);
+        _header.var10 = ShowShipping ? _shipFeeAmt.ToString("0.##") : "0";
+    }
+
+    private void RefreshCompany()
+        => _company = CotractPiCompanyInfo.For(TemplateType, _header.currency_unit ?? _lines.FirstOrDefault()?.currency_unit);
+
+    private async Task RefreshInvoiceNoAsync()
+    {
+        if (_invoiceLocked) return;
+        if (string.IsNullOrWhiteSpace(_header.ClientNo) || string.IsNullOrWhiteSpace(_header.ClientName_old))
+            return;
+        _header.INVOICE_NO = await CotractPi.BuildInvoiceNoAsync(_header.ClientNo, _header.ClientName_old, _header.var6);
+    }
+
+    private async Task SaveAsync()
+    {
+        RecalcTotals();
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            if (string.IsNullOrWhiteSpace(_header.email))
+                await FillEmailAsync(empNo);
+            var (ok, msg, guid) = await CotractPi.SaveAsync(_header, _lines, empNo, IsCreate);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("保存成功", Severity.Success);
+            _invoiceLocked = true;
+            if (IsCreate && !string.IsNullOrWhiteSpace(guid))
+            {
+                var prefix = IsCustomerCi ? "/contract-ci/" : "/contract-pi/";
+                NavManager.NavigateTo(prefix + guid, replace: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportExcelAsync()
+    {
+        if (IsCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var rows = await CotractPi.GetByGuidAsync(DocumentGuid);
+            if (rows.Count == 0)
+            {
+                Notify.Show("没有可导出的数据", Severity.Warning);
+                return;
+            }
+            var bytes = PiExcel.Build(rows);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                CotractPiExcelService.DownloadName(rows[0]),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportPdfAsync(bool useExcelCom)
+    {
+        if (IsCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return;
+        }
+        _busy = true;
+        var tag = useExcelCom ? "Excel" : "LO";
+        try
+        {
+            Notify.Show(useExcelCom ? "正在用 Excel 生成 PDF…" : "正在用 LibreOffice 生成 PDF…", Severity.Info);
+            var rows = await CotractPi.GetByGuidAsync(DocumentGuid);
+            if (rows.Count == 0)
+            {
+                Notify.Show("没有可导出的数据", Severity.Warning);
+                return;
+            }
+            var xlsx = PiExcel.Build(rows);
+            var english = string.Equals(rows[0].Cotract_PI_type, "JS", StringComparison.OrdinalIgnoreCase);
+            var pdf = useExcelCom
+                ? await ExcelPdf.ConvertXlsxToPdfAsync(xlsx, rows.Count, english)
+                : await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                CotractPiExcelService.DownloadPdfName(rows[0], tag),
+                "application/pdf",
+                Convert.ToBase64String(pdf));
+            Notify.Show(tag + " PDF 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出" + tag + " PDF失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TestLibreOfficeAsync()
+    {
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await LibreOffice.TestAsync();
+            _loOk = ok;
+            _loStatus = msg;
+            Notify.Show(msg, ok ? Severity.Success : Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            _loOk = false;
+            _loStatus = ex.Message;
+            Notify.Show("LibreOffice 测试失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<CotractPiQueryDto> BuildScopeAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        var viewAll = Auth.CanManageUsers(auth);
+        if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
+        {
+            var (_, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
+            viewAll = Auth.CanViewAllCustomers(auth, info);
+        }
+        return new CotractPiQueryDto
+        {
+            ViewAll = viewAll,
+            ViewerEmpNo = auth?.EmpNo
+        };
+    }
+}

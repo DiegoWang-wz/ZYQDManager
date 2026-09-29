@@ -1,0 +1,9 @@
+@page "/"
+@rendermode InteractiveServer
+
+@code {
+    protected override void OnInitialized()
+    {
+        NavManager.NavigateTo("/project-list", replace: true);
+    }
+}

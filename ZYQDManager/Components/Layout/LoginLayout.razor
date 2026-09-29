@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<div class="login-layout-root">
+    @Body
+</div>
+
+<style>
+    .login-layout-root {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        background: linear-gradient(160deg, #0d47a1 0%, #1565c0 38%, #42a5f5 100%);
+    }
+</style>

@@ -1,0 +1,29 @@
+@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.JSInterop
+@using MudBlazor
+@using ZYQDManager
+@using ZYQDManager.Components
+@using ZYQDManager.DataDtos
+@using ZYQDManager.DataModels
+@using ZYQDManager.Services
+@using ZYQDManager.Utilities
+@inject IWebHostEnvironment Env
+@inject NavigationManager NavManager
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+@inject IConfiguration Config
+@inject IAppService AppService
+@inject IEmailService EmailService
+@inject CentralAuthService Auth
+@inject CentralUserManagementService UsersApi
+@inject CentralUserInformationService UserInfo
+@inject UserCustomerAssignService CustomerAssign
+@inject AdminNotifyService AdminNotify
+@inject IUserProfileService UserProfile
+@inject SnackbarHelper Notify

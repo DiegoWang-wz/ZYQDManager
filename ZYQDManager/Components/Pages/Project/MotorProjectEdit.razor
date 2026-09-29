@@ -1,0 +1,664 @@
+@page "/project/motor/new"
+@page "/project/motor/{DocGuid}"
+@rendermode InteractiveServer
+@inject MotorLxService MotorLx
+@inject CentralAuthService Auth
+@inject NavigationManager Nav
+@inject SnackbarHelper Notify
+
+<PageTitle>@(IsNew ? "新增电机立项单" : "电机立项单")</PageTitle>
+
+<div class="motor-lx-page">
+    <div class="motor-lx-toolbar">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">@(IsNew ? "新增电机立项单" : "电机立项单")</MudText>
+                <MudText Typo="Typo.caption" Color="@(IsNew ? Color.Error : Color.Secondary)">
+                    @if (IsNew)
+                    {
+                        <text>未保存：尚未生成 GUID，点击「保存」后才会写入数据库</text>
+                    }
+                    else
+                    {
+                        <text>版本 @_model.VersionNo　DocGuid：@_model.DocGuid</text>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_lastSavedText))
+                    {
+                        <text>　上次保存：@_lastSavedText</text>
+                    }
+                </MudText>
+            </MudStack>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/project-list">返回列表</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">保存</MudButton>
+            </MudStack>
+        </MudStack>
+    </div>
+
+    <div class="motor-lx-scroll">
+    <MudPaper Outlined="true" Class="pa-0 motor-lx-form" Elevation="0">
+        <MudSimpleTable Dense="true" Bordered="true" Hover="false" Style="width:100%">
+            <tbody>
+            <tr>
+                <th>需求人</th>
+                <td><MudTextField @bind-Value="_model.DemandPerson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th>提出需求日期</th>
+                <td><MudDatePicker @bind-Date="_timeToRequest" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px"/></td>
+            </tr>
+            <tr>
+                <th>要求完成日期</th>
+                <td><MudDatePicker @bind-Date="_requiredCompletion" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px"/></td>
+            </tr>
+            <tr>
+                <th class="req">客户</th>
+                <td><MudTextField @bind-Value="_model.Customer" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th>客户产品编号</th>
+                <td><MudTextField @bind-Value="_model.CustomerPartCode" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+
+            <tr>
+                <th>01.捷昌型号</th>
+                <td><MudTextField @bind-Value="_model.MotorModelSpec" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th>02.产品描述</th>
+                <td><MudTextField @bind-Value="_model.Description" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"/></td>
+            </tr>
+            <tr>
+                <th class="req">03.输入电压(V)</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.InputVoltage" Class="radio-wrap">
+                        @foreach (var v in _voltages)
+                        {
+                            <MudRadio T="string" Value="@v" Dense="true">@v</MudRadio>
+                        }
+                    </MudRadioGroup>
+                    <MudTextField @bind-Value="_model.InputVoltageOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Adornment="Adornment.End" AdornmentText="V"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">04.额定扭矩(N.m)</th>
+                <td><MudTextField @bind-Value="_model.RatedTorque" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Adornment="Adornment.End" AdornmentText="Nm"/></td>
+            </tr>
+            <tr>
+                <th class="req">05.运行速度(rpm/cm/s)</th>
+                <td class="inline-fields">
+                    <span>额定等级转速</span>
+                    <MudTextField @bind-Value="_model.RatedLevelSpeed" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    <span>出厂默认</span>
+                    <MudTextField @bind-Value="_model.DefaultRunningSpeed" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Placeholder="XXXrpm"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">06.额定功率(W)</th>
+                <td><MudTextField @bind-Value="_model.RatedPower" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/></td>
+            </tr>
+            <tr>
+                <th class="req">07.运行噪音(dBA)</th>
+                <td class="inline-fields">
+                    <span>空载</span>
+                    <MudTextField @bind-Value="_model.OperatingNoise" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">08.遥控频率</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.RemoteFrequency" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("433.92 MHz")" Dense="true">433.92 MHz</MudRadio>
+                        <MudRadio T="string" Value="@("447.x MHz")" Dense="true">447.x MHz</MudRadio>
+                        <MudRadio T="string" Value="@("868.x MHz")" Dense="true">868.x MHz</MudRadio>
+                        <MudRadio T="string" Value="@("其它Other")" Dense="true">其它</MudRadio>
+                    </MudRadioGroup>
+                    <div class="inline-fields mt-1">
+                        <MudTextField @bind-Value="_model.RemoteFrequencyOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Adornment="Adornment.End" AdornmentText="MHz"/>
+                        <span>距离</span>
+                        <MudTextField @bind-Value="_model.RemoteDistance" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">09.遥控技术</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.RemoteTechnology" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("None")" Dense="true">None</MudRadio>
+                        <MudRadio T="string" Value="@("单向Single-way")" Dense="true">单向</MudRadio>
+                        <MudRadio T="string" Value="@("双向Bi-directional")" Dense="true">双向</MudRadio>
+                    </MudRadioGroup>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">10.遥控协议</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.RemoteProtocol" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("捷昌Standard")" Dense="true">捷昌</MudRadio>
+                        <MudRadio T="string" Value="@("客户Customized")" Dense="true">客户</MudRadio>
+                        <MudRadio T="string" Value="@("其它Other")" Dense="true">其它</MudRadio>
+                    </MudRadioGroup>
+                    <MudTextField @bind-Value="_model.RemoteProtocolOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">11.功能</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.MotorFunction" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("None")" Dense="true">None</MudRadio>
+                        <MudRadio T="string" Value="@("RS485")" Dense="true">RS485</MudRadio>
+                        <MudRadio T="string" Value="@("干触点Dry Contact")" Dense="true">干触点</MudRadio>
+                        <MudRadio T="string" Value="@("强电开关 Power Switch")" Dense="true">强电开关</MudRadio>
+                        <MudRadio T="string" Value="@("其它Other")" Dense="true">其它</MudRadio>
+                    </MudRadioGroup>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">12.智能模块</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.SmartModule" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("蓝牙Bluetooth")" Dense="true">蓝牙</MudRadio>
+                        <MudRadio T="string" Value="@("WIFI")" Dense="true">WIFI</MudRadio>
+                        <MudRadio T="string" Value="@("Zigbee")" Dense="true">Zigbee</MudRadio>
+                        <MudRadio T="string" Value="@("其它Other")" Dense="true">其它</MudRadio>
+                    </MudRadioGroup>
+                    <MudTextField @bind-Value="_model.SmartModuleOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">13.IP等级</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.IpLevel" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("IP40")" Dense="true">IP40</MudRadio>
+                        <MudRadio T="string" Value="@("IP44")" Dense="true">IP44</MudRadio>
+                        <MudRadio T="string" Value="@("IP45")" Dense="true">IP45</MudRadio>
+                        <MudRadio T="string" Value="@("IP66")" Dense="true">IP66</MudRadio>
+                        <MudRadio T="string" Value="@("其它other")" Dense="true">其它</MudRadio>
+                    </MudRadioGroup>
+                    <MudTextField @bind-Value="_model.IpLevelOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">14.快充</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.FastCharge" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("是Yes")" Dense="true">是</MudRadio>
+                        <MudRadio T="string" Value="@("否No")" Dense="true">否</MudRadio>
+                    </MudRadioGroup>
+                </td>
+            </tr>
+            <tr>
+                <th>15.输入电源</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.InputPower" Class="radio-wrap">
+                        @foreach (var v in _inputPowers)
+                        {
+                            <MudRadio T="string" Value="@v" Dense="true">@v</MudRadio>
+                        }
+                    </MudRadioGroup>
+                </td>
+            </tr>
+            <tr>
+                <th>16.外管</th>
+                <td class="inline-fields">
+                    <span>直径</span>
+                    <MudTextField @bind-Value="_model.OuterTubeDiameter" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    <span>长度限制</span>
+                    <MudTextField @bind-Value="_model.OuterTubeLengthLimit" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">17.外管颜色</th>
+                <td><MudTextField @bind-Value="_model.OuterTubeColor" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th>18.行程头</th>
+                <td>
+                    <div class="inline-fields">
+                        <span>型号</span>
+                        <MudTextField @bind-Value="_model.MotorHead" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/>
+                    </div>
+                    <div class="mt-1">
+                        <span class="sub-label">供电接口</span>
+                        <MudRadioGroup T="string" @bind-Value="_model.ChargingMethod" Class="radio-wrap">
+                            <MudRadio T="string" Value="@("Type-C")" Dense="true">TypeC</MudRadio>
+                            <MudRadio T="string" Value="@("Micro-USB")" Dense="true">MicroUSB</MudRadio>
+                            <MudRadio T="string" Value="@("None")" Dense="true">无</MudRadio>
+                            <MudRadio T="string" Value="@("其它Other")" Dense="true">其它</MudRadio>
+                        </MudRadioGroup>
+                        <MudTextField @bind-Value="_model.ChargingMethodNo" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th>19.电机引出电线规格</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.LeadWireSpecification" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("NONE")" Dense="true">NONE</MudRadio>
+                    </MudRadioGroup>
+                    <div class="mt-1">
+                        <span class="sub-label">线材认证</span>
+                        <MudRadioGroup T="string" @bind-Value="_model.CordCertified" Class="radio-wrap">
+                            <MudRadio T="string" Value="@("UL")" Dense="true">UL</MudRadio>
+                            <MudRadio T="string" Value="@("VDE")" Dense="true">VDE</MudRadio>
+                            <MudRadio T="string" Value="@("CCC")" Dense="true">CCC</MudRadio>
+                        </MudRadioGroup>
+                    </div>
+                    <div class="mt-1">
+                        <span class="sub-label">线材型号/类型</span>
+                        <MudRadioGroup T="string" @bind-Value="_model.CordType" Class="radio-wrap">
+                            <MudRadio T="string" Value="@("2-core wire")" Dense="true">2芯</MudRadio>
+                            <MudRadio T="string" Value="@("3-core wire")" Dense="true">3芯</MudRadio>
+                            <MudRadio T="string" Value="@("4-core wire")" Dense="true">4芯</MudRadio>
+                            <MudRadio T="string" Value="@("5-core wire")" Dense="true">5芯</MudRadio>
+                            <MudRadio T="string" Value="@("其它Other")" Dense="true">其它</MudRadio>
+                        </MudRadioGroup>
+                        <MudTextField @bind-Value="_model.CordTypeOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    </div>
+                    <div class="inline-fields mt-1">
+                        <span>线材长度</span>
+                        <MudTextField @bind-Value="_model.CordLength" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Adornment="Adornment.End" AdornmentText="米"/>
+                        <span>特殊要求</span>
+                        <MudTextField @bind-Value="_model.CordOtherRequirements" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th>20.电线长度</th>
+                <td class="inline-fields">
+                    <MudTextField @bind-Value="_model.WireLength" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Adornment="Adornment.End" AdornmentText="米"/>
+                </td>
+            </tr>
+            <tr>
+                <th>21.输出轴</th>
+                <td><MudTextField @bind-Value="_model.Shaft" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th>22.配套皇冠转轮</th>
+                <td><MudTextField @bind-Value="_model.CrownAndDrive" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th class="req">23.持续运行时间</th>
+                <td class="inline-fields">
+                    <span>最大持续运行</span>
+                    <MudTextField @bind-Value="_model.MaxRunningTime" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm" Adornment="Adornment.End" AdornmentText="分钟"/>
+                </td>
+            </tr>
+            <tr>
+                <th class="req">24.配套控制器</th>
+                <td><MudTextField @bind-Value="_model.RemoteController" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md"/></td>
+            </tr>
+            <tr>
+                <th>25.产品应用场合</th>
+                <td class="check-wrap">
+                    <MudCheckBox T="bool" Value="Flag(_model.Application1)" ValueChanged="v => _model.Application1 = FlagStr(v)" Label="卷帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application2)" ValueChanged="v => _model.Application2 = FlagStr(v)" Label="蜂巢帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application3)" ValueChanged="v => _model.Application3 = FlagStr(v)" Label="香格里拉帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application4)" ValueChanged="v => _model.Application4 = FlagStr(v)" Label="罗马帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application5)" ValueChanged="v => _model.Application5 = FlagStr(v)" Label="斑马帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application6)" ValueChanged="v => _model.Application6 = FlagStr(v)" Label="铝百叶帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application7)" ValueChanged="v => _model.Application7 = FlagStr(v)" Label="木百叶帘" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application8)" ValueChanged="v => _model.Application8 = FlagStr(v)" Label="遮阳篷" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application9)" ValueChanged="v => _model.Application9 = FlagStr(v)" Label="投影屏" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.Application10)" ValueChanged="v => _model.Application10 = FlagStr(v)" Label="开合帘" Dense="true" Color="Color.Primary"/>
+                </td>
+            </tr>
+            <tr>
+                <th>26.使用环境</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.UsageEnv" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("室内Indoor")" Dense="true">室内</MudRadio>
+                        <MudRadio T="string" Value="@("室外Outdoor")" Dense="true">室外</MudRadio>
+                        <MudRadio T="string" Value="@("特殊环境Special environment")" Dense="true">特殊环境</MudRadio>
+                    </MudRadioGroup>
+                    <MudTextField @bind-Value="_model.UsageEnvOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md" Placeholder="注明具体环境"/>
+                </td>
+            </tr>
+            <tr>
+                <th>27.预估市场需求</th>
+                <td class="inline-fields">
+                    <span>年度</span>
+                    <MudTextField @bind-Value="_model.MarketDemandYear" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    <span>数量</span>
+                    <MudTextField @bind-Value="_model.MarketDemandQuantity" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                </td>
+            </tr>
+            <tr>
+                <th>28.是否需提供样机</th>
+                <td>
+                    <MudRadioGroup T="string" @bind-Value="_model.IsPrototypeNeeded" Class="radio-wrap">
+                        <MudRadio T="string" Value="@("是Yes")" Dense="true">是</MudRadio>
+                        <MudRadio T="string" Value="@("否No")" Dense="true">否</MudRadio>
+                    </MudRadioGroup>
+                </td>
+            </tr>
+            <tr>
+                <th>29.样机明细</th>
+                <td class="inline-fields">
+                    <span>提供时间</span>
+                    <MudDatePicker @bind-Date="_prototypeProvided" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px"/>
+                    <span>数量</span>
+                    <MudTextField @bind-Value="_model.PrototypeQuantity" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-sm"/>
+                    <span>预计确认时间</span>
+                    <MudDatePicker @bind-Date="_prototypeConfirm" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px"/>
+                </td>
+            </tr>
+            <tr>
+                <th>30.安全认证要求</th>
+                <td class="check-wrap">
+                    <MudCheckBox T="bool" Value="Flag(_model.SCRequirementUL)" ValueChanged="v => _model.SCRequirementUL = FlagStr(v)" Label="UL" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.SCRequirementCE)" ValueChanged="v => _model.SCRequirementCE = FlagStr(v)" Label="CE" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.SCRequirementFCC)" ValueChanged="v => _model.SCRequirementFCC = FlagStr(v)" Label="FCC" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.SCRequirementROHS)" ValueChanged="v => _model.SCRequirementROHS = FlagStr(v)" Label="ROHS" Dense="true" Color="Color.Primary"/>
+                    <MudCheckBox T="bool" Value="Flag(_model.SCRequirementOtherC)" ValueChanged="v => _model.SCRequirementOtherC = FlagStr(v)" Label="其它" Dense="true" Color="Color.Primary"/>
+                    <MudTextField @bind-Value="_model.SCRequirementOther" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Class="field-md" Placeholder="注明具体要求"/>
+                </td>
+            </tr>
+            <tr>
+                <th>31.产品特殊功能</th>
+                <td><MudTextField @bind-Value="_model.SpecialFunction" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="其它特殊要求"/></td>
+            </tr>
+            <tr class="row-highlight">
+                <th>32.需求是否有变更</th>
+                <td>
+                    <span class="sub-label">版本说明</span>
+                    <MudTextField @bind-Value="_model.DemandChange" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="2"/>
+                </td>
+            </tr>
+            <tr>
+                <th>33.客户特殊要求</th>
+                <td><MudTextField @bind-Value="_model.OtherRequirement" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="3"/></td>
+            </tr>
+            <tr>
+                <th>备注</th>
+                <td><MudTextField @bind-Value="_model.Remark" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="2"/></td>
+            </tr>
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+    </div>
+</div>
+
+<style>
+    .motor-lx-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        max-width: 1180px;
+        overflow: hidden;
+        gap: 8px;
+    }
+
+    .motor-lx-toolbar {
+        flex: 0 0 auto;
+    }
+
+    .motor-lx-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 2px;
+    }
+
+    .motor-lx-form.mud-paper {
+        border: 1px solid #9e9e9e;
+        background: #fff;
+    }
+
+    .motor-lx-form .mud-table-root {
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .motor-lx-form th,
+    .motor-lx-form td {
+        border: 1px solid #757575 !important;
+        vertical-align: middle;
+        font-size: 12px !important;
+        line-height: 1.25 !important;
+    }
+
+    .motor-lx-form th {
+        width: 220px;
+        background: rgba(128, 128, 128, 0.29) !important;
+        font-weight: 600;
+        padding: 2px 8px !important;
+        white-space: normal;
+        color: #222;
+    }
+
+    .motor-lx-form th.req { color: #c62828; }
+
+    .motor-lx-form td {
+        background: #fff;
+        padding: 2px 6px !important;
+    }
+
+    .motor-lx-form .row-highlight th,
+    .motor-lx-form .row-highlight td {
+        background: #fff8e1 !important;
+    }
+
+    .radio-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 6px;
+        align-items: center;
+    }
+
+    .check-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 4px;
+        align-items: center;
+    }
+
+    .inline-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        align-items: center;
+    }
+
+    .field-sm { max-width: 120px; display: inline-flex; width: 120px; }
+    .field-md { max-width: 260px; display: inline-flex; width: 260px; }
+    .sub-label { margin-right: 6px; color: #555; white-space: nowrap; font-size: 12px; }
+    .mt-1 { margin-top: 2px; }
+
+    /* 收紧 Mud 控件高度，贴近老立项单 */
+    .motor-lx-form .mud-input-control {
+        margin: 0 !important;
+    }
+
+    .motor-lx-form .mud-input-control-input-container {
+        margin: 0 !important;
+    }
+
+    .motor-lx-form .mud-input {
+        font-size: 12px !important;
+        min-height: 26px !important;
+    }
+
+    .motor-lx-form .mud-input > input.mud-input-root,
+    .motor-lx-form .mud-input > textarea.mud-input-root {
+        padding: 2px 6px !important;
+        min-height: 24px !important;
+        font-size: 12px !important;
+        line-height: 1.2 !important;
+    }
+
+    .motor-lx-form .mud-input.mud-input-outlined .mud-input-outlined-border {
+        border-width: 1px !important;
+    }
+
+    .motor-lx-form .mud-radio,
+    .motor-lx-form .mud-checkbox {
+        margin: 0 !important;
+        padding: 0 2px !important;
+    }
+
+    .motor-lx-form .mud-radio .mud-button-root,
+    .motor-lx-form .mud-checkbox .mud-button-root {
+        padding: 2px !important;
+    }
+
+    .motor-lx-form .mud-typography-body1,
+    .motor-lx-form .mud-typography-body2,
+    .motor-lx-form .mud-radio .mud-typography,
+    .motor-lx-form .mud-checkbox .mud-typography {
+        font-size: 12px !important;
+        line-height: 1.2 !important;
+    }
+
+    .motor-lx-form .mud-picker {
+        max-width: 160px;
+    }
+
+    .motor-lx-form .mud-input-adornment {
+        margin: 0 !important;
+    }
+
+    .motor-lx-form .mud-input-adornment-text {
+        font-size: 11px !important;
+        padding: 0 4px !important;
+    }
+</style>
+
+@code {
+    [Parameter] public string? DocGuid { get; set; }
+
+    private bool IsNew => string.IsNullOrWhiteSpace(DocGuid)
+                          || string.Equals(DocGuid, "new", StringComparison.OrdinalIgnoreCase);
+
+    private MotorLxModel _model = new();
+    private DateTime? _timeToRequest = DateTime.Today;
+    private DateTime? _requiredCompletion;
+    private DateTime? _prototypeProvided;
+    private DateTime? _prototypeConfirm;
+    private bool _busy;
+    private string? _lastSavedText;
+    private bool _loaded;
+
+    private static readonly string[] _voltages =
+    [
+        "5V", "8.4V", "12V", "24V", "110V", "230V", "100-240V", "其它电压"
+    ];
+
+    private static readonly string[] _inputPowers =
+    [
+        "AC110V/60Hz", "AC230V/50Hz", "AC100-240V",
+        "12V/2A适配器Adapter12V/2A", "12V/3A适配器Adapter12V/3A", "12V/4A适配器Adapter12V/4A",
+        "8.4V/1A适配器Adapter8.4V/1A", "24V/1A适配器Adapter24V/1A",
+        "两节锂电池Li-on Battery 2 cell", "三节锂电池Li-on Battery 3 cell", "四节锂电池Li-on Battery 4 cell"
+    ];
+
+    private static bool Flag(string? v) =>
+        string.Equals(v, "True", StringComparison.OrdinalIgnoreCase)
+        || v == "1"
+        || string.Equals(v, "true", StringComparison.Ordinal);
+
+    private static string? FlagStr(bool v) => v ? "True" : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded && !IsNew && string.Equals(_model.DocGuid, DocGuid, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (IsNew)
+        {
+            await InitNewAsync();
+            _loaded = true;
+            return;
+        }
+
+        await LoadExistingAsync(DocGuid!);
+        _loaded = true;
+    }
+
+    private async Task InitNewAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        _model = new MotorLxModel
+        {
+            VersionNo = "vn",
+            IsDraft = true,
+            Status = "草稿",
+            DemandPerson = auth?.EmpNo,
+            TimeToRequest = DateTime.Today
+        };
+        _timeToRequest = DateTime.Today;
+        _requiredCompletion = null;
+        _prototypeProvided = null;
+        _prototypeConfirm = null;
+        _lastSavedText = null;
+    }
+
+    private async Task LoadExistingAsync(string docGuid)
+    {
+        _busy = true;
+        try
+        {
+            var row = await MotorLx.GetByDocGuidAsync(docGuid);
+            if (row is null)
+            {
+                Notify.Show("未找到立项单", Severity.Warning);
+                Nav.NavigateTo("/project-list");
+                return;
+            }
+
+            _model = row;
+            _timeToRequest = row.TimeToRequest?.Date;
+            _requiredCompletion = row.RequiredCompletionTime?.Date;
+            _prototypeProvided = row.PrototypeProvidedTime?.Date;
+            _prototypeConfirm = row.ExpectedPrototypeConfirmTime?.Date;
+            _lastSavedText = (row.UpdateTime ?? row.CreateTime)?.ToString("yyyy-MM-dd HH:mm");
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Customer))
+        {
+            Notify.Show("请填写客户", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            _model.TimeToRequest = _timeToRequest;
+            _model.RequiredCompletionTime = _requiredCompletion;
+            _model.PrototypeProvidedTime = _prototypeProvided;
+            _model.ExpectedPrototypeConfirmTime = _prototypeConfirm;
+
+            var result = await MotorLx.SaveDraftAsync(_model, auth?.EmpNo, auth?.EmpNo);
+            _model.ProjectGuid = result.ProjectGuid;
+            _model.DocGuid = result.DocGuid;
+            _lastSavedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            Notify.Show(result.Created ? "已保存，GUID 已生成" : "已保存", Severity.Success);
+
+            if (result.Created)
+                Nav.NavigateTo($"/project/motor/{result.DocGuid}?projectGuid={result.ProjectGuid}", replace: true);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
