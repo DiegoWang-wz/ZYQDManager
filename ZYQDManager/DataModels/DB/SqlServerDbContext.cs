@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ZYQDManager.DataModels.Quotation;
 
 namespace ZYQDManager.DataModels;
 
@@ -16,6 +17,16 @@ public class SqlServerDbContext : DbContext
     public DbSet<ApprovalFlowModel> ApprovalFlows => Set<ApprovalFlowModel>();
     public DbSet<ZyqdCotractBaseModel> CotractBases => Set<ZyqdCotractBaseModel>();
     public DbSet<ZyqdCotractPiModel> CotractPis => Set<ZyqdCotractPiModel>();
+    public DbSet<ZyqdSirMainModel> SirMains => Set<ZyqdSirMainModel>();
+    public DbSet<ZyqdSirDetailModel> SirDetails => Set<ZyqdSirDetailModel>();
+    public DbSet<ZyqdSirSampleForFilingModel> SirSamples => Set<ZyqdSirSampleForFilingModel>();
+    public DbSet<ZyqdQuotationBaseMotorModel> QuotationBaseMotors => Set<ZyqdQuotationBaseMotorModel>();
+    public DbSet<ZyqdQuotationBaseRemoteModel> QuotationBaseRemotes => Set<ZyqdQuotationBaseRemoteModel>();
+    public DbSet<ZyqdQuotationBaseAccessoryModel> QuotationBaseAccessories => Set<ZyqdQuotationBaseAccessoryModel>();
+    public DbSet<ZyqdQuotationBaseCbModel> QuotationBaseCbs => Set<ZyqdQuotationBaseCbModel>();
+    public DbSet<ZyqdQuotationBasePrModel> QuotationBasePrs => Set<ZyqdQuotationBasePrModel>();
+    public DbSet<ZyqdQuotationMainModel> QuotationMains => Set<ZyqdQuotationMainModel>();
+    public DbSet<ZyqdQuotationDetailModel> QuotationDetails => Set<ZyqdQuotationDetailModel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -91,6 +102,65 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.DocumentGuid).HasColumnName("Guid");
             entity.Property(e => e.SignDate).HasColumnName("DATE");
+        });
+
+        modelBuilder.Entity<ZyqdSirMainModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_SIR_main");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+
+        modelBuilder.Entity<ZyqdSirDetailModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_SIR_detail");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+
+        modelBuilder.Entity<ZyqdSirSampleForFilingModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_SIR_datail_SampleForFiling");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+
+        ConfigureQuotationBase<ZyqdQuotationBaseMotorModel>(modelBuilder, "T_ZYQD_Quotation_Base_Motor");
+        ConfigureQuotationBase<ZyqdQuotationBaseRemoteModel>(modelBuilder, "T_ZYQD_Quotation_Base_Remote");
+        ConfigureQuotationBase<ZyqdQuotationBaseAccessoryModel>(modelBuilder, "T_ZYQD_Quotation_Base_Accessory");
+        ConfigureQuotationBase<ZyqdQuotationBaseCbModel>(modelBuilder, "T_ZYQD_Quotation_Base_CB");
+        ConfigureQuotationBase<ZyqdQuotationBasePrModel>(modelBuilder, "T_ZYQD_Quotation_Base_PR");
+
+        modelBuilder.Entity<ZyqdQuotationMainModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Quotation_main");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.DATE).HasColumnName("DATE");
+            entity.HasIndex(e => e.guid).IsUnique();
+        });
+
+        modelBuilder.Entity<ZyqdQuotationDetailModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Quotation_detail");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.Qty).HasPrecision(18, 4);
+            entity.Property(e => e.Price).HasPrecision(18, 4);
+            entity.Property(e => e.Discount).HasPrecision(18, 4);
+            entity.Property(e => e.Amount).HasPrecision(18, 4);
+            entity.HasIndex(e => e.main_guid);
+        });
+    }
+
+    private static void ConfigureQuotationBase<T>(ModelBuilder modelBuilder, string tableName)
+        where T : QuotationBaseEntity
+    {
+        modelBuilder.Entity<T>(entity =>
+        {
+            entity.ToTable(tableName);
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
         });
     }
 }

@@ -15,18 +15,19 @@
 
 <style>
     .mud-overlay.legacy-img-lightbox-overlay {
-        background-color: rgba(0, 0, 0, 0.72) !important;
+        background-color: rgba(0, 0, 0, 0.55) !important;
     }
 
     .mud-dialog.legacy-img-lightbox {
-        background: rgba(0, 0, 0, 0.45) !important;
-        box-shadow: none !important;
+        background: #fff !important;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28) !important;
         width: auto !important;
         min-width: 0 !important;
         max-width: none !important;
         height: auto !important;
-        overflow: visible !important;
+        overflow: hidden !important;
         border-radius: 4px;
+        padding: 12px;
     }
 
     .mud-dialog.legacy-img-lightbox .mud-dialog-title,
@@ -39,25 +40,27 @@
         padding: 0 !important;
         margin: 0 !important;
         overflow: visible !important;
-        background: transparent !important;
+        background: #fff !important;
     }
 
     .legacy-preview-wrap {
         display: inline-flex;
         line-height: 0;
         cursor: default;
+        background: #fff;
     }
 
     .legacy-preview-wrap img {
         display: block;
         width: auto;
         height: auto;
-        max-width: 90vw;
-        max-height: 90vh;
+        max-width: 86vw;
+        max-height: 82vh;
         object-fit: contain;
         transform-origin: center center;
         user-select: none;
         -webkit-user-drag: none;
+        background: #fff;
     }
 </style>
 

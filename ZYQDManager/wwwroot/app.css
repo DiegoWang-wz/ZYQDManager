@@ -60,15 +60,17 @@ h1:focus {
 }
 
 .mud-overlay.legacy-img-lightbox-overlay {
-    background-color: rgba(0, 0, 0, 0.72) !important;
+    background-color: rgba(0, 0, 0, 0.55) !important;
 }
 
 .mud-dialog.legacy-img-lightbox {
-    background: rgba(20, 20, 20, 0.55) !important;
-    box-shadow: none !important;
+    background: #fff !important;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28) !important;
     width: auto !important;
     min-width: 0 !important;
     max-width: none !important;
     height: auto !important;
-    overflow: visible !important;
+    overflow: hidden !important;
+    border-radius: 4px;
+    padding: 12px;
 }

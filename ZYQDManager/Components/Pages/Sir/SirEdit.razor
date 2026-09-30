@@ -1,0 +1,1349 @@
+@page "/sir/new"
+@page "/sir/{DocumentGuid}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Rendering
+@inject SirService Sir
+@inject CrmCustomerService Crm
+@inject CotractBaseService CotractBase
+@inject NavigationManager Nav
+@inject IConfiguration Config
+
+<PageTitle>遮阳产品测试报告</PageTitle>
+
+<div class="sir-edit-page">
+    <MudPaper Class="sir-card pa-0" Elevation="0" Square="true">
+        <div class="sir-toolbar">
+            <div class="sir-toolbar-left">
+                <MudText Typo="Typo.h6" Class="sir-page-title">遮阳产品测试报告</MudText>
+                <span class="sir-label">测试类型：</span>
+                <MudSelect T="string"
+                           Value="_reportType"
+                           ValueChanged="OnReportTypeChanged"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           Class="sir-type-select"
+                           Disabled="_busy">
+                    @foreach (var t in SirReportTypes.Tests)
+                    {
+                        <MudSelectItem Value="@t.Value">@t.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <span class="sir-label">产品类型：</span>
+                <MudSelect T="string"
+                           Value="_productType"
+                           ValueChanged="OnProductTypeChanged"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Dense="true"
+                           Class="sir-product-select"
+                           Disabled="_busy">
+                    @foreach (var p in _productOptions)
+                    {
+                        <MudSelectItem Value="@p">@p</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <div class="sir-toolbar-right">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/sir">返回列表</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                           StartIcon="@Icons.Material.Filled.Visibility"
+                           OnClick="NotReadyPdf" Disabled="_busy">预览PDF</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info"
+                           StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           OnClick="NotReadyPdf" Disabled="_busy">导出PDF</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                           Class="sir-save-btn"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="SaveAsync" Disabled="_busy || !_loaded">保存</MudButton>
+            </div>
+        </div>
+
+        @if (!_loaded)
+        {
+            <MudProgressLinear Indeterminate="true"/>
+        }
+        else
+        {
+            <div class="sir-form-wrap">
+                <table class="sir-form-table">
+                    <colgroup>
+                        <col style="width:7%"/><col style="width:8%"/><col style="width:12%"/><col style="width:8%"/>
+                        <col style="width:10%"/><col style="width:8%"/><col style="width:10%"/><col style="width:7%"/>
+                        <col style="width:7%"/><col style="width:5%"/><col style="width:5%"/><col style="width:5%"/>
+                        <col style="width:4%"/><col style="width:4%"/>
+                    </colgroup>
+                    <tbody>
+                    @* FROM / TO + 报告类型勾选；中间空白合并为一格，去掉竖线 *@
+                    <tr>
+                        <th rowspan="2" class="sir-th-side">由 FROM:</th>
+                        <th>部门 Dept</th>
+                        <td colspan="2"><MudTextField @bind-Value="_main.Department" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td rowspan="4" colspan="5" class="sir-mid-blank"></td>
+                        <td colspan="5" class="sir-check-cell">
+                            <MudCheckBox T="bool" @bind-Value="_main.Appearance_Approval_Report" Dense="true" Color="Color.Primary"
+                                         Label="外观批准报告 Appearance Approval Report"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>业务员 Name</th>
+                        <td colspan="2"><MudTextField @bind-Value="_main.SalesmanName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="5" class="sir-check-cell">
+                            <MudCheckBox T="bool" @bind-Value="_main.Dimension_Report" Dense="true" Color="Color.Primary"
+                                         Label="尺寸检验报告 Dimension Report"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th rowspan="3" class="sir-th-side">呈交 TO:</th>
+                        <th>客户 Client</th>
+                        <td colspan="2">
+                            <MudTextField Value="_main.Client"
+                                          ValueChanged="@(EventCallback.Factory.Create<string>(this, OnClientChanged))"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Immediate="false"/>
+                        </td>
+                        <td colspan="5" class="sir-check-cell">
+                            <MudCheckBox T="bool" @bind-Value="_main.Material_Report" Dense="true" Color="Color.Primary"
+                                         Label="材料检验报告 Material Report"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>部门 Dept</th>
+                        <td colspan="2"><MudTextField @bind-Value="_main.ClientDepartment" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="5" class="sir-check-cell">
+                            <MudCheckBox T="bool" @bind-Value="_main.Function_Report" Dense="true" Color="Color.Primary"
+                                         Label="性能检验报告 Function Report"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>联系人 Name</th>
+                        <td colspan="2"><MudTextField @bind-Value="_main.ContactName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="10" class="sir-mid-blank"></td>
+                    </tr>
+
+                    @* 产品信息 *@
+                    <tr>
+                        <th colspan="2">产品型号 Part No.</th>
+                        <td colspan="2"><MudTextField @bind-Value="_main.Product_partNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <th colspan="2">产品名称 Designation</th>
+                        <td colspan="3">
+                            <MudTextField Value="_main.ProductName"
+                                          ValueChanged="@(EventCallback.Factory.Create<string>(this, OnProductNameChanged))"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/>
+                        </td>
+                        <th colspan="2">软件版本 Firmware index</th>
+                        <td colspan="3"><MudTextField @bind-Value="_main.SoftwareVersion" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                    </tr>
+                    <tr>
+                        <th colspan="2">签发日期 Issue Date</th>
+                        <td colspan="2">
+                            <MudDatePicker Date="_issuanceDate"
+                                           DateChanged="OnIssuanceDateChanged"
+                                           DateFormat="yyyy-MM-dd"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Editable="true"
+                                           Dense="true"/>
+                        </td>
+                        <th colspan="2">样品数量 Qty of Samples</th>
+                        <td colspan="3"><MudNumericField @bind-Value="_main.SampleQuantity" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Min="0"/></td>
+                        <th colspan="2">第几次送样 Samples delivery times</th>
+                        <td colspan="3">
+                            <MudNumericField T="int"
+                                             Value="_main.DeliveryTimes"
+                                             ValueChanged="@(EventCallback.Factory.Create<int>(this, OnDeliveryTimesChanged))"
+                                             Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Min="0"/>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th colspan="2">程序名称 program name</th>
+                        <td colspan="2"><MudTextField @bind-Value="_main.program_name" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <th colspan="2">程序代码 program code</th>
+                        <td colspan="3"><MudTextField @bind-Value="_main.program_code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <th colspan="2">程序校验码 check code</th>
+                        <td colspan="3"><MudTextField @bind-Value="_main.check_code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                    </tr>
+
+                    @* 认证 + 签名 *@
+                    <tr>
+                        <th colspan="11" class="sir-section-title">
+                            样品符合以下认证测试要求<br/>
+                            <span class="sir-en">The sample is qualified for below certification test requirements</span>
+                        </th>
+                        <th colspan="3" class="sir-section-title">
+                            样品测试<br/>
+                            <span class="sir-en">Samples inspected by</span>
+                        </th>
+                    </tr>
+                    <tr>
+                        <td colspan="11" class="sir-cert-cell">
+                            <div class="sir-cert-grid">
+                                @CertTile("UL", _main.UL, v => _main.UL = v)
+                                @CertTile("FCC", _main.FCC, v => _main.FCC = v)
+                                @CertTile("CE", _main.CE, v => _main.CE = v)
+                                @CertTile("RoHS", _main.RoHS, v => _main.RoHS = v)
+                                @CertTile("REACH", _main.REACH, v => _main.REACH = v)
+                                @CertTile("无 None", _main.Certification_None, v => _main.Certification_None = v)
+                            </div>
+                        </td>
+                        <td colspan="3" class="sir-sign-cell">
+                            <div class="sir-sign-row"><span>测试:</span><MudTextField @bind-Value="_main.Test_Engineer" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></div>
+                            <div class="sir-sign-row"><span>复核:</span><MudTextField @bind-Value="_main.Test_Checked_by" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></div>
+                            <div class="sir-sign-row"><span>批准:</span><MudTextField @bind-Value="_main.Test_Approved_By" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                @* 明细：抬头单独 sticky 容器（div 吸顶可靠），样式对齐 Excel *@
+                <div class="sir-detail-block">
+                    <div class="sir-detail-sticky">
+                        <table class="sir-form-table sir-detail-table sir-detail-head-table">
+                            <colgroup>
+                                <col style="width:5%"/>
+                                <col style="width:12%"/>
+                                <col style="width:32%"/>
+                                <col style="width:4%"/><col style="width:4%"/><col style="width:4%"/>
+                                <col style="width:4%"/><col style="width:4%"/><col style="width:4%"/>
+                                <col style="width:4%"/><col style="width:4%"/><col style="width:4%"/><col style="width:4%"/>
+                                <col style="width:11%"/>
+                            </colgroup>
+                            <thead>
+                            <tr class="sir-detail-legend-row">
+                                <td colspan="3" class="sir-legend-spacer"></td>
+                                <td colspan="11" class="sir-legend-cell">
+                                    A = 合格/Qualified &nbsp;|&nbsp;
+                                    B = 不合格/Not Qualified &nbsp;|&nbsp;
+                                    C = 可接受的偏差/Acceptable deviation &nbsp;|&nbsp;
+                                    D = 无法测试/Unable to test
+                                </td>
+                            </tr>
+                            <tr class="sir-detail-head">
+                                <th rowspan="2" class="sir-head-span">序号</th>
+                                <th rowspan="2" class="sir-head-span">规格要求</th>
+                                <th rowspan="2" class="sir-head-span">判断标准</th>
+                                <th colspan="6">测试结果 (actual results)</th>
+                                <th colspan="4">测试结果 (Conclusion)</th>
+                                <th rowspan="2" class="sir-head-span">备注</th>
+                            </tr>
+                            <tr class="sir-detail-colhead">
+                                <th class="sir-num-th">1</th>
+                                <th class="sir-num-th">2</th>
+                                <th class="sir-num-th">3</th>
+                                <th class="sir-num-th">4</th>
+                                <th class="sir-num-th">5</th>
+                                <th class="sir-num-th">6</th>
+                                <th class="sir-num-th">A</th>
+                                <th class="sir-num-th">B</th>
+                                <th class="sir-num-th">C</th>
+                                <th class="sir-num-th">D</th>
+                            </tr>
+                            </thead>
+                        </table>
+                    </div>
+
+                    <table class="sir-form-table sir-detail-table sir-detail-body-table">
+                        <colgroup>
+                            <col style="width:5%"/>
+                            <col style="width:12%"/>
+                            <col style="width:32%"/>
+                            <col style="width:4%"/><col style="width:4%"/><col style="width:4%"/>
+                            <col style="width:4%"/><col style="width:4%"/><col style="width:4%"/>
+                            <col style="width:4%"/><col style="width:4%"/><col style="width:4%"/><col style="width:4%"/>
+                            <col style="width:11%"/>
+                        </colgroup>
+                        <tbody>
+                        <tr class="sir-detail-subhead">
+                            <td colspan="14" class="sir-group-title">成品外观要求 / Finished product appearance requirements</td>
+                        </tr>
+
+                        @foreach (var item in _details)
+                        {
+                            @if (ShouldShowGroupHeader(item.Specification_type, out var groupTitle))
+                            {
+                                <tr class="sir-detail-subhead">
+                                    <td colspan="14" class="sir-group-title">@groupTitle</td>
+                                </tr>
+                            }
+                            <tr class="sir-detail-row">
+                                <td class="center">@item.Specification_type</td>
+                                <td class="sir-spec-cell"><div class="sir-html">@((MarkupString)(item.Specification ?? ""))</div></td>
+                                <td><div class="sir-html">@((MarkupString)(item.Criteria ?? ""))</div></td>
+                                @for (var i = 1; i <= 6; i++)
+                                {
+                                    var idx = i;
+                                    <td class="center sir-result-cell">@ResultEditor(item, idx)</td>
+                                }
+                                <td class="center sir-concl-cell">@ConclusionCheck(item, "A")</td>
+                                <td class="center sir-concl-cell">@ConclusionCheck(item, "B")</td>
+                                <td class="center sir-concl-cell">@ConclusionCheck(item, "C")</td>
+                                <td class="center sir-concl-cell">@ConclusionCheck(item, "D")</td>
+                                <td><MudTextField @bind-Value="item.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (ShowRemoteImages)
+                {
+                    <div class="sir-image-block">
+                        <div class="sir-image-title">遥控器主控板正反面附图（最多5张）</div>
+                        <div class="sir-image-area">
+                            <label class="sir-upload-label">
+                                <InputFile OnChange="OnRemoteImagesSelected"
+                                           accept=".jpg,.jpeg,.png,.gif,.bmp,image/*"
+                                           multiple
+                                           disabled="@(_busy || _imgUploading)"/>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.CloudUpload"
+                                           Disabled="@(_busy || _imgUploading || _images.Count >= 5)"
+                                           HtmlTag="span">
+                                    @(_imgUploading ? "上传中…" : (_images.Count >= 5 ? "已达上限(5张)" : "选择图片"))
+                                </MudButton>
+                            </label>
+                            <span class="sir-upload-hint">支持JPG、PNG格式，单张不超过5MB</span>
+                        </div>
+                        @if (_images.Count > 0)
+                        {
+                            <div class="sir-image-preview">
+                                @for (var i = 0; i < _images.Count; i++)
+                                {
+                                    var idx = i;
+                                    var url = ImageDisplayUrl(_images[idx]);
+                                    <div class="sir-preview-item">
+                                        <a href="@url" target="_blank" rel="noopener">
+                                            <img src="@url" alt="附图"/>
+                                        </a>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       Class="sir-preview-remove"
+                                                       Disabled="_busy"
+                                                       OnClick="@(() => RemoveRemoteImage(idx))"/>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else if (ShowSampleFiling)
+                {
+                    <div class="sir-sample-block">
+                        <div class="sir-sample-title">样品留样记录 / Sample Retention Records</div>
+                        <table class="sir-form-table sir-sample-table">
+                            <thead>
+                            <tr class="sir-detail-head">
+                                <th style="width:48px">序号</th>
+                                <th style="width:120px">物料编号</th>
+                                <th style="width:140px">物料名称</th>
+                                <th>图片留底（最多5张）</th>
+                                <th style="width:160px">样品部件</th>
+                                <th style="width:200px">备注/要求</th>
+                                <th style="width:72px">操作</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @for (var si = 0; si < _samples.Count; si++)
+                            {
+                                var s = _samples[si];
+                                var sIndex = si;
+                                var imgs = GetSampleImages(s);
+                                <tr>
+                                    <td class="center">@(si + 1)</td>
+                                    <td><MudTextField @bind-Value="s.materialNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                                    <td><MudTextField @bind-Value="s.materialName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                                    <td>
+                                        <div class="sir-sample-imgs">
+                                            <label class="sir-upload-label">
+                                                <InputFile OnChange="@(e => OnSampleImagesSelected(e, sIndex))"
+                                                           accept=".jpg,.jpeg,.png,.gif,.bmp,image/*"
+                                                           multiple
+                                                           disabled="@(_busy || _imgUploading || imgs.Count >= 5)"/>
+                                                <MudButton Variant="Variant.Outlined"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small"
+                                                           StartIcon="@Icons.Material.Filled.AddPhotoAlternate"
+                                                           Disabled="@(_busy || _imgUploading || imgs.Count >= 5)"
+                                                           HtmlTag="span">
+                                                    @(imgs.Count >= 5 ? "已满5张" : "添加图片")
+                                                </MudButton>
+                                            </label>
+                                            <div class="sir-image-preview sir-sample-preview">
+                                                @for (var ii = 0; ii < imgs.Count; ii++)
+                                                {
+                                                    var imgIdx = ii;
+                                                    var url = ImageDisplayUrl(imgs[imgIdx]);
+                                                    <div class="sir-preview-item sir-preview-item-sm">
+                                                        <a href="@url" target="_blank" rel="noopener"><img src="@url" alt="样品"/></a>
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                                       Size="Size.Small"
+                                                                       Color="Color.Error"
+                                                                       Class="sir-preview-remove"
+                                                                       Disabled="_busy"
+                                                                       OnClick="@(() => RemoveSampleImage(sIndex, imgIdx))"/>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="sir-upload-hint">JPG/PNG，单张≤5MB</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <MudTextField @bind-Value="s.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="样品部件"/>
+                                    </td>
+                                    <td><MudTextField @bind-Value="s.Note1" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Lines="2" Placeholder="留底要求"/></td>
+                                    <td class="center">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       Disabled="_busy"
+                                                       OnClick="@(() => RemoveSampleRow(sIndex))"/>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                        <div class="sir-sample-actions">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Disabled="_busy"
+                                       OnClick="AddSampleRow">
+                                添加样品记录
+                            </MudButton>
+                        </div>
+                    </div>
+                }
+
+                <div class="sir-note-block">
+                    <MudTextField @bind-Value="_main.Note" Label="备注 Note" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2"/>
+                </div>
+            </div>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .sir-edit-page {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        /* 抵消 MainLayout .zyqd-main 的 16px 内边距，避免顶栏左右出现灰缝 */
+        margin: 0 -16px -16px;
+        overflow: hidden;
+        background: #fff;
+    }
+    .sir-card {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex !important;
+        flex-direction: column;
+        /* 顶部直角贴齐导航栏，底部保留一点圆角立体感 */
+        border-radius: 0 0 10px 10px !important;
+        overflow: hidden;
+        background: #fff !important;
+        box-shadow: none !important;
+    }
+    .sir-toolbar {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 12px;
+        min-height: 0;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fff;
+    }
+    .sir-toolbar-left, .sir-toolbar-right {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        align-items: center;
+    }
+    .sir-page-title {
+        margin: 0 4px 0 0 !important;
+        color: #1f2937;
+        font-weight: 700 !important;
+        white-space: nowrap;
+        font-size: 1rem !important;
+        line-height: 1.2 !important;
+    }
+    .sir-label { color: #374151; font-weight: 500; white-space: nowrap; font-size: 13px; }
+    .sir-type-select { width: 150px; min-width: 130px; }
+    .sir-product-select { width: 300px; min-width: 200px; }
+    .sir-toolbar .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
+    .sir-toolbar .mud-button-root { height: 32px; min-height: 32px; }
+    .sir-save-btn { background: #1d4ed8 !important; }
+    .sir-form-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        /* 去掉顶部 padding，吸顶才能贴齐工具栏，避免露缝 */
+        padding: 0 16px 16px;
+        overflow: auto;
+        background: #fff;
+    }
+    .sir-form-wrap > .sir-form-table:first-of-type {
+        margin-top: 8px;
+    }
+    .sir-form-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 13px;
+    }
+    .sir-form-table th,
+    .sir-form-table td {
+        border: 1px solid #d1d5db;
+        padding: 6px 8px;
+        vertical-align: middle;
+    }
+    .sir-form-table th {
+        background: #f9fafb;
+        font-weight: 600;
+        color: #374151;
+        text-align: left;
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.35;
+    }
+    .sir-th-side {
+        text-align: center !important;
+        writing-mode: horizontal-tb;
+        background: #f3f4f6 !important;
+        width: 72px;
+    }
+    .sir-check-cell { background: #fafafa; }
+    .sir-mid-blank {
+        background: #fff !important;
+    }
+    .sir-check-cell .mud-input-control { margin: 0; }
+    .sir-check-cell .mud-typography,
+    .sir-check-cell .mud-checkbox .mud-typography,
+    .sir-check-cell label {
+        white-space: normal !important;
+        word-break: break-word;
+        line-height: 1.3;
+    }
+    .sir-section-title {
+        text-align: center !important;
+        background: #f3f4f6 !important;
+        line-height: 1.35;
+    }
+    .sir-en { font-weight: 600; font-size: 13px; color: #111; }
+    .sir-cert-cell { padding: 10px !important; }
+    .sir-cert-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(100px, 1fr));
+        gap: 8px;
+    }
+    .sir-cert-tile {
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+        transition: all .15s ease;
+        color: #374151;
+        font-weight: 500;
+    }
+    .sir-cert-tile:hover { border-color: #165DFF; background: #f0f7ff; }
+    .sir-cert-tile.active {
+        border-color: #165DFF;
+        background: rgba(22,93,255,.08);
+        color: #165DFF;
+    }
+    .sir-cert-box {
+        width: 18px; height: 18px;
+        border: 2px solid #d1d5db;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+    .sir-cert-tile.active .sir-cert-box {
+        border-color: #165DFF;
+        background: #165DFF;
+        color: #fff;
+    }
+    .sir-sign-cell { padding: 8px !important; }
+    .sir-sign-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+    .sir-sign-row > span { width: 42px; flex: 0 0 42px; font-weight: 600; }
+    .sir-sign-row .mud-input-control { flex: 1; }
+    .sir-legend {
+        border: 1px solid #111 !important;
+        font-size: 13px;
+        line-height: 1.45;
+        background: #fff;
+    }
+    .sir-detail-legend-row th,
+    .sir-detail-legend-row td {
+        border: 1px solid #111 !important;
+        padding: 4px 8px !important;
+        font-weight: 600;
+        color: #111;
+        background: #fff !important;
+        vertical-align: middle;
+        line-height: 1.35;
+    }
+    .sir-detail-legend-row .sir-legend-spacer {
+        background: #fff !important;
+    }
+    .sir-detail-legend-row .sir-legend-cell {
+        text-align: right !important;
+        font-size: 13px;
+        background: #fff !important;
+        white-space: nowrap;
+    }
+    .sir-detail-head th {
+        text-align: center !important;
+        border: 1px solid #111 !important;
+        background: #f3f4f6 !important;
+        line-height: 1.25;
+        vertical-align: middle;
+        font-weight: 700;
+        color: #111;
+        padding: 6px 4px !important;
+    }
+    .sir-detail-colhead th {
+        text-align: center !important;
+        border: 1px solid #111 !important;
+        background: #f3f4f6 !important;
+        line-height: 1.1;
+        vertical-align: middle;
+        padding: 3px 2px !important;
+    }
+    .sir-detail-colhead th.sir-num-th {
+        font-weight: 800;
+        color: #165DFF;
+    }
+    .sir-detail-subhead td {
+        border: 1px solid #111 !important;
+        background: #f3f4f6;
+    }
+    .sir-group-title {
+        font-weight: 800;
+        color: #165DFF;
+        font-size: 15px;
+    }
+    .sir-group-title.center, .center { text-align: center; }
+    .sir-detail-row td { border: 1px solid #111 !important; }
+    .sir-detail-table {
+        margin-top: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+    }
+    .sir-detail-block {
+        margin-top: 12px;
+    }
+    /* 用 div 吸顶，不依赖表格单元格 sticky（浏览器兼容差） */
+    .sir-detail-sticky {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        background: #fff;
+        box-shadow: 0 1px 0 #111;
+    }
+    .sir-detail-head-table {
+        margin: 0;
+    }
+    .sir-detail-body-table {
+        margin: 0;
+        /* 与抬头表共用竖线：去掉顶边，贴紧 sticky 底边 */
+    }
+    .sir-detail-body-table tbody tr:first-child td {
+        border-top: none !important;
+    }
+    .sir-detail-table thead th,
+    .sir-detail-table thead td {
+        background-clip: padding-box !important;
+    }
+    .sir-spec-cell {
+        max-width: 0;
+        font-size: 12px;
+    }
+    .sir-result-cell {
+        padding: 4px 2px !important;
+        text-align: center;
+        vertical-align: middle !important;
+    }
+    .sir-cycle-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-width: 0;
+        max-width: 52px;
+        height: 28px;
+        margin: 0 auto;
+        padding: 0 2px;
+        border: 1px solid #9ca3af;
+        border-radius: 4px;
+        background: #fff;
+        color: #111;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+    }
+    .sir-cycle-btn:hover { border-color: #165DFF; background: #f0f7ff; }
+    .sir-cycle-btn.sir-cycle-ok {
+        border-color: #16a34a;
+        color: #15803d;
+        background: #f0fdf4;
+    }
+    .sir-cycle-btn.sir-cycle-ng {
+        border-color: #dc2626;
+        color: #b91c1c;
+        background: #fef2f2;
+    }
+    .sir-cycle-btn.sir-cycle-empty {
+        color: #6b7280;
+    }
+    .sir-result-cell .mud-input-control {
+        margin: 0 !important;
+        width: 100%;
+        min-width: 0;
+    }
+    .sir-result-cell .mud-select {
+        width: 100%;
+        min-width: 0;
+    }
+    .sir-result-cell .mud-input > input {
+        text-align: center;
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+    .sir-html { font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
+    .sir-concl-cell {
+        text-align: center;
+        vertical-align: middle !important;
+        padding: 2px !important;
+    }
+    .sir-result-cell .mud-checkbox,
+    .sir-concl-cell .mud-checkbox {
+        margin: 0 !important;
+        justify-content: center;
+    }
+    .sir-sample-block { margin-top: 16px; }
+    .sir-sample-title {
+        font-weight: 700;
+        color: #165DFF;
+        padding: 8px 4px;
+    }
+    .sir-image-block {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px dashed #ccc;
+        border-radius: 6px;
+        background: #fafafa;
+    }
+    .sir-image-title {
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #111;
+    }
+    .sir-image-area {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+    }
+    .sir-upload-label {
+        display: inline-flex;
+        cursor: pointer;
+        margin: 0;
+    }
+    .sir-upload-label input[type=file] {
+        display: none;
+    }
+    .sir-upload-hint {
+        color: #6b7280;
+        font-size: 12px;
+    }
+    .sir-image-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+    }
+    .sir-preview-item {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #fff;
+    }
+    .sir-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .sir-preview-remove {
+        position: absolute !important;
+        top: 0;
+        right: 0;
+        background: rgba(255,255,255,.85) !important;
+    }
+    .sir-sample-actions { margin-top: 10px; }
+    .sir-sample-imgs { display: flex; flex-direction: column; gap: 6px; }
+    .sir-sample-preview { margin-top: 4px; }
+    .sir-preview-item-sm { width: 72px; height: 72px; }
+    .sir-note-block { margin-top: 12px; }
+
+    .sir-form-table .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
+    .sir-form-table .mud-input > input.mud-input-slot,
+    .sir-form-table .mud-input > input { font-size: 13px; }
+</style>
+
+@code {
+    [Parameter] public string? DocumentGuid { get; set; }
+    [SupplyParameterFromQuery(Name = "rt")] public string? QueryReportType { get; set; }
+    [SupplyParameterFromQuery(Name = "pt")] public string? QueryProductType { get; set; }
+
+    private ZyqdSirMainModel _main = new();
+    private List<ZyqdSirDetailModel> _details = [];
+    private List<ZyqdSirSampleForFilingModel> _samples = [];
+    private List<string> _images = [];
+    private string _reportType = "remote";
+    private string _productType = "基础版遥控器";
+    private List<string> _productOptions = SirReportTypes.ProductsFor("remote").ToList();
+    private DateTime? _issuanceDate = DateTime.Today;
+    private bool _busy;
+    private bool _loaded;
+    private bool _imgUploading;
+    private string _guid = "";
+    private string ImageBase => Config["LegacyFile:ImageBaseUrl"] ?? LegacyFileUrl.DefaultBase;
+
+    private bool ShowRemoteImages => SirService.IsRemoteWithoutSample(_reportType);
+    private bool ShowSampleFiling => SirService.NeedsSampleFiling(_reportType);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var guid = (DocumentGuid ?? "").Trim();
+        if (guid.Length == 0 || string.Equals(guid, "new", StringComparison.OrdinalIgnoreCase))
+            guid = Guid.NewGuid().ToString("N");
+
+        _guid = guid;
+        _reportType = string.IsNullOrWhiteSpace(QueryReportType) ? "remote" : QueryReportType.Trim();
+        _productType = string.IsNullOrWhiteSpace(QueryProductType)
+            ? SirReportTypes.DefaultProduct(_reportType)
+            : QueryProductType.Trim();
+        _productOptions = SirReportTypes.ProductsFor(_reportType).ToList();
+        if (!_productOptions.Contains(_productType))
+            _productType = SirReportTypes.DefaultProduct(_reportType);
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _loaded = false;
+        try
+        {
+            var doc = await Sir.GetDocumentAsync(_guid, _reportType, _productType);
+            _main = doc.Main;
+            _details = doc.Details;
+            _samples = ShowSampleFiling ? doc.Samples : [];
+            _images = ShowRemoteImages ? ParseImageUrls(_main.ImageUrls) : [];
+            if (ShowRemoteImages)
+                _main.ImageUrls = string.Join(",", _images);
+            _guid = _main.guid ?? _guid;
+            _reportType = _main.Report_type ?? _reportType;
+            _productType = _main.product_type ?? _productType;
+            _productOptions = SirReportTypes.ProductsFor(_reportType).ToList();
+            _issuanceDate = _main.IssuanceDate == default ? DateTime.Today : _main.IssuanceDate.Date;
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnReportTypeChanged(string value)
+    {
+        _reportType = value;
+        _productType = SirReportTypes.DefaultProduct(value);
+        _productOptions = SirReportTypes.ProductsFor(value).ToList();
+        _main.Report_type = _reportType;
+        _main.product_type = _productType;
+        await LoadAsync();
+    }
+
+    private async Task OnProductTypeChanged(string value)
+    {
+        _productType = value;
+        _main.product_type = value;
+        await LoadAsync();
+    }
+
+    private async Task OnClientChanged(string value)
+    {
+        _main.Client = value;
+        RefreshPartNo();
+        var clientNo = (value ?? "").Trim();
+        if (clientNo.Length == 0) return;
+        try
+        {
+            var crm = await Crm.GetBillToAsync(clientNo);
+            if (crm is null) return;
+            if (!string.IsNullOrWhiteSpace(crm.FullName))
+                _main.ContactName = crm.FullName;
+            if (!string.IsNullOrWhiteSpace(crm.ClientName))
+                _main.ClientDepartment = crm.ClientName;
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void OnProductNameChanged(string value)
+    {
+        _main.ProductName = value;
+        RefreshPartNo();
+    }
+
+    private void OnIssuanceDateChanged(DateTime? value)
+    {
+        _issuanceDate = value;
+        _main.IssuanceDate = value?.Date ?? DateTime.Today;
+        RefreshPartNo();
+    }
+
+    private void OnDeliveryTimesChanged(int value)
+    {
+        _main.DeliveryTimes = value;
+        RefreshPartNo();
+    }
+
+    private void RefreshPartNo()
+    {
+        var client = (_main.Client ?? "").Trim();
+        var name = (_main.ProductName ?? "").Trim();
+        var date = (_issuanceDate ?? DateTime.Today).ToString("yyyyMMdd");
+        if (client.Length == 0 || name.Length == 0) return;
+        _main.Product_partNo = $"{client}-{name}-{date}-{_main.DeliveryTimes}";
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            _main.guid = _guid;
+            _main.Report_type = _reportType;
+            _main.product_type = _productType;
+            _main.IssuanceDate = _issuanceDate?.Date ?? DateTime.Today;
+            _main.ImageUrls = ShowRemoteImages
+                ? string.Join(",", _images.Where(x => !string.IsNullOrWhiteSpace(x)))
+                : (_main.ImageUrls ?? "");
+
+            // 留样行图片写回 ImageUrls(JSON)
+            if (ShowSampleFiling)
+            {
+                foreach (var s in _samples)
+                    s.ImageUrls ??= "[]";
+            }
+
+            var doc = new SirDocumentDto
+            {
+                Main = _main,
+                Details = _details,
+                Samples = ShowSampleFiling ? _samples : [],
+            };
+            var (ok, msg) = await Sir.SaveAsync(doc);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("保存成功", Severity.Success);
+            if (!Nav.Uri.Contains(_guid, StringComparison.OrdinalIgnoreCase))
+            {
+                var href = $"/sir/{Uri.EscapeDataString(_guid)}?rt={Uri.EscapeDataString(_reportType)}&pt={Uri.EscapeDataString(_productType)}";
+                Nav.NavigateTo(href, replace: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void NotReadyPdf() => Notify.Show("PDF 预览/导出稍后移植", Severity.Info);
+
+    private string ImageDisplayUrl(string? path) => LegacyFileUrl.Resolve(path, ImageBase);
+
+    private static List<string> ParseImageUrls(string? raw)
+        => (raw ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !LegacyFileUrl.IsBlankOrPlaceholder(x))
+            .ToList();
+
+    private async Task OnRemoteImagesSelected(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles(5).ToList();
+        if (files.Count == 0) return;
+        if (_images.Count + files.Count > 5)
+        {
+            Notify.Show("最多只能上传5张图片", Severity.Warning);
+            return;
+        }
+
+        _imgUploading = true;
+        try
+        {
+            foreach (var file in files)
+            {
+                var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+                if (ext is not (".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp"))
+                {
+                    Notify.Show($"不支持的格式：{file.Name}", Severity.Warning);
+                    continue;
+                }
+
+                if (file.Size > 5 * 1024 * 1024)
+                {
+                    Notify.Show($"{file.Name} 超过5MB", Severity.Warning);
+                    continue;
+                }
+
+                await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+                var path = await CotractBase.UploadImageAsync(stream, file.Name);
+                if (!string.IsNullOrWhiteSpace(path))
+                    _images.Add(path.Trim());
+            }
+
+            Notify.Show("图片上传完成", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _imgUploading = false;
+        }
+    }
+
+    private void RemoveRemoteImage(int index)
+    {
+        if (index < 0 || index >= _images.Count) return;
+        _images.RemoveAt(index);
+    }
+
+    private static List<string> GetSampleImages(ZyqdSirSampleForFilingModel row)
+    {
+        var raw = (row.ImageUrls ?? "").Trim();
+        if (raw.Length == 0 || raw == "[]")
+            return [];
+        try
+        {
+            if (raw.StartsWith('['))
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(raw);
+                var list = new List<string>();
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    if (el.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var s = el.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) list.Add(s);
+                    }
+                    else if (el.ValueKind == System.Text.Json.JsonValueKind.Object
+                             && el.TryGetProperty("url", out var urlProp))
+                    {
+                        var s = urlProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) list.Add(s);
+                    }
+                }
+                return list;
+            }
+        }
+        catch
+        {
+            // fall through
+        }
+
+        return ParseImageUrls(raw);
+    }
+
+    private static void SetSampleImages(ZyqdSirSampleForFilingModel row, List<string> urls)
+    {
+        row.ImageUrls = System.Text.Json.JsonSerializer.Serialize(urls);
+    }
+
+    private async Task OnSampleImagesSelected(InputFileChangeEventArgs e, int sampleIndex)
+    {
+        if (sampleIndex < 0 || sampleIndex >= _samples.Count) return;
+        var row = _samples[sampleIndex];
+        var imgs = GetSampleImages(row);
+        var files = e.GetMultipleFiles(5).ToList();
+        if (files.Count == 0) return;
+        if (imgs.Count + files.Count > 5)
+        {
+            Notify.Show("每行最多上传5张图片", Severity.Warning);
+            return;
+        }
+
+        _imgUploading = true;
+        try
+        {
+            foreach (var file in files)
+            {
+                var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+                if (ext is not (".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp"))
+                {
+                    Notify.Show($"不支持的格式：{file.Name}", Severity.Warning);
+                    continue;
+                }
+
+                if (file.Size > 5 * 1024 * 1024)
+                {
+                    Notify.Show($"{file.Name} 超过5MB", Severity.Warning);
+                    continue;
+                }
+
+                await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+                var path = await CotractBase.UploadImageAsync(stream, file.Name);
+                if (!string.IsNullOrWhiteSpace(path))
+                    imgs.Add(path.Trim());
+            }
+
+            SetSampleImages(row, imgs);
+            Notify.Show("样品图片上传完成", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _imgUploading = false;
+        }
+    }
+
+    private void RemoveSampleImage(int sampleIndex, int imgIndex)
+    {
+        if (sampleIndex < 0 || sampleIndex >= _samples.Count) return;
+        var row = _samples[sampleIndex];
+        var imgs = GetSampleImages(row);
+        if (imgIndex < 0 || imgIndex >= imgs.Count) return;
+        imgs.RemoveAt(imgIndex);
+        SetSampleImages(row, imgs);
+    }
+
+    private void AddSampleRow()
+    {
+        var code = _samples.Count == 0 ? 1 : _samples.Max(x => x.code) + 1;
+        _samples.Add(new ZyqdSirSampleForFilingModel
+        {
+            main_guid = _guid,
+            Report_type = _reportType,
+            Specification_type = $"S.{code}",
+            Note = $"部件{code}",
+            Note1 = "",
+            code = code,
+            createTime = DateTime.Now,
+            ImageUrls = "[]",
+        });
+    }
+
+    private void RemoveSampleRow(int index)
+    {
+        if (index < 0 || index >= _samples.Count) return;
+        _samples.RemoveAt(index);
+    }
+
+    private RenderFragment CertTile(string label, bool active, Action<bool> set) => __builder =>
+    {
+        <div class="@($"sir-cert-tile{(active ? " active" : "")}")" @onclick="@(() => { set(!active); StateHasChanged(); })">
+            <span class="sir-cert-box">@(active ? "✓" : "")</span>
+            <span>@label</span>
+        </div>
+    };
+
+    private bool ShouldShowGroupHeader(string? specType, out string title)
+    {
+        title = "";
+        // 分组标题插在对应项之前（老系统是插在该项之后，这里按“下一组开始”更直观）
+        if (specType == "2.1")
+        {
+            title = "成品性能要求 / Performance requirements for finished products";
+            return true;
+        }
+        if (specType == "3.1")
+        {
+            title = "成品功能要求 / Functional requirements for finished products";
+            return true;
+        }
+        if (specType == "4.1")
+        {
+            title = "其他要求 / Other requirements";
+            return true;
+        }
+        // 遥控器：4.1 配件之后是半成品内部测试（序号 1~10），需单独成块
+        if (specType == "1")
+        {
+            title = "半成品测试，不提供给客户，内部测试记录。";
+            return true;
+        }
+        return false;
+    }
+
+    private RenderFragment ConclusionCheck(ZyqdSirDetailModel row, string which) => __builder =>
+    {
+        var raw = which switch
+        {
+            "A" => row.Conclusion_A,
+            "B" => row.Conclusio_B,
+            "C" => row.Conclusion_C,
+            "D" => row.Conclusion_D,
+            _ => null
+        };
+        var checkedVal = IsTick(raw);
+
+        <MudCheckBox T="bool"
+                     Value="@checkedVal"
+                     ValueChanged="@(EventCallback.Factory.Create<bool>(this, v => SetConclusion(row, which, v ? "√" : "")))"
+                     Dense="true"
+                     Color="Color.Primary"/>
+    };
+
+    private static void SetConclusion(ZyqdSirDetailModel row, string which, string? value)
+    {
+        switch (which)
+        {
+            case "A": row.Conclusion_A = value; break;
+            case "B": row.Conclusio_B = value; break;
+            case "C": row.Conclusion_C = value; break;
+            case "D": row.Conclusion_D = value; break;
+        }
+    }
+
+    private RenderFragment ResultEditor(ZyqdSirDetailModel row, int index) => builder =>
+    {
+        var value = GetResult(row, index) ?? "";
+        var filling = row.filling_type ?? "0";
+
+        if (filling == "1")
+        {
+            // √/× 类型：用勾选框，勾选存 √，取消存空
+            var checkedVal = IsTick(value);
+            builder.OpenComponent<MudCheckBox<bool>>(0);
+            builder.AddAttribute(1, "Value", checkedVal);
+            builder.AddAttribute(2, "ValueChanged", EventCallback.Factory.Create<bool>(this, v => SetResult(row, index, v ? "√" : "")));
+            builder.AddAttribute(3, "Dense", true);
+            builder.AddAttribute(4, "Color", Color.Primary);
+            builder.CloseComponent();
+        }
+        else if (filling == "2")
+        {
+            // OK/NG：点击在 - → OK → NG 间循环
+            var display = string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+            var stateClass = display switch
+            {
+                "OK" => "sir-cycle-ok",
+                "NG" => "sir-cycle-ng",
+                _ => "sir-cycle-empty"
+            };
+            builder.OpenElement(0, "button");
+            builder.AddAttribute(1, "type", "button");
+            builder.AddAttribute(2, "class", $"sir-cycle-btn {stateClass}");
+            builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => CycleOkNg(row, index)));
+            builder.AddContent(4, display);
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenComponent<MudTextField<string>>(0);
+            builder.AddAttribute(1, "Value", value);
+            builder.AddAttribute(2, "ValueChanged", EventCallback.Factory.Create<string>(this, v => SetResult(row, index, v)));
+            builder.AddAttribute(3, "Dense", true);
+            builder.AddAttribute(4, "Margin", Margin.Dense);
+            builder.AddAttribute(5, "Variant", Variant.Outlined);
+            builder.CloseComponent();
+        }
+    };
+
+    private void CycleOkNg(ZyqdSirDetailModel row, int index)
+    {
+        var cur = (GetResult(row, index) ?? "").Trim();
+        var next = cur switch
+        {
+            "OK" => "NG",
+            "NG" => "",
+            _ => "OK"
+        };
+        SetResult(row, index, next);
+    }
+
+    private static bool IsTick(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return v is "√" or "✓" or "V" or "v" or "OK" or "ok" or "true" or "1";
+    }
+
+    private static void AddOption(RenderTreeBuilder b, string v)
+    {
+        b.OpenComponent<MudSelectItem<string>>(0);
+        b.AddAttribute(1, "Value", v);
+        b.AddAttribute(2, "ChildContent", (RenderFragment)(c => c.AddContent(0, string.IsNullOrEmpty(v) ? "-" : v)));
+        b.CloseComponent();
+    }
+
+    private static string? GetResult(ZyqdSirDetailModel row, int index) => index switch
+    {
+        1 => row.Actual_Results1,
+        2 => row.Actual_Results2,
+        3 => row.Actual_Results3,
+        4 => row.Actual_Results4,
+        5 => row.Actual_Results5,
+        6 => row.Actual_Results6,
+        _ => null
+    };
+
+    private static void SetResult(ZyqdSirDetailModel row, int index, string? value)
+    {
+        switch (index)
+        {
+            case 1: row.Actual_Results1 = value; break;
+            case 2: row.Actual_Results2 = value; break;
+            case 3: row.Actual_Results3 = value; break;
+            case 4: row.Actual_Results4 = value; break;
+            case 5: row.Actual_Results5 = value; break;
+            case 6: row.Actual_Results6 = value; break;
+        }
+    }
+}

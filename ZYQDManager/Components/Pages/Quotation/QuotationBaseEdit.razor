@@ -1,0 +1,254 @@
+@page "/quotation-base/new"
+@page "/quotation-base/{Id:int}/copy"
+@page "/quotation-base/{Id:int}/detail"
+@page "/quotation-base/{Id:int}"
+@rendermode InteractiveServer
+@using ZYQDManager.Components.Pages.Contract
+@using ZYQDManager.DataModels.Quotation
+@inject QuotationBaseService QuotationBase
+@inject CentralAuthService Auth
+
+<PageTitle>@Title</PageTitle>
+
+<div class="qb-edit-page">
+    <div class="qb-edit-toolbar">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.h6">@Title</MudText>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@ListHref">返回列表</MudButton>
+                @if (!IsDetail)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
+                        @(IsCopy ? "创建" : "保存")
+                    </MudButton>
+                }
+            </MudStack>
+        </MudStack>
+    </div>
+
+    <div class="qb-edit-scroll">
+        <MudPaper Outlined="true" Class="pa-4 qb-edit-card">
+            <fieldset class="qb-form" disabled="@IsDetail">
+                <div class="cb-kv-list">
+                    <CbKvRow Label="类型" Required="true">
+                        @if (IsCreate && !IsCopy)
+                        {
+                            <MudSelect T="string"
+                                       Value="_itemType"
+                                       ValueChanged="OnTypeChanged"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Disabled="_busy">
+                                @foreach (var t in QuotationBaseTypes.All)
+                                {
+                                    <MudSelectItem Value="@t.Key">@t.Label</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else
+                        {
+                            <span>@QuotationBaseTypes.LabelOf(_itemType)</span>
+                        }
+                    </CbKvRow>
+
+                    <CbKvText Label="型号" @bind-Value="_model.Part_No" ReadOnly="IsDetail" Required="true"/>
+                    <CbKvImage Label="图片" @bind-Value="_model.Quotation_logo" ReadOnly="IsDetail"/>
+
+                    @if (_itemType == QuotationBaseTypes.Motor)
+                    {
+                        <CbKvText Label="额定扭矩" @bind-Value="_model.Rated_torque" ReadOnly="IsDetail"/>
+                        <CbKvText Label="额定转速" @bind-Value="_model.Rated_speed" ReadOnly="IsDetail"/>
+                        <CbKvText Label="电源" @bind-Value="_model.Power_supply" ReadOnly="IsDetail"/>
+                        <CbKvText Label="额定功率" @bind-Value="_model.Rated_Power" ReadOnly="IsDetail"/>
+                        <CbKvText Label="额定电流" @bind-Value="_model.Rated_Current" ReadOnly="IsDetail"/>
+                        <CbKvText Label="噪音" @bind-Value="_model.Noise_dBA" ReadOnly="IsDetail"/>
+                        <CbKvText Label="电机长度" @bind-Value="_model.Motor_Length" ReadOnly="IsDetail"/>
+                        <CbKvText Label="管径" @bind-Value="_model.Tube_diameter" ReadOnly="IsDetail"/>
+                        <CbKvText Label="电池容量" @bind-Value="_model.Battery_Capacity" ReadOnly="IsDetail"/>
+                        <CbKvText Label="价格排除" @bind-Value="_model.Exclude_text" ReadOnly="IsDetail" Multiline="true"/>
+                    }
+                    else if (_itemType == QuotationBaseTypes.Remote)
+                    {
+                        <CbKvText Label="遥控器型号" @bind-Value="_model.Remote_controller_type" ReadOnly="IsDetail"/>
+                        <CbKvText Label="电池型号" @bind-Value="_model.Battery_Type" ReadOnly="IsDetail"/>
+                        <CbKvText Label="频率" @bind-Value="_model.Radio_Frequency" ReadOnly="IsDetail"/>
+                        <CbKvText Label="工作温度" @bind-Value="_model.Working_Temperature" ReadOnly="IsDetail"/>
+                        <CbKvText Label="通道数" @bind-Value="_model.NoOfChannels" ReadOnly="IsDetail"/>
+                    }
+                    else if (_itemType == QuotationBaseTypes.Accessory)
+                    {
+                        <CbKvText Label="配件名" @bind-Value="_model.adaptor" ReadOnly="IsDetail"/>
+                    }
+                    else if (_itemType == QuotationBaseTypes.CB)
+                    {
+                        <CbKvText Label="额定电压" @bind-Value="_model.Rated_Voltage" ReadOnly="IsDetail"/>
+                        <CbKvText Label="尺寸" @bind-Value="_model.Size" ReadOnly="IsDetail"/>
+                        <CbKvText Label="额定功率" @bind-Value="_model.Rated_Power" ReadOnly="IsDetail"/>
+                        <CbKvText Label="执行器数量" @bind-Value="_model.No_Of_Actuator" ReadOnly="IsDetail"/>
+                        <CbKvText Label="输出控制" @bind-Value="_model.Output_Control" ReadOnly="IsDetail"/>
+                        <CbKvText Label="传感器" @bind-Value="_model.Sensor" ReadOnly="IsDetail"/>
+                        <CbKvText Label="防护等级" @bind-Value="_model.Protection_Degree" ReadOnly="IsDetail"/>
+                    }
+                    else if (_itemType == QuotationBaseTypes.PR)
+                    {
+                        <CbKvText Label="最大负载" @bind-Value="_model.Max_Loading" ReadOnly="IsDetail"/>
+                        <CbKvText Label="最大行程" @bind-Value="_model.Max_Stroke" ReadOnly="IsDetail"/>
+                        <CbKvText Label="防护等级" @bind-Value="_model.Protection_Degree2" ReadOnly="IsDetail"/>
+                        <CbKvText Label="噪音" @bind-Value="_model.Noise" ReadOnly="IsDetail"/>
+                    }
+
+                    <CbKvText Label="备注" @bind-Value="_model.Remark" ReadOnly="IsDetail" Multiline="true"/>
+                </div>
+            </fieldset>
+        </MudPaper>
+    </div>
+</div>
+
+<style>
+    .qb-edit-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .qb-edit-toolbar { flex: 0 0 auto; }
+
+    .qb-edit-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+    }
+
+    .qb-edit-card {
+        width: 100%;
+        max-width: 720px;
+        align-self: flex-start;
+        flex: 0 1 720px;
+    }
+
+    .qb-form {
+        border: 0;
+        padding: 0;
+        margin: 0;
+        min-inline-size: 0;
+    }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeFromQuery { get; set; }
+
+    private bool _busy;
+    private string? _loadedKey;
+    private string _itemType = QuotationBaseTypes.Motor;
+    private QuotationBaseListItemDto _model = new();
+
+    private bool IsCopy => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/copy", StringComparison.OrdinalIgnoreCase);
+    private bool IsDetail => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/detail", StringComparison.OrdinalIgnoreCase);
+    private bool IsCreate => Id == 0 || IsCopy;
+    private string ListHref => $"/quotation-base?type={Uri.EscapeDataString(_itemType)}";
+    private string Title => IsDetail
+        ? $"报价基础数据详情（{QuotationBaseTypes.LabelOf(_itemType)}）"
+        : IsCopy
+            ? $"复制报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
+            : Id == 0
+                ? $"新建报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
+                : $"编辑报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var type = QuotationBaseTypes.Normalize(TypeFromQuery);
+        var key = $"{Id}:{type}:{IsCopy}:{IsDetail}";
+        if (_loadedKey == key) return;
+        _loadedKey = key;
+        _itemType = type;
+
+        if (Id == 0)
+        {
+            // 新建切类型时保留公共字段，规格字段随类型切换清空
+            var keepPart = _model.Part_No;
+            var keepLogo = _model.Quotation_logo;
+            var keepRemark = _model.Remark;
+            _model = new QuotationBaseListItemDto
+            {
+                ItemType = _itemType,
+                Part_No = keepPart,
+                Quotation_logo = keepLogo,
+                Remark = keepRemark,
+            };
+            return;
+        }
+
+        var row = await QuotationBase.GetAsync(_itemType, Id);
+        if (row is null)
+        {
+            Notify.Show("记录不存在", Severity.Warning);
+            NavManager.NavigateTo(ListHref);
+            return;
+        }
+
+        _model = row;
+        _itemType = QuotationBaseTypes.Normalize(row.ItemType);
+        if (IsCopy)
+        {
+            _model.Id = 0;
+            _model.CreatePerson = null;
+            _model.CreateTime = null;
+            _model.UpdatePerson = null;
+            _model.UpdateTime = null;
+        }
+    }
+
+    private Task OnTypeChanged(string value)
+    {
+        _itemType = QuotationBaseTypes.Normalize(value);
+        _model.ItemType = _itemType;
+        NavManager.NavigateTo($"/quotation-base/new?type={Uri.EscapeDataString(_itemType)}", replace: true);
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (IsDetail) return;
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            var wasCreate = IsCreate;
+            _model.ItemType = _itemType;
+            var (ok, msg, id) = await QuotationBase.SaveAsync(_itemType, _model, empNo, wasCreate);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show(IsCopy ? "创建成功" : "保存成功", Severity.Success);
+            if (IsCopy)
+            {
+                NavManager.NavigateTo(ListHref);
+            }
+            else if (wasCreate && id > 0)
+            {
+                _model.Id = id;
+                NavManager.NavigateTo($"/quotation-base/{id}?type={Uri.EscapeDataString(_itemType)}", replace: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

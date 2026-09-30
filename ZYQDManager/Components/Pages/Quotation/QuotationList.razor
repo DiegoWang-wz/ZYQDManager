@@ -1,0 +1,273 @@
+@page "/quotation"
+@rendermode InteractiveServer
+@inject QuotationService Quotation
+@inject CentralAuthService Auth
+
+<PageTitle>报价列表</PageTitle>
+
+<div class="qe-list-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="qe-toolbar" Wrap="Wrap.Wrap">
+            <MudSelect T="string" @bind-Value="_filterColumn" Label="条件" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-filter-select">
+                @foreach (var field in QuotationFilterFields.All)
+                {
+                    <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_keyword"
+                          Label="内容"
+                          Placeholder="请输入查询内容"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          Class="qe-filter-input"
+                          OnKeyUp="OnKeyUp"/>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+            <div class="qe-spacer"></div>
+            <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/quotation/new">新建</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="qe-table-wrap pa-0" Outlined="true">
+        @if (_ready)
+        {
+            <MudTable @ref="_table"
+                      T="QuotationListItemDto"
+                      ServerData="LoadServerData"
+                      RowsPerPage="20"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      MultiSelection="true"
+                      SelectOnRowClick="false"
+                      @bind-SelectedItems="_selected"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      SortMode="SortMode.Single"
+                      Class="qe-table">
+                <HeaderContent>
+                    <MudTh Class="qe-no-cell">序号</MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationListItemDto" SortLabel="Quota_No">报价单号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationListItemDto" SortLabel="ClientCode">客户编号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationListItemDto" SortLabel="ClientName">客户名称</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationListItemDto" SortLabel="DATE">日期</MudTableSortLabel></MudTh>
+                    <MudTh>货币</MudTh>
+                    <MudTh>签名</MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationListItemDto" SortLabel="personId">创建人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationListItemDto" SortLabel="createTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
+                    <MudTh Class="qe-ops-cell">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="qe-no-cell">@RowNo(context)</MudTd>
+                    <MudTd>@Dash(context.Quota_No)</MudTd>
+                    <MudTd>@Dash(context.ClientCode)</MudTd>
+                    <MudTd>@Dash(context.ClientName)</MudTd>
+                    <MudTd>@Dash(context.DATE)</MudTd>
+                    <MudTd>@Dash(context.currencyUnit)</MudTd>
+                    <MudTd>@Dash(context.signature)</MudTd>
+                    <MudTd>@Dash(context.personId)</MudTd>
+                    <MudTd>@(context.createTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</MudTd>
+                    <MudTd Class="qe-ops-cell">
+                        <div class="qe-ops-grid">
+                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="@EditHref(context)">编辑</MudButton>
+                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Href="@DetailHref(context)">详情</MudButton>
+                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Href="@CopyHref(context)">复制</MudButton>
+                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                        </div>
+                    </MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new[] { 10, 20, 50, 100 }" InfoFormat="{first_item}-{last_item} / {all_items}"/>
+                </PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .qe-list-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+    .qe-toolbar { width: 100%; }
+    .qe-filter-select { min-width: 140px; max-width: 180px; }
+    .qe-filter-input { min-width: 180px; max-width: 280px; }
+    .qe-spacer { flex: 1 1 auto; }
+    .qe-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+    }
+    .qe-ops-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 28px 28px;
+        gap: 2px 4px;
+        width: 100%;
+    }
+    .qe-ops-grid .qe-ops-btn.mud-button-root {
+        min-width: 0 !important;
+        width: 100%;
+        height: 28px;
+        padding: 0 2px !important;
+        margin: 0;
+        font-size: 12px;
+        line-height: 28px;
+        justify-content: center;
+    }
+    .qe-table .mud-table-cell.qe-ops-cell {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+    }
+    .qe-table .mud-table-head .mud-table-cell.qe-ops-cell { z-index: 6; }
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qe-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+</style>
+
+@code {
+    private MudTable<QuotationListItemDto>? _table;
+    private bool _ready;
+    private bool _busy;
+    private string _filterColumn = "Quota_No";
+    private string? _keyword;
+    private HashSet<QuotationListItemDto> _selected = new();
+    private List<QuotationListItemDto> _rows = [];
+    private int _skip;
+
+    protected override void OnInitialized() => _ready = true;
+
+    private int RowNo(QuotationListItemDto row)
+    {
+        var i = _rows.IndexOf(row);
+        return i < 0 ? 0 : _skip + i + 1;
+    }
+
+    private static string Dash(string? s) => string.IsNullOrWhiteSpace(s) ? "-" : s;
+
+    private static string EditHref(QuotationListItemDto row) => $"/quotation/{row.Guid}";
+    private static string DetailHref(QuotationListItemDto row) => $"/quotation/{row.Guid}/detail";
+    private static string CopyHref(QuotationListItemDto row) => $"/quotation/{row.Guid}/copy";
+
+    private Task OnKeyUp(KeyboardEventArgs e)
+        => e.Key is "Enter" or "NumpadEnter" ? SearchAsync() : Task.CompletedTask;
+
+    private async Task SearchAsync() => await ReloadTableAsync(resetPage: true);
+
+    private async Task ClearAsync()
+    {
+        _keyword = null;
+        _filterColumn = "Quota_No";
+        await ReloadTableAsync(resetPage: true);
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private async Task ReloadTableAsync(bool resetPage)
+    {
+        if (_table is null) return;
+        if (resetPage && _table.CurrentPage != 0)
+        {
+            _table.NavigateTo(Page.First);
+            return;
+        }
+
+        await _table.ReloadServerData();
+    }
+
+    private async Task<TableData<QuotationListItemDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _busy = true;
+        try
+        {
+            var query = new QuotationQueryDto
+            {
+                FilterColumn = _filterColumn,
+                Keyword = _keyword,
+                SortLabel = string.IsNullOrWhiteSpace(state.SortLabel) ? "createTime" : state.SortLabel,
+                SortDescending = state.SortDirection != SortDirection.Ascending,
+            };
+            var skip = state.Page * state.PageSize;
+            var (rows, total) = await Quotation.QueryPageAsync(query, skip, state.PageSize, ct);
+            _rows = rows;
+            _skip = skip;
+            return new TableData<QuotationListItemDto> { Items = rows, TotalItems = total };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(QuotationListItemDto row)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除报价单 {Dash(row.Quota_No)}？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var (success, msg) = await Quotation.DeleteAsync(row.Guid);
+            if (!success)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            _selected.RemoveWhere(x => x.Guid == row.Guid);
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除选中的 {_selected.Count} 条报价单？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var (success, msg) = await Quotation.DeleteManyAsync(_selected.Select(x => x.Guid));
+            if (!success)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

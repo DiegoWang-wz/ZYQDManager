@@ -1,0 +1,454 @@
+@page "/sir"
+@rendermode InteractiveServer
+@inject SirService Sir
+@inject LocalStorageHelper LocalStorage
+
+<PageTitle>检测报告管理列表</PageTitle>
+
+<div class="sir-list-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="sir-toolbar">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-left">
+                <MudText Typo="Typo.body2" Class="sir-date-label">签发日期</MudText>
+                <MudDatePicker @bind-Date="_dateStart"
+                               Label="开始"
+                               DateFormat="yyyy-MM-dd"
+                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Editable="true"
+                               Clearable="true"
+                               Class="sir-filter-date"/>
+                <MudDatePicker @bind-Date="_dateEnd"
+                               Label="结束"
+                               DateFormat="yyyy-MM-dd"
+                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Editable="true"
+                               Clearable="true"
+                               Class="sir-filter-date"/>
+                <MudSelect T="string"
+                           @bind-Value="_filterColumn"
+                           Label="条件"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="sir-filter-select">
+                    @foreach (var field in SirFilterFields.All)
+                    {
+                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_keyword"
+                              Label="内容"
+                              Placeholder="输入查询内容"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="sir-filter-input"
+                              OnKeyUp="OnKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+            </MudStack>
+            <div class="sir-toolbar-spacer"></div>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-right">
+                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="sir-table-wrap pa-0" Outlined="true">
+        @if (_ready)
+        {
+            <MudTable @ref="_table"
+                      T="ZyqdSirMainModel"
+                      ServerData="LoadServerData"
+                      @bind-CurrentPage="_currentPage"
+                      RowsPerPage="@_rowsPerPage"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      MultiSelection="true"
+                      SelectOnRowClick="false"
+                      @bind-SelectedItems="_selected"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      SortMode="SortMode.Single"
+                      OnRowClick="OnRowClick"
+                      Class="sir-table">
+                <HeaderContent>
+                    <MudTh Class="sir-no-cell">序号</MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Department">申请部门</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="SalesmanName">业务员姓名</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Client">客户编号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Report_type">报告类型</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="product_type">产品类型</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Product_partNo">产品型号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="ProductName">产品名称</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="SoftwareVersion">软件版本</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="IssuanceDate">签发日期</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Test_Approved_By">批准人</MudTableSortLabel></MudTh>
+                    <MudTh Class="sir-ops-cell">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="sir-no-cell">@RowNo(context)</MudTd>
+                    <MudTd>@Dash(context.Department)</MudTd>
+                    <MudTd>@Dash(context.SalesmanName)</MudTd>
+                    <MudTd>@Dash(context.Client)</MudTd>
+                    <MudTd>@SirReportTypes.FormatReportType(context.Report_type)</MudTd>
+                    <MudTd>@Dash(context.product_type)</MudTd>
+                    <MudTd>@Dash(context.Product_partNo)</MudTd>
+                    <MudTd>@Dash(context.ProductName)</MudTd>
+                    <MudTd>@Dash(context.SoftwareVersion)</MudTd>
+                    <MudTd>@FormatDate(context.IssuanceDate)</MudTd>
+                    <MudTd>@Dash(context.Test_Approved_By)</MudTd>
+                    <MudTd Class="sir-ops-cell">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   OnClick="@(() => GoEditAsync(context))">编辑</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Delete"
+                                   Disabled="_busy"
+                                   OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无数据")</MudText>
+                </NoRecordsContent>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                                   InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+                </PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .sir-list-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+    .sir-toolbar { width: 100%; }
+    .sir-toolbar-left, .sir-toolbar-right { flex: 0 0 auto; }
+    .sir-toolbar-right { margin-left: auto; }
+    .sir-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .sir-filter-select { width: 140px; min-width: 140px; }
+    .sir-filter-input { width: 200px; min-width: 200px; }
+    .sir-date-label {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        color: var(--mud-palette-text-secondary);
+        padding: 0 4px 0 0;
+    }
+    .sir-filter-date { width: 180px; min-width: 180px; flex: 0 0 180px; }
+    .sir-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .sir-table { height: 100%; display: flex; flex-direction: column; }
+    .sir-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+    }
+    .sir-table .mud-table-pagination {
+        flex: 0 0 auto !important;
+        margin-top: auto;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+    .sir-table .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell):not(:first-child),
+    .sir-table .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell):not(:first-child) {
+        white-space: nowrap;
+        min-width: 88px;
+        vertical-align: middle;
+    }
+    .sir-table .mud-table-cell:first-child,
+    .sir-table .mud-table-cell.sir-no-cell {
+        position: sticky;
+        z-index: 4;
+        box-sizing: border-box;
+        background-color: #fff !important;
+        vertical-align: middle !important;
+    }
+    .sir-table .mud-table-head .mud-table-cell:first-child,
+    .sir-table .mud-table-head .mud-table-cell.sir-no-cell { z-index: 6; }
+    .sir-table .mud-table-cell:first-child {
+        left: 0;
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
+    .sir-table .mud-table-cell.sir-no-cell {
+        left: 42px;
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        padding: 0 2px !important;
+        text-align: center;
+        border-right: 1px solid #e0e0e0;
+    }
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.sir-no-cell {
+        background-color: #f5f5f5 !important;
+    }
+    .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
+    .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-no-cell {
+        background-color: #eeeeee !important;
+    }
+    .sir-table .mud-table-cell.sir-ops-cell {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        min-width: 148px;
+        white-space: nowrap;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+        vertical-align: middle;
+    }
+    .sir-table .mud-table-head .mud-table-cell.sir-ops-cell { z-index: 6; }
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.sir-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+    .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-ops-cell {
+        background-color: #eeeeee !important;
+    }
+    .sir-table .mud-table-body .mud-table-row { cursor: pointer; }
+</style>
+
+@code {
+    private MudTable<ZyqdSirMainModel>? _table;
+    private bool _ready;
+    private bool _busy;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
+    private string _filterColumn = "客户";
+    private string? _keyword;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
+    private List<ZyqdSirMainModel> _rows = new();
+    private HashSet<ZyqdSirMainModel> _selected = new();
+    private int _skip;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _ready) return;
+
+        // localStorage 需在首次渲染后读；先恢复分页再挂表，避免先落第 0 页
+        await RestoreFromStorageAsync();
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private async Task RestoreFromStorageAsync()
+    {
+        try
+        {
+            var snap = await LocalStorage.GetAsync<SirListUiState>(StorageKeys.SirListUi);
+            if (snap is null) return;
+
+            _filterColumn = string.IsNullOrWhiteSpace(snap.FilterColumn) ? "客户" : snap.FilterColumn;
+            _keyword = snap.Keyword;
+            _dateStart = snap.DateStart;
+            _dateEnd = snap.DateEnd;
+            _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+            _currentPage = snap.Page < 0 ? 0 : snap.Page;
+        }
+        catch
+        {
+            // 忽略损坏的本地缓存
+        }
+    }
+
+    private async Task PersistAsync(int page, int pageSize)
+    {
+        var snap = new SirListUiState
+        {
+            Page = page < 0 ? 0 : page,
+            PageSize = pageSize > 0 ? pageSize : 20,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            DateStart = _dateStart,
+            DateEnd = _dateEnd,
+        };
+        try
+        {
+            await LocalStorage.SetAsync(StorageKeys.SirListUi, snap);
+        }
+        catch
+        {
+            // 忽略存储失败
+        }
+    }
+
+    private int RowNo(ZyqdSirMainModel row) => _skip + _rows.IndexOf(row) + 1;
+
+    private static string FormatDate(DateTime dt)
+        => dt == default ? "-" : dt.ToString("yyyy-MM-dd");
+
+    private static string EditHref(ZyqdSirMainModel row)
+    {
+        var guid = Uri.EscapeDataString((row.guid ?? "").Trim());
+        var rt = Uri.EscapeDataString((row.Report_type ?? "").Trim());
+        var pt = Uri.EscapeDataString((row.product_type ?? "").Trim());
+        return $"/sir/{guid}?rt={rt}&pt={pt}";
+    }
+
+    private static string Dash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        _filterColumn = "客户";
+        _keyword = null;
+        _dateStart = null;
+        _dateEnd = null;
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _selected.Clear();
+        await ReloadTableAsync(resetPage: true);
+    }
+
+    private async Task OnRowClick(TableRowClickEventArgs<ZyqdSirMainModel> args)
+    {
+        if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
+        await GoEditAsync(args.Item);
+    }
+
+    private async Task GoEditAsync(ZyqdSirMainModel row)
+    {
+        var page = _table?.CurrentPage ?? _currentPage;
+        var size = _table?.RowsPerPage > 0 ? _table.RowsPerPage : _rowsPerPage;
+        await PersistAsync(page, size);
+        NavManager.NavigateTo(EditHref(row));
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private async Task ReloadTableAsync(bool resetPage)
+    {
+        if (_table is null) return;
+        if (resetPage && _table.CurrentPage != 0)
+        {
+            _table.NavigateTo(MudBlazor.Page.First);
+            return;
+        }
+
+        await _table.ReloadServerData();
+    }
+
+    private async Task<TableData<ZyqdSirMainModel>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _busy = true;
+        try
+        {
+            var query = new SirQueryDto
+            {
+                DateStart = _dateStart,
+                DateEnd = _dateEnd,
+                FilterColumn = _filterColumn,
+                Keyword = _keyword,
+                SortLabel = state.SortLabel,
+                SortDesc = state.SortDirection != SortDirection.Ascending,
+            };
+            var skip = state.Page * state.PageSize;
+            var (rows, total) = await Sir.QueryPageAsync(query, skip, state.PageSize, ct);
+            _rows = rows;
+            _skip = skip;
+            _currentPage = state.Page;
+            _rowsPerPage = state.PageSize;
+            await PersistAsync(state.Page, state.PageSize);
+            return new TableData<ZyqdSirMainModel> { Items = rows, TotalItems = total };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(ZyqdSirMainModel row)
+    {
+        var guid = (row.guid ?? "").Trim();
+        if (guid.Length == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除客户 {row.Client} / {row.Product_partNo} 的检测报告？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var (success, msg) = await Sir.DeleteByGuidAsync(guid);
+            if (!success)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            _selected.RemoveWhere(x => (x.guid ?? "") == guid);
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除选中的 {_selected.Count} 条检测报告？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var guids = _selected.Select(x => (x.guid ?? "").Trim()).Where(x => x.Length > 0).Distinct().ToList();
+            var fail = 0;
+            foreach (var guid in guids)
+            {
+                var (success, _) = await Sir.DeleteByGuidAsync(guid);
+                if (!success) fail++;
+            }
+
+            if (fail > 0)
+                Notify.Show($"完成，失败 {fail} 条", Severity.Warning);
+            else
+                Notify.Show("已删除", Severity.Success);
+
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -55,11 +55,9 @@ else
                      Class="zyqd-nav-menu"
                      AnchorOrigin="Origin.BottomLeft"
                      TransformOrigin="Origin.TopLeft">
-                <MudMenuItem OnClick="@(() => NotReady("报价列表"))">报价列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("报价录入"))">报价录入</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("电机类基础数据维护"))">电机类基础数据维护</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("推杆类基础数据维护"))">推杆类基础数据维护</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("其他配件基础数据维护"))">其他配件基础数据维护</MudMenuItem>
+                <MudMenuItem OnClick="@(() => GoTo("/quotation"))">报价列表</MudMenuItem>
+                <MudMenuItem OnClick="@(() => GoTo("/quotation/new"))">报价录入</MudMenuItem>
+                <MudMenuItem OnClick="@(() => GoTo("/quotation-base"))">基础数据维护</MudMenuItem>
             </MudMenu>
 
             @if (_canViewInvoiceKp)
@@ -76,17 +74,12 @@ else
                 </MudMenu>
             }
 
-            <MudMenu Label="检测报告管理"
-                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                     Variant="Variant.Text"
-                     Color="Color.Inherit"
-                     Dense="true"
-                     Class="zyqd-nav-menu"
-                     AnchorOrigin="Origin.BottomLeft"
-                     TransformOrigin="Origin.TopLeft">
-                <MudMenuItem OnClick="@(() => NotReady("检测报告管理"))">检测报告管理</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("检测报告管理列表"))">检测报告管理列表</MudMenuItem>
-            </MudMenu>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Inherit"
+                       Class="zyqd-nav-menu mud-button-root"
+                       OnClick="@(() => GoTo("/sir"))">
+                检测报告管理
+            </MudButton>
 
             @if (_canManageUsers)
             {

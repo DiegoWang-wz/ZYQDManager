@@ -1,0 +1,538 @@
+@page "/quotation-base"
+@rendermode InteractiveServer
+@using ZYQDManager.Components.Pages.Contract
+@using ZYQDManager.DataModels.Quotation
+@inject QuotationBaseService QuotationBase
+@inject CentralAuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>报价基础数据</PageTitle>
+
+<div class="qb-list-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="qb-toolbar">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qb-toolbar-left">
+                <MudSelect T="string"
+                           Value="_itemType"
+                           ValueChanged="OnItemTypeChangedAsync"
+                           Label="类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="qb-type-select"
+                           Disabled="_busy">
+                    @foreach (var t in QuotationBaseTypes.All)
+                    {
+                        <MudSelectItem Value="@t.Key">@t.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string"
+                           @bind-Value="_filterColumn"
+                           Label="条件"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="qb-filter-select">
+                    @foreach (var field in QuotationBaseFilterFields.ForType(_itemType))
+                    {
+                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_keyword"
+                              Label="内容"
+                              Placeholder="请输入查询内容"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="qb-filter-input"
+                              OnKeyUp="OnKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+            </MudStack>
+            <div class="qb-toolbar-spacer"></div>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qb-toolbar-right">
+                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@NewHref">新建</MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="qb-table-wrap pa-0" Outlined="true">
+        @if (_ready)
+        {
+            <MudTable @ref="_table"
+                      T="QuotationBaseListItemDto"
+                      ServerData="LoadServerData"
+                      RowsPerPage="20"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      MultiSelection="true"
+                      SelectOnRowClick="false"
+                      @bind-SelectedItems="_selected"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      SortMode="SortMode.Single"
+                      Class="qb-table">
+                <HeaderContent>
+                    <MudTh Class="qb-no-cell">序号</MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Part_No">型号</MudTableSortLabel></MudTh>
+                    <MudTh>图片</MudTh>
+                    @if (_itemType == QuotationBaseTypes.Motor)
+                    {
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Rated_torque">额定扭矩</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Rated_speed">额定转速</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Power_supply">电源</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Rated_Power">额定功率</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Rated_Current">额定电流</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Noise_dBA">噪音</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Motor_Length">电机长度</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Tube_diameter">管径</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Battery_Capacity">电池容量</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Exclude_text">价格排除</MudTableSortLabel></MudTh>
+                    }
+                    else if (_itemType == QuotationBaseTypes.Remote)
+                    {
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Remote_controller_type">遥控器型号</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Battery_Type">电池型号</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Radio_Frequency">频率</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Working_Temperature">工作温度</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="NoOfChannels">通道数</MudTableSortLabel></MudTh>
+                    }
+                    else if (_itemType == QuotationBaseTypes.Accessory)
+                    {
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="adaptor">配件名</MudTableSortLabel></MudTh>
+                    }
+                    else if (_itemType == QuotationBaseTypes.CB)
+                    {
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Rated_Voltage">额定电压</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Size">尺寸</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Rated_Power">额定功率</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="No_Of_Actuator">执行器数量</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Output_Control">输出控制</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Sensor">传感器</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Protection_Degree">防护等级</MudTableSortLabel></MudTh>
+                    }
+                    else if (_itemType == QuotationBaseTypes.PR)
+                    {
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Max_Loading">最大负载</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Max_Stroke">最大行程</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Protection_Degree2">防护等级</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Noise">噪音</MudTableSortLabel></MudTh>
+                    }
+                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Remark">备注</MudTableSortLabel></MudTh>
+                    <MudTh Class="qb-ops-cell">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="qb-no-cell">@RowNo(context)</MudTd>
+                    <MudTd>@Dash(context.Part_No)</MudTd>
+                    <MudTd><LegacyRemoteImg Path="@context.Quotation_logo" CssClass="cotract-thumb"/></MudTd>
+                    @if (_itemType == QuotationBaseTypes.Motor)
+                    {
+                        <MudTd>@Dash(context.Rated_torque)</MudTd>
+                        <MudTd>@Dash(context.Rated_speed)</MudTd>
+                        <MudTd>@Dash(context.Power_supply)</MudTd>
+                        <MudTd>@Dash(context.Rated_Power)</MudTd>
+                        <MudTd>@Dash(context.Rated_Current)</MudTd>
+                        <MudTd>@Dash(context.Noise_dBA)</MudTd>
+                        <MudTd>@Dash(context.Motor_Length)</MudTd>
+                        <MudTd>@Dash(context.Tube_diameter)</MudTd>
+                        <MudTd>@Dash(context.Battery_Capacity)</MudTd>
+                        <MudTd>@Dash(context.Exclude_text)</MudTd>
+                    }
+                    else if (_itemType == QuotationBaseTypes.Remote)
+                    {
+                        <MudTd>@Dash(context.Remote_controller_type)</MudTd>
+                        <MudTd>@Dash(context.Battery_Type)</MudTd>
+                        <MudTd>@Dash(context.Radio_Frequency)</MudTd>
+                        <MudTd>@Dash(context.Working_Temperature)</MudTd>
+                        <MudTd>@Dash(context.NoOfChannels)</MudTd>
+                    }
+                    else if (_itemType == QuotationBaseTypes.Accessory)
+                    {
+                        <MudTd>@Dash(context.adaptor)</MudTd>
+                    }
+                    else if (_itemType == QuotationBaseTypes.CB)
+                    {
+                        <MudTd>@Dash(context.Rated_Voltage)</MudTd>
+                        <MudTd>@Dash(context.Size)</MudTd>
+                        <MudTd>@Dash(context.Rated_Power)</MudTd>
+                        <MudTd>@Dash(context.No_Of_Actuator)</MudTd>
+                        <MudTd>@Dash(context.Output_Control)</MudTd>
+                        <MudTd>@Dash(context.Sensor)</MudTd>
+                        <MudTd>@Dash(context.Protection_Degree)</MudTd>
+                    }
+                    else if (_itemType == QuotationBaseTypes.PR)
+                    {
+                        <MudTd>@Dash(context.Max_Loading)</MudTd>
+                        <MudTd>@Dash(context.Max_Stroke)</MudTd>
+                        <MudTd>@Dash(context.Protection_Degree2)</MudTd>
+                        <MudTd>@Dash(context.Noise)</MudTd>
+                    }
+                    <MudTd>@FormatDate(context.CreateTime)</MudTd>
+                    <MudTd>@Dash(context.CreatePerson)</MudTd>
+                    <MudTd>@Dash(context.Remark)</MudTd>
+                    <MudTd Class="qb-ops-cell">
+                        <div class="qb-ops-grid">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       Class="qb-ops-btn"
+                                       Href="@EditHref(context)">编辑</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text"
+                                       StartIcon="@Icons.Material.Filled.Visibility"
+                                       Class="qb-ops-btn"
+                                       Href="@DetailHref(context)">详情</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text"
+                                       StartIcon="@Icons.Material.Filled.ContentCopy"
+                                       Class="qb-ops-btn"
+                                       Href="@CopyHref(context)">复制</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       Class="qb-ops-btn"
+                                       Disabled="_busy"
+                                       OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                        </div>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无数据")</MudText>
+                </NoRecordsContent>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                                   InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+                </PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .qb-list-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+    .qb-toolbar { width: 100%; }
+    .qb-toolbar-left, .qb-toolbar-right { flex: 0 0 auto; }
+    .qb-toolbar-right { margin-left: auto; }
+    .qb-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .qb-type-select { width: 120px; min-width: 120px; }
+    .qb-filter-select { width: 140px; min-width: 140px; }
+    .qb-filter-input { width: 200px; min-width: 200px; }
+    .qb-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .qb-table { height: 100%; display: flex; flex-direction: column; }
+    .qb-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+    }
+    .qb-table .mud-table-pagination {
+        flex: 0 0 auto !important;
+        margin-top: auto;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+    .qb-table .mud-table-head .mud-table-cell:not(.qb-ops-cell):not(.qb-no-cell):not(:first-child),
+    .qb-table .mud-table-body .mud-table-cell:not(.qb-ops-cell):not(.qb-no-cell):not(:first-child) {
+        white-space: nowrap;
+        min-width: 88px;
+        vertical-align: middle;
+    }
+    .qb-table .mud-table-cell:first-child,
+    .qb-table .mud-table-cell.qb-no-cell {
+        position: sticky;
+        z-index: 4;
+        box-sizing: border-box;
+        background-color: #fff !important;
+        vertical-align: middle !important;
+    }
+    .qb-table .mud-table-head .mud-table-cell:first-child,
+    .qb-table .mud-table-head .mud-table-cell.qb-no-cell { z-index: 6; }
+    .qb-table .mud-table-cell:first-child {
+        left: 0;
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
+    .qb-table .mud-table-cell.qb-no-cell {
+        left: 42px;
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        padding: 0 2px !important;
+        text-align: center;
+        border-right: 1px solid #e0e0e0;
+    }
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qb-no-cell {
+        background-color: #f5f5f5 !important;
+    }
+    .qb-table .mud-table-cell.qb-ops-cell {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        box-sizing: border-box;
+        padding: 6px 8px !important;
+        white-space: normal;
+        vertical-align: middle;
+        overflow: hidden;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+    }
+    .qb-table .mud-table-head .mud-table-cell.qb-ops-cell {
+        z-index: 6;
+        background-color: #fff !important;
+    }
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qb-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+    .qb-table .mud-table-body .mud-table-row:hover .mud-table-cell.qb-ops-cell {
+        background-color: #eeeeee !important;
+    }
+    .qb-ops-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 28px 28px;
+        gap: 2px 4px;
+        width: 100%;
+    }
+    .qb-ops-grid .qb-ops-btn.mud-button-root {
+        min-width: 0 !important;
+        width: 100%;
+        height: 28px;
+        padding: 0 2px !important;
+        margin: 0;
+        font-size: 12px;
+        line-height: 28px;
+        justify-content: center;
+    }
+    .qb-ops-grid .qb-ops-btn .mud-button-label {
+        font-size: 12px !important;
+    }
+    .qb-ops-grid .qb-ops-btn .mud-icon-root {
+        font-size: 16px !important;
+        margin-right: 2px !important;
+    }
+    .qb-list-page .cotract-thumb {
+        max-height: 64px;
+        max-width: 96px;
+        object-fit: contain;
+        display: block;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeFromQuery { get; set; }
+
+    private MudTable<QuotationBaseListItemDto>? _table;
+    private bool _ready;
+    private bool _busy;
+    private string _itemType = QuotationBaseTypes.Motor;
+    private string _filterColumn = "Part_No";
+    private string? _keyword;
+    private List<QuotationBaseListItemDto> _rows = new();
+    private HashSet<QuotationBaseListItemDto> _selected = new();
+    private int _skip;
+
+    protected override void OnInitialized()
+    {
+        ApplyType(TypeFromQuery, resetKeyword: true);
+    }
+
+    protected override void OnParametersSet()
+    {
+        var next = QuotationBaseTypes.Normalize(TypeFromQuery);
+        if (next == _itemType) return;
+        ApplyType(next, resetKeyword: true);
+        _ = ReloadAfterTypeChangeAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _ready) return;
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private void ApplyType(string? type, bool resetKeyword)
+    {
+        _itemType = QuotationBaseTypes.Normalize(type);
+        _filterColumn = QuotationBaseFilterFields.ForType(_itemType)[0].Key;
+        if (resetKeyword)
+            _keyword = null;
+        _selected.Clear();
+    }
+
+    private async Task OnItemTypeChangedAsync(string value)
+    {
+        var next = QuotationBaseTypes.Normalize(value);
+        if (next == _itemType) return;
+
+        ApplyType(next, resetKeyword: true);
+        Nav.NavigateTo($"/quotation-base?type={Uri.EscapeDataString(next)}", replace: true);
+        await ReloadAfterTypeChangeAsync();
+    }
+
+    private async Task ReloadAfterTypeChangeAsync()
+    {
+        // 列结构随类型变化，重建表格并立刻拉数
+        _ready = false;
+        StateHasChanged();
+        await Task.Yield();
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private int RowNo(QuotationBaseListItemDto row) => _skip + _rows.IndexOf(row) + 1;
+
+    private static string Dash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? dt)
+        => dt is null || dt == default ? "-" : dt.Value.ToString("yyyy-MM-dd HH:mm");
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        _filterColumn = QuotationBaseFilterFields.ForType(_itemType)[0].Key;
+        _keyword = null;
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _selected.Clear();
+        await ReloadTableAsync(resetPage: true);
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private string NewHref => $"/quotation-base/new?type={Uri.EscapeDataString(_itemType)}";
+
+    private string EditHref(QuotationBaseListItemDto row)
+        => $"/quotation-base/{row.Id}?type={Uri.EscapeDataString(_itemType)}";
+
+    private string DetailHref(QuotationBaseListItemDto row)
+        => $"/quotation-base/{row.Id}/detail?type={Uri.EscapeDataString(_itemType)}";
+
+    private string CopyHref(QuotationBaseListItemDto row)
+        => $"/quotation-base/{row.Id}/copy?type={Uri.EscapeDataString(_itemType)}";
+
+    private async Task ReloadTableAsync(bool resetPage)
+    {
+        if (_table is null) return;
+        if (resetPage && _table.CurrentPage != 0)
+        {
+            _table.NavigateTo(Page.First);
+            return;
+        }
+
+        await _table.ReloadServerData();
+    }
+
+    private async Task<TableData<QuotationBaseListItemDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _busy = true;
+        try
+        {
+            var query = new QuotationBaseQueryDto
+            {
+                ItemType = _itemType,
+                FilterColumn = _filterColumn,
+                Keyword = _keyword,
+                SortLabel = string.IsNullOrWhiteSpace(state.SortLabel) ? "Id" : state.SortLabel,
+                SortDescending = state.SortDirection != SortDirection.Ascending,
+            };
+            var skip = state.Page * state.PageSize;
+            var (rows, total) = await QuotationBase.QueryPageAsync(query, skip, state.PageSize, ct);
+            _rows = rows;
+            _skip = skip;
+            return new TableData<QuotationBaseListItemDto> { Items = rows, TotalItems = total };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(QuotationBaseListItemDto row)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除型号 {Dash(row.Part_No)}？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync() ?? "";
+            var (success, msg) = await QuotationBase.SoftDeleteAsync(_itemType, row.Id, empNo);
+            if (!success)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            _selected.RemoveWhere(x => x.Id == row.Id);
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除选中的 {_selected.Count} 条？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync() ?? "";
+            var ids = _selected.Select(x => x.Id).ToList();
+            var (success, msg) = await QuotationBase.SoftDeleteManyAsync(_itemType, ids, empNo);
+            if (!success)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

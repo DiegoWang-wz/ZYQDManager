@@ -1,0 +1,564 @@
+@page "/quotation/new"
+@page "/quotation/{DocumentGuid}"
+@page "/quotation/{DocumentGuid}/detail"
+@page "/quotation/{DocumentGuid}/copy"
+@rendermode InteractiveServer
+@using ZYQDManager.Components.Pages.Contract
+@inject QuotationService Quotation
+@inject QuotationBaseService QuotationBase
+@inject CrmCustomerService Crm
+@inject CentralAuthService Auth
+@inject CentralUserInformationService UserInfo
+
+<PageTitle>@Title</PageTitle>
+
+<div class="qe-page">
+    <div class="qe-toolbar">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
+            <MudText Typo="Typo.h6">@Title</MudText>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/quotation">返回列表</MudButton>
+                @if (!IsDetail)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
+                        @(IsCopy ? "创建" : "保存")
+                    </MudButton>
+                }
+            </MudStack>
+        </MudStack>
+    </div>
+
+    <div class="qe-scroll">
+        <fieldset class="qe-form" disabled="@IsDetail">
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">BILLED TO</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTextField @bind-Value="_main.ClientCode"
+                                      Label="ClientCode"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Immediate="true"
+                                      OnKeyUp="OnClientKey"
+                                      HelperText="回车从 CRM 带出"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTextField @bind-Value="_main.ClientName" Label="ClientName" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudTextField @bind-Value="_main.Address" Label="Address" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="1">
+                        <MudTextField @bind-Value="_main.Tel" Label="Tel" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTextField @bind-Value="_main.Mail" Label="Mail" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTextField @bind-Value="_main.Attn" Label="Attn" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Quotation</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudTextField @bind-Value="_main.Quota_No" Label="Quota_No" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudTextField @bind-Value="_main.DATE" Label="DATE" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Date"/>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            @foreach (var type in QuotationBaseTypes.All)
+            {
+                var itemType = type.Key;
+                var lines = LinesOf(itemType);
+                <MudPaper Outlined="true" Class="pa-2 mb-3 qe-section">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2 px-1">
+                        <MudText Typo="Typo.subtitle2">@type.Label 报价明细</MudText>
+                        @if (!IsDetail)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddLine(itemType))">新增</MudButton>
+                        }
+                    </MudStack>
+
+                    <MudTable T="QuotationDetailLineDto" Items="lines" Dense="true" Hover="true" Bordered="true"
+                              Breakpoint="Breakpoint.None" Class="qe-table" Elevation="0">
+                        <HeaderContent>
+                            @if (!IsDetail)
+                            {
+                                <MudTh Style="width:72px">操作</MudTh>
+                            }
+                            <MudTh Style="min-width:180px">型号</MudTh>
+                            <MudTh Style="width:80px">图片</MudTh>
+                            @foreach (var col in SpecColumns(itemType))
+                            {
+                                <MudTh Style="white-space:nowrap;min-width:5.5em">@col.Label</MudTh>
+                            }
+                            <MudTh Style="min-width:90px">数量</MudTh>
+                            <MudTh Style="min-width:90px">单价</MudTh>
+                            <MudTh Style="min-width:80px">折扣%</MudTh>
+                            <MudTh Style="min-width:100px">金额</MudTh>
+                            <MudTh Style="min-width:140px">备注</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @{
+                                var row = context;
+                            }
+                            @if (!IsDetail)
+                            {
+                                <MudTd>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default"
+                                                   OnClick="@(() => RemoveLine(row))"/>
+                                </MudTd>
+                            }
+                            <MudTd>
+                                <MudSelect T="int?"
+                                           Value="row.BaseId"
+                                           ValueChanged="v => OnPartChangedAsync(row, v)"
+                                           Dense="true"
+                                           Margin="Margin.Dense"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true"
+                                           Disabled="IsDetail"
+                                           Class="qe-part-select">
+                                    @foreach (var p in PartsOf(itemType))
+                                    {
+                                        <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Part_No</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudTd>
+                            <MudTd>
+                                <LegacyRemoteImg Path="@row.Quotation_logo" CssClass="qe-thumb"/>
+                            </MudTd>
+                            @foreach (var col in SpecColumns(itemType))
+                            {
+                                <MudTd><span class="qe-spec">@SpecValue(row, col.Key)</span></MudTd>
+                            }
+                            <MudTd>
+                                <MudNumericField T="decimal?" Value="row.Qty" ValueChanged="v => OnMoneyChanged(row, qty: v)"
+                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="IsDetail"/>
+                            </MudTd>
+                            <MudTd>
+                                <MudNumericField T="decimal?" Value="row.Price" ValueChanged="v => OnMoneyChanged(row, price: v)"
+                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="IsDetail"/>
+                            </MudTd>
+                            <MudTd>
+                                <MudNumericField T="decimal?" Value="row.Discount" ValueChanged="v => OnMoneyChanged(row, discount: v)"
+                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="IsDetail"/>
+                            </MudTd>
+                            <MudTd>
+                                <MudNumericField T="decimal?" Value="row.Amount" ReadOnly="true"
+                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"/>
+                            </MudTd>
+                            <MudTd>
+                                <MudTextField T="string"
+                                              Value="@(row.Note ?? "")"
+                                              ValueChanged="v => SetNote(row, v)"
+                                              Margin="Margin.Dense" Variant="Variant.Outlined" Placeholder="可选" Disabled="IsDetail"/>
+                            </MudTd>
+                        </RowTemplate>
+                        <FooterContent>
+                            <MudTd ColSpan="@(IsDetail ? SpecColumns(itemType).Length + 5 : SpecColumns(itemType).Length + 6)">
+                                <strong>@type.Label 小计：@lines.Sum(x => x.Amount ?? 0m).ToString("0.00")</strong>
+                            </MudTd>
+                        </FooterContent>
+                    </MudTable>
+                </MudPaper>
+            }
+
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">签名 / 汇率</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudTextField Value="@(_main.signature ?? "")"
+                                      Label="签名"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      ReadOnly="true"
+                                      HelperText="固定为当前登录人"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3" Class="d-flex align-center">
+                        @if (!string.IsNullOrWhiteSpace(_main.signature_url))
+                        {
+                            <LegacyRemoteImg Path="@_main.signature_url" CssClass="qe-sig"/>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-secondary-text">未配置签名图片（可在个人信息维护）</MudText>
+                        }
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTextField @bind-Value="_main.rate" Label="汇率" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudSelect T="string" @bind-Value="_main.currencyUnit" Label="货币" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="IsDetail">
+                            <MudSelectItem Value="@("$")">美元 $</MudSelectItem>
+                            <MudSelectItem Value="@("¥")">人民币 ¥</MudSelectItem>
+                            <MudSelectItem Value="@("€")">欧元 €</MudSelectItem>
+                            <MudSelectItem Value="@("CAD")">加币 CAD</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">合计</MudText>
+                <MudText>明细总额：<strong>@_doc.Details.Sum(x => x.Amount ?? 0m).ToString("0.00")</strong> @(_main.currencyUnit)</MudText>
+            </MudPaper>
+        </fieldset>
+    </div>
+</div>
+
+<style>
+    .qe-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+    .qe-toolbar { flex: 0 0 auto; }
+    .qe-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+    }
+    .qe-form {
+        border: 0;
+        padding: 0;
+        margin: 0;
+        min-inline-size: 0;
+    }
+    .qe-thumb {
+        max-width: 64px;
+        max-height: 48px;
+        object-fit: contain;
+        display: block;
+    }
+    .qe-sig {
+        max-height: 56px;
+        max-width: 180px;
+        object-fit: contain;
+    }
+    .qe-spec {
+        font-size: 12px;
+        color: #555;
+        white-space: nowrap;
+    }
+    .qe-part-select { min-width: 160px; }
+    .qe-table .mud-table-cell { vertical-align: middle; }
+    .qe-table .mud-table-head .mud-table-cell,
+    .qe-table th {
+        white-space: nowrap !important;
+        word-break: keep-all;
+        overflow-wrap: normal;
+    }
+    .qe-table .mud-table-body .mud-table-cell {
+        white-space: nowrap;
+    }
+</style>
+
+@code {
+    [Parameter] public string? DocumentGuid { get; set; }
+
+    private bool _busy;
+    private string? _loadedKey;
+    private QuotationDocumentDto _doc = new();
+    private ZyqdQuotationMainModel _main = new();
+    private readonly Dictionary<string, List<QuotationPartOptionDto>> _parts = new();
+
+    private bool IsCopy => RelPath().Contains("/copy", StringComparison.OrdinalIgnoreCase);
+    private bool IsDetail => RelPath().Contains("/detail", StringComparison.OrdinalIgnoreCase);
+    private bool IsCreate => string.IsNullOrWhiteSpace(DocumentGuid) || IsCopy
+                             || RelPath().StartsWith("quotation/new", StringComparison.OrdinalIgnoreCase);
+    private string Title => IsDetail ? "报价详情" : IsCopy ? "复制报价" : IsCreate ? "报价录入" : "编辑报价";
+
+    private string RelPath() => NavManager.ToBaseRelativePath(NavManager.Uri);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{DocumentGuid}|{IsCopy}|{IsDetail}|{IsCreate}";
+        if (_loadedKey == key) return;
+        _loadedKey = key;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        try
+        {
+            await EnsurePartsAsync();
+
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            if (IsCreate && !IsCopy)
+            {
+                _doc = Quotation.CreateBlank(empNo);
+                _main = _doc.Main;
+                await ApplyMySignatureAsync(empNo);
+                return;
+            }
+
+            var guid = (DocumentGuid ?? "").Trim();
+            var doc = await Quotation.GetAsync(guid);
+            if (doc is null)
+            {
+                Notify.Show("报价单不存在", Severity.Warning);
+                NavManager.NavigateTo("/quotation");
+                return;
+            }
+
+            if (IsCopy)
+            {
+                doc.Main.Id = 0;
+                doc.Main.guid = Guid.NewGuid().ToString("N");
+                doc.Main.createTime = DateTime.Now;
+                doc.Main.personId = empNo ?? doc.Main.personId;
+                var qn = (doc.Main.Quota_No ?? "").Trim();
+                if (qn.Length > 0 && !qn.EndsWith("-COPY", StringComparison.OrdinalIgnoreCase))
+                    doc.Main.Quota_No = qn + "-COPY";
+                foreach (var d in doc.Details)
+                {
+                    d.Id = 0;
+                    d.Uid = Guid.NewGuid().ToString("N");
+                }
+            }
+
+            _doc = doc;
+            _main = doc.Main;
+            if (IsCopy || !IsDetail)
+                await ApplyMySignatureAsync(empNo);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task EnsurePartsAsync()
+    {
+        foreach (var t in QuotationBaseTypes.All)
+        {
+            if (_parts.ContainsKey(t.Key)) continue;
+            _parts[t.Key] = await QuotationBase.ListPartsAsync(t.Key);
+        }
+    }
+
+    private async Task ApplyMySignatureAsync(string? empNo)
+    {
+        empNo = (empNo ?? "").Trim();
+        if (empNo.Length == 0) return;
+
+        var (ok, displayName, info, msg) = await UserInfo.GetAsync(empNo);
+        if (!ok || info is null)
+        {
+            if (!string.IsNullOrWhiteSpace(msg))
+                Notify.Show(msg, Severity.Warning);
+            return;
+        }
+
+        var name = (info.Signature ?? "").Trim();
+        if (name.Length == 0)
+            name = (displayName ?? "").Trim();
+        if (name.Length == 0)
+            name = empNo;
+
+        _main.signature = name;
+        _main.signature_url = (info.SignatureUrl ?? "").Trim();
+    }
+
+    private List<QuotationDetailLineDto> LinesOf(string itemType)
+        => _doc.Details.Where(x => QuotationBaseTypes.Normalize(x.ItemType) == itemType).ToList();
+
+    private List<QuotationPartOptionDto> PartsOf(string itemType)
+        => _parts.TryGetValue(itemType, out var list) ? list : [];
+
+    private void AddLine(string itemType)
+    {
+        _doc.Details.Add(new QuotationDetailLineDto
+        {
+            ItemType = QuotationBaseTypes.Normalize(itemType),
+            Discount = 0m,
+            Qty = 0m,
+            Price = 0m,
+            Amount = 0m,
+        });
+    }
+
+    private void RemoveLine(QuotationDetailLineDto row)
+        => _doc.Details.Remove(row);
+
+    private async Task OnPartChangedAsync(QuotationDetailLineDto row, int? baseId)
+    {
+        if (baseId is null or <= 0)
+        {
+            row.ApplyBase(null);
+            return;
+        }
+
+        var b = await QuotationBase.GetAsync(row.ItemType, baseId.Value);
+        row.ApplyBase(b);
+    }
+
+    private void OnMoneyChanged(QuotationDetailLineDto row, decimal? qty = null, decimal? price = null, decimal? discount = null)
+    {
+        if (qty.HasValue) row.Qty = qty;
+        if (price.HasValue) row.Price = price;
+        if (discount.HasValue) row.Discount = discount;
+        row.RecalcAmount();
+    }
+
+    private static void SetNote(QuotationDetailLineDto row, string? note) => row.Note = note;
+
+    private Task OnClientKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter")
+            return LookupClientAsync();
+        return Task.CompletedTask;
+    }
+
+    private async Task LookupClientAsync()
+    {
+        try
+        {
+            var code = CotractPiTypes.NormalizeClientNo(_main.ClientCode);
+            _main.ClientCode = code;
+            if (code.Length == 0) return;
+
+            var c = await Crm.GetBillToAsync(code);
+            if (c is null)
+            {
+                Notify.Show("CRM 未找到该客户", Severity.Warning);
+                return;
+            }
+
+            _main.ClientName = c.ClientName;
+            _main.Address = string.IsNullOrWhiteSpace(c.CombinedAddress) ? c.Address : c.CombinedAddress;
+            _main.Tel = c.Tel;
+            _main.Mail = c.Mail;
+            _main.Attn = c.FullName;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (IsDetail) return;
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            await ApplyMySignatureAsync(empNo);
+            _doc.Main = _main;
+            var create = IsCreate;
+            var (ok, msg, guid) = await Quotation.SaveAsync(_doc, empNo, create);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show(IsCopy ? "创建成功" : "保存成功", Severity.Success);
+            if (create)
+                NavManager.NavigateTo($"/quotation/{guid}", replace: true);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static (string Key, string Label)[] SpecColumns(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Remote =>
+        [
+            ("Remote_controller_type", "遥控器型号"),
+            ("Battery_Type", "电池型号"),
+            ("Radio_Frequency", "频率"),
+            ("Working_Temperature", "工作温度"),
+            ("NoOfChannels", "通道数"),
+        ],
+        QuotationBaseTypes.Accessory =>
+        [
+            ("adaptor", "配件名"),
+        ],
+        QuotationBaseTypes.CB =>
+        [
+            ("Rated_Voltage", "额定电压"),
+            ("Size", "尺寸"),
+            ("Rated_Power", "额定功率"),
+            ("No_Of_Actuator", "执行器数量"),
+            ("Output_Control", "输出控制"),
+            ("Sensor", "传感器"),
+            ("Protection_Degree", "防护等级"),
+        ],
+        QuotationBaseTypes.PR =>
+        [
+            ("Max_Loading", "最大负载"),
+            ("Max_Stroke", "最大行程"),
+            ("Protection_Degree2", "防护等级"),
+            ("Noise", "噪音"),
+        ],
+        _ =>
+        [
+            ("Rated_torque", "额定扭矩"),
+            ("Rated_speed", "额定转速"),
+            ("Power_supply", "电源"),
+            ("Rated_Power", "额定功率"),
+            ("Rated_Current", "额定电流"),
+            ("Noise_dBA", "噪音"),
+            ("Motor_Length", "电机长度"),
+            ("Tube_diameter", "管径"),
+            ("Battery_Capacity", "电池容量"),
+            ("Exclude_text", "排除配件"),
+        ],
+    };
+
+    private static string SpecValue(QuotationDetailLineDto row, string key) => key switch
+    {
+        "Rated_torque" => row.Rated_torque ?? "",
+        "Rated_speed" => row.Rated_speed ?? "",
+        "Power_supply" => row.Power_supply ?? "",
+        "Rated_Power" => row.Rated_Power ?? "",
+        "Rated_Current" => row.Rated_Current ?? "",
+        "Noise_dBA" => row.Noise_dBA ?? "",
+        "Motor_Length" => row.Motor_Length ?? "",
+        "Tube_diameter" => row.Tube_diameter ?? "",
+        "Battery_Capacity" => row.Battery_Capacity ?? "",
+        "Exclude_text" => row.Exclude_text ?? "",
+        "Remote_controller_type" => row.Remote_controller_type ?? "",
+        "Battery_Type" => row.Battery_Type ?? "",
+        "Radio_Frequency" => row.Radio_Frequency ?? "",
+        "Working_Temperature" => row.Working_Temperature ?? "",
+        "NoOfChannels" => row.NoOfChannels ?? "",
+        "adaptor" => row.adaptor ?? "",
+        "Rated_Voltage" => row.Rated_Voltage ?? "",
+        "Size" => row.Size ?? "",
+        "No_Of_Actuator" => row.No_Of_Actuator ?? "",
+        "Output_Control" => row.Output_Control ?? "",
+        "Sensor" => row.Sensor ?? "",
+        "Protection_Degree" => row.Protection_Degree ?? "",
+        "Max_Loading" => row.Max_Loading ?? "",
+        "Max_Stroke" => row.Max_Stroke ?? "",
+        "Protection_Degree2" => row.Protection_Degree2 ?? "",
+        "Noise" => row.Noise ?? "",
+        _ => "",
+    };
+}
