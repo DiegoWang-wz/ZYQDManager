@@ -38,8 +38,8 @@ public class InvoiceKpService
 
     public async Task<InvoiceKpQueryResult> QuerySummaryAsync(InvoiceKpQueryRequest req, CancellationToken ct = default)
     {
-        if (!TryParseMonthRange(req.MonthStart, req.MonthEnd, out var start, out var end))
-            throw new ArgumentException("开票期间格式无效，请使用 yyyy-MM");
+        if (!TryParseDateRange(req.DateStart, req.DateEnd, out var start, out var end))
+            throw new ArgumentException("开票日期格式无效，请使用 yyyy-MM-dd");
 
         var connStr = ResolveHanaConnectionString();
         if (string.IsNullOrEmpty(connStr))
@@ -299,33 +299,28 @@ public class InvoiceKpService
         return "Accessories";
     }
 
-    private static bool TryParseMonthRange(string? monthStart, string? monthEnd, out DateTime start, out DateTime end)
+    private static bool TryParseDateRange(string? dateStart, string? dateEnd, out DateTime start, out DateTime end)
     {
         start = default;
         end = default;
-        if (!TryParseMonth(monthStart, out start) || !TryParseMonth(monthEnd, out var endMonth))
+        if (!TryParseDate(dateStart, out start) || !TryParseDate(dateEnd, out end))
             return false;
-        if (endMonth < start) (start, endMonth) = (endMonth, start);
-        end = endMonth.AddMonths(1).AddDays(-1);
+        if (end < start) (start, end) = (end, start);
+        start = start.Date;
+        end = end.Date;
         return true;
     }
 
-    private static bool TryParseMonth(string? value, out DateTime monthStart)
+    private static bool TryParseDate(string? value, out DateTime date)
     {
-        monthStart = default;
+        date = default;
         var s = (value ?? "").Trim();
-        if (DateTime.TryParseExact(s, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
-        {
-            monthStart = new DateTime(dt.Year, dt.Month, 1);
+        if (DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
             return true;
-        }
-
-        if (DateTime.TryParseExact(s, "yyyyMM", CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
-        {
-            monthStart = new DateTime(dt.Year, dt.Month, 1);
+        if (DateTime.TryParseExact(s, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
             return true;
-        }
-
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out date))
+            return true;
         return false;
     }
 

@@ -32,11 +32,11 @@ public sealed class InvoiceKpOptions
 
 public sealed class InvoiceKpQueryRequest
 {
-    /// <summary>开始月份 yyyy-MM</summary>
-    public string MonthStart { get; set; } = "";
+    /// <summary>开始日期 yyyy-MM-dd</summary>
+    public string DateStart { get; set; } = "";
 
-    /// <summary>结束月份 yyyy-MM</summary>
-    public string MonthEnd { get; set; } = "";
+    /// <summary>结束日期 yyyy-MM-dd</summary>
+    public string DateEnd { get; set; } = "";
 
     /// <summary>客户编码/名称关键词</summary>
     public string? CustomerKeyword { get; set; }

@@ -16,10 +16,27 @@
     {
         <MudPaper Class="pa-3" Outlined="true">
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="ikp-toolbar">
-                <MudText Typo="Typo.body2" Class="ikp-label">开票期间</MudText>
-                <input type="month" class="ikp-month" value="@_monthStart" @onchange="OnMonthStartChanged" disabled="@(_busy || _readOnly)"/>
+                <MudDatePicker @bind-Date="_dateStart"
+                               Label="开票日期起"
+                               DateFormat="yyyy-MM-dd"
+                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Editable="true"
+                               Clearable="true"
+                               Class="ikp-date"
+                               Disabled="@(_busy || _readOnly)"/>
                 <MudText Typo="Typo.body2" Class="ikp-label">至</MudText>
-                <input type="month" class="ikp-month" value="@_monthEnd" @onchange="OnMonthEndChanged" disabled="@(_busy || _readOnly)"/>
+                <MudDatePicker @bind-Date="_dateEnd"
+                               Label="开票日期止"
+                               DateFormat="yyyy-MM-dd"
+                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Editable="true"
+                               Clearable="true"
+                               Class="ikp-date"
+                               Disabled="@(_busy || _readOnly)"/>
                 <MudTextField @bind-Value="_keyword"
                               Label="客户"
                               Placeholder="客户编码/名称"
@@ -111,15 +128,7 @@
         color: var(--mud-palette-text-secondary);
         padding: 0 4px;
     }
-    .ikp-month {
-        height: 36px;
-        min-width: 150px;
-        padding: 4px 8px;
-        border: 1px solid var(--mud-palette-lines-inputs);
-        border-radius: 4px;
-        background: var(--mud-palette-surface);
-        color: var(--mud-palette-text-primary);
-    }
+    .ikp-date { width: 170px; min-width: 160px; }
     .ikp-keyword { width: 220px; min-width: 180px; }
     .ikp-summary {
         color: var(--mud-palette-text-secondary);
@@ -151,8 +160,8 @@
     private bool _isAdmin;
     private bool _busy;
     private string _empNo = "";
-    private string _monthStart = DateTime.Today.ToString("yyyy-MM");
-    private string _monthEnd = DateTime.Today.ToString("yyyy-MM");
+    private DateTime? _dateStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _dateEnd = DateTime.Today;
     private string _keyword = "";
     private List<InvoiceKpSummaryRow> _rows = [];
     private double _totalQty;
@@ -177,17 +186,13 @@
         _allowed = Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
         _readOnly = Auth.IsPageDisabled(auth, CentralApiOptions.InvoiceKpRoute);
 
-        var now = DateTime.Today.ToString("yyyy-MM");
-        _monthStart = now;
-        _monthEnd = now;
+        _dateStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        _dateEnd = DateTime.Today;
 
         StateHasChanged();
         if (_allowed)
             await SearchAsync();
     }
-
-    private void OnMonthStartChanged(ChangeEventArgs e) => _monthStart = e.Value?.ToString() ?? _monthStart;
-    private void OnMonthEndChanged(ChangeEventArgs e) => _monthEnd = e.Value?.ToString() ?? _monthEnd;
 
     private async Task OnKeyUp(KeyboardEventArgs e)
     {
@@ -198,13 +203,19 @@
     private async Task SearchAsync()
     {
         if (!_allowed || _busy) return;
+        if (_dateStart is null || _dateEnd is null)
+        {
+            Notify.Show("请选择开票起止日期", Severity.Warning);
+            return;
+        }
+
         _busy = true;
         try
         {
             var result = await InvoiceKp.QuerySummaryAsync(new InvoiceKpQueryRequest
             {
-                MonthStart = _monthStart,
-                MonthEnd = _monthEnd,
+                DateStart = _dateStart.Value.ToString("yyyy-MM-dd"),
+                DateEnd = _dateEnd.Value.ToString("yyyy-MM-dd"),
                 CustomerKeyword = _keyword,
                 EmpNo = _empNo,
                 IsAdmin = _isAdmin

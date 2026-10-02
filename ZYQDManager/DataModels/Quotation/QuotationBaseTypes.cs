@@ -13,9 +13,9 @@ public static class QuotationBaseTypes
     [
         (Motor, "电机"),
         (Remote, "遥控器"),
-        (Accessory, "配件"),
         (CB, "控制盒"),
         (PR, "推杆"),
+        (Accessory, "配件"),
     ];
 
     public static string Normalize(string? key)

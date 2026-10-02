@@ -6,8 +6,9 @@
          class="@CssClass legacy-img-zoom"
          alt=""
          title="点击查看大图"
-         loading="lazy"
+         loading="eager"
          decoding="async"
+         @key="Url"
          @onclick="OpenAsync"
          @onclick:stopPropagation="true"/>
 }

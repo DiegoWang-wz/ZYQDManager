@@ -4,6 +4,7 @@
 @page "/quotation/{DocumentGuid}/copy"
 @rendermode InteractiveServer
 @using ZYQDManager.Components.Pages.Contract
+@using System.Globalization
 @inject QuotationService Quotation
 @inject QuotationBaseService QuotationBase
 @inject CrmCustomerService Crm
@@ -31,43 +32,59 @@
     <div class="qe-scroll">
         <fieldset class="qe-form" disabled="@IsDetail">
             <MudPaper Outlined="true" Class="pa-3 mb-3">
-                <MudText Typo="Typo.subtitle2" Class="mb-2">BILLED TO</MudText>
+                <MudText Typo="Typo.subtitle2" Class="mb-2">开票抬头</MudText>
                 <MudGrid Spacing="2">
                     <MudItem xs="12" sm="6" md="2">
-                        <MudTextField @bind-Value="_main.ClientCode"
-                                      Label="ClientCode"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Immediate="true"
-                                      OnKeyUp="OnClientKey"
-                                      HelperText="回车从 CRM 带出"/>
+                        <MudTooltip Text="@Tip(_main.ClientCode)" Arrow="true" Disabled="@NoTip(_main.ClientCode)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.ClientCode"
+                                          Label="客户编号"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Immediate="true"
+                                          Class="qe-field"
+                                          OnKeyUp="OnClientKey"/>
+                        </MudTooltip>
                     </MudItem>
                     <MudItem xs="12" sm="6" md="2">
-                        <MudTextField @bind-Value="_main.ClientName" Label="ClientName" Variant="Variant.Outlined" Margin="Margin.Dense"/>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudTextField @bind-Value="_main.Address" Label="Address" Variant="Variant.Outlined" Margin="Margin.Dense"/>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="1">
-                        <MudTextField @bind-Value="_main.Tel" Label="Tel" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                        <MudTooltip Text="@Tip(_main.ClientName)" Arrow="true" Disabled="@NoTip(_main.ClientName)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.ClientName" Label="客户名称" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-field"/>
+                        </MudTooltip>
                     </MudItem>
                     <MudItem xs="12" sm="6" md="2">
-                        <MudTextField @bind-Value="_main.Mail" Label="Mail" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                        <MudTooltip Text="@Tip(_main.Address)" Arrow="true" Disabled="@NoTip(_main.Address)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.Address" Label="地址" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-field"/>
+                        </MudTooltip>
                     </MudItem>
                     <MudItem xs="12" sm="6" md="2">
-                        <MudTextField @bind-Value="_main.Attn" Label="Attn" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                        <MudTooltip Text="@Tip(_main.Tel)" Arrow="true" Disabled="@NoTip(_main.Tel)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.Tel" Label="电话" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-field"/>
+                        </MudTooltip>
                     </MudItem>
-                </MudGrid>
-            </MudPaper>
-
-            <MudPaper Outlined="true" Class="pa-3 mb-3">
-                <MudText Typo="Typo.subtitle2" Class="mb-2">Quotation</MudText>
-                <MudGrid Spacing="2">
-                    <MudItem xs="12" sm="6" md="4">
-                        <MudTextField @bind-Value="_main.Quota_No" Label="Quota_No" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true"/>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTooltip Text="@Tip(_main.Mail)" Arrow="true" Disabled="@NoTip(_main.Mail)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.Mail" Label="邮箱" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-field"/>
+                        </MudTooltip>
                     </MudItem>
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudTextField @bind-Value="_main.DATE" Label="DATE" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Date"/>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTooltip Text="@Tip(_main.Attn)" Arrow="true" Disabled="@NoTip(_main.Attn)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.Attn" Label="联系人" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-field"/>
+                        </MudTooltip>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudTooltip Text="@Tip(_main.Quota_No)" Arrow="true" Disabled="@NoTip(_main.Quota_No)" RootClass="qe-tip">
+                            <MudTextField @bind-Value="_main.Quota_No" Label="报价单号" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" Class="qe-field"/>
+                        </MudTooltip>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudDatePicker @bind-Date="QuotaDate"
+                                       Label="报价日期"
+                                       DateFormat="yyyy-MM-dd"
+                                       Culture="@(CultureInfo.InvariantCulture)"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Editable="true"
+                                       Clearable="true"
+                                       Class="qe-field"/>
                     </MudItem>
                 </MudGrid>
             </MudPaper>
@@ -77,8 +94,15 @@
                 var itemType = type.Key;
                 var lines = LinesOf(itemType);
                 <MudPaper Outlined="true" Class="pa-2 mb-3 qe-section">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2 px-1">
-                        <MudText Typo="Typo.subtitle2">@type.Label 报价明细</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="@($"px-1{(lines.Count > 0 ? " mb-2" : "")}")">
+                        <MudChipSet T="string" ReadOnly="true" Class="qe-type-chips">
+                            <MudChip T="string"
+                                     Text="@type.Label"
+                                     Icon="@ChipIconOf(itemType)"
+                                     Color="@ChipColorOf(itemType)"
+                                     Variant="Variant.Filled"
+                                     Size="Size.Medium"/>
+                        </MudChipSet>
                         @if (!IsDetail)
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
@@ -86,129 +110,138 @@
                         }
                     </MudStack>
 
-                    <MudTable T="QuotationDetailLineDto" Items="lines" Dense="true" Hover="true" Bordered="true"
-                              Breakpoint="Breakpoint.None" Class="qe-table" Elevation="0">
-                        <HeaderContent>
-                            @if (!IsDetail)
-                            {
-                                <MudTh Style="width:72px">操作</MudTh>
-                            }
-                            <MudTh Style="min-width:180px">型号</MudTh>
-                            <MudTh Style="width:80px">图片</MudTh>
-                            @foreach (var col in SpecColumns(itemType))
-                            {
-                                <MudTh Style="white-space:nowrap;min-width:5.5em">@col.Label</MudTh>
-                            }
-                            <MudTh Style="min-width:90px">数量</MudTh>
-                            <MudTh Style="min-width:90px">单价</MudTh>
-                            <MudTh Style="min-width:80px">折扣%</MudTh>
-                            <MudTh Style="min-width:100px">金额</MudTh>
-                            <MudTh Style="min-width:140px">备注</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            @{
-                                var row = context;
-                            }
-                            @if (!IsDetail)
-                            {
+                    @if (lines.Count > 0)
+                    {
+                        <MudTable T="QuotationDetailLineDto" Items="lines" Dense="true" Hover="true" Bordered="true"
+                                  Breakpoint="Breakpoint.None" Class="qe-table" Elevation="0">
+                            <HeaderContent>
+                                @if (!IsDetail)
+                                {
+                                    <MudTh Style="width:72px">操作</MudTh>
+                                }
+                                <MudTh Style="min-width:180px">型号</MudTh>
+                                <MudTh Style="width:80px">图片</MudTh>
+                                @foreach (var col in SpecColumns(itemType))
+                                {
+                                    <MudTh Style="white-space:nowrap;min-width:5.5em">@col.Label</MudTh>
+                                }
+                                <MudTh Class="qe-num-col">数量</MudTh>
+                                <MudTh Class="qe-num-col">单价</MudTh>
+                                <MudTh Class="qe-num-col qe-num-col-sm">折扣%</MudTh>
+                                <MudTh Class="qe-num-col qe-num-col-lg">金额</MudTh>
+                                <MudTh Style="min-width:140px">备注</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                @{
+                                    var row = context;
+                                }
+                                @if (!IsDetail)
+                                {
+                                    <MudTd>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default"
+                                                       OnClick="@(() => RemoveLine(row))"/>
+                                    </MudTd>
+                                }
                                 <MudTd>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default"
-                                                   OnClick="@(() => RemoveLine(row))"/>
+                                    <MudSelect T="int?"
+                                               Value="row.BaseId"
+                                               ValueChanged="v => OnPartChangedAsync(row, v)"
+                                               Dense="true"
+                                               Margin="Margin.Dense"
+                                               Variant="Variant.Outlined"
+                                               Clearable="true"
+                                               Disabled="IsDetail"
+                                               Class="qe-part-select">
+                                        @foreach (var p in PartsOf(itemType))
+                                        {
+                                            <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Part_No</MudSelectItem>
+                                        }
+                                    </MudSelect>
                                 </MudTd>
-                            }
-                            <MudTd>
-                                <MudSelect T="int?"
-                                           Value="row.BaseId"
-                                           ValueChanged="v => OnPartChangedAsync(row, v)"
-                                           Dense="true"
-                                           Margin="Margin.Dense"
-                                           Variant="Variant.Outlined"
-                                           Clearable="true"
-                                           Disabled="IsDetail"
-                                           Class="qe-part-select">
-                                    @foreach (var p in PartsOf(itemType))
-                                    {
-                                        <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Part_No</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </MudTd>
-                            <MudTd>
-                                <LegacyRemoteImg Path="@row.Quotation_logo" CssClass="qe-thumb"/>
-                            </MudTd>
-                            @foreach (var col in SpecColumns(itemType))
-                            {
-                                <MudTd><span class="qe-spec">@SpecValue(row, col.Key)</span></MudTd>
-                            }
-                            <MudTd>
-                                <MudNumericField T="decimal?" Value="row.Qty" ValueChanged="v => OnMoneyChanged(row, qty: v)"
-                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="IsDetail"/>
-                            </MudTd>
-                            <MudTd>
-                                <MudNumericField T="decimal?" Value="row.Price" ValueChanged="v => OnMoneyChanged(row, price: v)"
-                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="IsDetail"/>
-                            </MudTd>
-                            <MudTd>
-                                <MudNumericField T="decimal?" Value="row.Discount" ValueChanged="v => OnMoneyChanged(row, discount: v)"
-                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="IsDetail"/>
-                            </MudTd>
-                            <MudTd>
-                                <MudNumericField T="decimal?" Value="row.Amount" ReadOnly="true"
-                                                 Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"/>
-                            </MudTd>
-                            <MudTd>
-                                <MudTextField T="string"
-                                              Value="@(row.Note ?? "")"
-                                              ValueChanged="v => SetNote(row, v)"
-                                              Margin="Margin.Dense" Variant="Variant.Outlined" Placeholder="可选" Disabled="IsDetail"/>
-                            </MudTd>
-                        </RowTemplate>
-                        <FooterContent>
-                            <MudTd ColSpan="@(IsDetail ? SpecColumns(itemType).Length + 5 : SpecColumns(itemType).Length + 6)">
-                                <strong>@type.Label 小计：@lines.Sum(x => x.Amount ?? 0m).ToString("0.00")</strong>
-                            </MudTd>
-                        </FooterContent>
-                    </MudTable>
+                                <MudTd>
+                                    <LegacyRemoteImg Path="@row.Quotation_logo" CssClass="qe-thumb"/>
+                                </MudTd>
+                                @foreach (var col in SpecColumns(itemType))
+                                {
+                                    <MudTd><span class="qe-spec">@SpecValue(row, col.Key)</span></MudTd>
+                                }
+                                <MudTd Class="qe-num-col">
+                                    <MudNumericField T="decimal?" Value="row.Qty" ValueChanged="v => OnMoneyChanged(row, qty: v)"
+                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                     Disabled="IsDetail" Class="qe-num"
+                                                     Culture="@NumCulture" Format="N0"/>
+                                </MudTd>
+                                <MudTd Class="qe-num-col">
+                                    <MudNumericField T="decimal?" Value="row.Price" ValueChanged="v => OnMoneyChanged(row, price: v)"
+                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                     Disabled="IsDetail" Class="qe-num"
+                                                     Culture="@NumCulture" Format="N2"/>
+                                </MudTd>
+                                <MudTd Class="qe-num-col qe-num-col-sm">
+                                    <MudNumericField T="decimal?" Value="row.Discount" ValueChanged="v => OnMoneyChanged(row, discount: v)"
+                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                     Disabled="IsDetail" Class="qe-num"
+                                                     Culture="@NumCulture" Format="N0"/>
+                                </MudTd>
+                                <MudTd Class="qe-num-col qe-num-col-lg">
+                                    <MudNumericField T="decimal?" Value="row.Amount" ReadOnly="true"
+                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                     Class="qe-num"
+                                                     Culture="@NumCulture" Format="N2"/>
+                                </MudTd>
+                                <MudTd>
+                                    <MudTextField T="string"
+                                                  Value="@(row.Note ?? "")"
+                                                  ValueChanged="v => SetNote(row, v)"
+                                                  Margin="Margin.Dense" Variant="Variant.Outlined" Placeholder="可选" Disabled="IsDetail"/>
+                                </MudTd>
+                            </RowTemplate>
+                            <FooterContent>
+                                <MudTd ColSpan="@(IsDetail ? SpecColumns(itemType).Length + 5 : SpecColumns(itemType).Length + 6)">
+                                    <strong>小计：@FmtMoney(lines.Sum(x => x.Amount ?? 0m))</strong>
+                                </MudTd>
+                            </FooterContent>
+                        </MudTable>
+                    }
                 </MudPaper>
             }
 
             <MudPaper Outlined="true" Class="pa-3 mb-3">
                 <MudText Typo="Typo.subtitle2" Class="mb-2">签名 / 汇率</MudText>
-                <MudGrid Spacing="2">
-                    <MudItem xs="12" sm="6" md="3">
+                <div class="qe-sig-row">
+                    <div class="qe-sig-col">
                         <MudTextField Value="@(_main.signature ?? "")"
                                       Label="签名"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
                                       ReadOnly="true"
-                                      HelperText="固定为当前登录人"/>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="3" Class="d-flex align-center">
+                                      Class="qe-field"/>
                         @if (!string.IsNullOrWhiteSpace(_main.signature_url))
                         {
                             <LegacyRemoteImg Path="@_main.signature_url" CssClass="qe-sig"/>
                         }
                         else
                         {
-                            <MudText Typo="Typo.caption" Class="mud-secondary-text">未配置签名图片（可在个人信息维护）</MudText>
+                            <MudText Typo="Typo.caption" Class="qe-sig-tip">未配置签名图片（可在个人信息维护）</MudText>
                         }
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="2">
-                        <MudTextField @bind-Value="_main.rate" Label="汇率" Variant="Variant.Outlined" Margin="Margin.Dense"/>
-                    </MudItem>
-                    <MudItem xs="12" sm="6" md="2">
-                        <MudSelect T="string" @bind-Value="_main.currencyUnit" Label="货币" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="IsDetail">
+                    </div>
+                    <div class="qe-sig-col">
+                        <MudTextField @bind-Value="_main.rate" Label="汇率" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-field"/>
+                    </div>
+                    <div class="qe-sig-col">
+                        <MudSelect T="string" @bind-Value="_main.currencyUnit" Label="货币" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="IsDetail" Class="qe-field">
                             <MudSelectItem Value="@("$")">美元 $</MudSelectItem>
                             <MudSelectItem Value="@("¥")">人民币 ¥</MudSelectItem>
                             <MudSelectItem Value="@("€")">欧元 €</MudSelectItem>
                             <MudSelectItem Value="@("CAD")">加币 CAD</MudSelectItem>
                         </MudSelect>
-                    </MudItem>
-                </MudGrid>
-            </MudPaper>
-
-            <MudPaper Outlined="true" Class="pa-3 mb-3">
-                <MudText Typo="Typo.subtitle2" Class="mb-1">合计</MudText>
-                <MudText>明细总额：<strong>@_doc.Details.Sum(x => x.Amount ?? 0m).ToString("0.00")</strong> @(_main.currencyUnit)</MudText>
+                    </div>
+                    <div class="qe-total-box">
+                        <span class="qe-total-label">明细总额</span>
+                        <span class="qe-total-amount">@FmtMoney(_doc.Details.Sum(x => x.Amount ?? 0m))</span>
+                        <span class="qe-total-unit">@(_main.currencyUnit)</span>
+                    </div>
+                </div>
             </MudPaper>
         </fieldset>
     </div>
@@ -251,7 +284,93 @@
         color: #555;
         white-space: nowrap;
     }
-    .qe-part-select { min-width: 160px; }
+    .qe-part-select { min-width: 160px; width: 100%; }
+    .qe-num-col {
+        min-width: 7em !important;
+        width: auto !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+    }
+    .qe-num-col-sm {
+        min-width: 6em !important;
+    }
+    .qe-num-col-lg {
+        min-width: 12em !important;
+    }
+    .qe-num {
+        width: 100%;
+        min-width: 7em;
+        max-width: none !important;
+    }
+    .qe-num-col-lg .qe-num {
+        min-width: 12em;
+    }
+    .qe-num .mud-input-control,
+    .qe-num.mud-input-control,
+    .qe-num .mud-input,
+    .qe-num .mud-input-slot,
+    .qe-num input {
+        width: 100% !important;
+        min-width: inherit !important;
+        max-width: none !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+    .qe-num .mud-input > input.mud-input-root {
+        padding-inline: 8px !important;
+    }
+    .qe-table .mud-table-cell.qe-num-col {
+        overflow: visible !important;
+    }
+    .qe-type-chips { gap: 0; }
+    .qe-field { width: 100%; }
+    .qe-field .mud-input-control,
+    .qe-field.mud-input-control { width: 100%; }
+    .qe-tip { display: block; width: 100%; }
+    .qe-sig-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 12px;
+    }
+    .qe-sig-col {
+        width: 220px;
+        flex: 0 0 220px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .qe-sig-tip {
+        white-space: nowrap;
+        color: var(--mud-palette-text-secondary);
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .qe-total-box {
+        margin-left: auto;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 8px 4px 0;
+        white-space: nowrap;
+    }
+    .qe-total-label {
+        font-size: 14px;
+        color: var(--mud-palette-text-secondary);
+    }
+    .qe-total-amount {
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--mud-palette-primary);
+        letter-spacing: 0.02em;
+    }
+    .qe-total-unit {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+    }
     .qe-table .mud-table-cell { vertical-align: middle; }
     .qe-table .mud-table-head .mud-table-cell,
     .qe-table th {
@@ -484,6 +603,38 @@
             _busy = false;
         }
     }
+
+    private static readonly CultureInfo NumCulture = CultureInfo.GetCultureInfo("en-US");
+
+    private DateTime? QuotaDate
+    {
+        get => DateTime.TryParse(_main.DATE, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+        set => _main.DATE = value?.ToString("yyyy-MM-dd");
+    }
+
+    private static string Tip(string? value) => (value ?? "").Trim();
+    private static bool NoTip(string? value) => Tip(value).Length == 0;
+    private static string FmtMoney(decimal value) => value.ToString("N2", NumCulture);
+
+    private static Color ChipColorOf(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Motor => Color.Primary,
+        QuotationBaseTypes.Remote => Color.Info,
+        QuotationBaseTypes.CB => Color.Warning,
+        QuotationBaseTypes.PR => Color.Success,
+        QuotationBaseTypes.Accessory => Color.Secondary,
+        _ => Color.Default,
+    };
+
+    private static string ChipIconOf(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Motor => Icons.Material.Filled.Blinds,
+        QuotationBaseTypes.Remote => Icons.Material.Filled.SettingsRemote,
+        QuotationBaseTypes.CB => Icons.Material.Filled.DeveloperBoard,
+        QuotationBaseTypes.PR => Icons.Material.Filled.SwapVert,
+        QuotationBaseTypes.Accessory => Icons.Material.Filled.Extension,
+        _ => Icons.Material.Filled.Label,
+    };
 
     private static (string Key, string Label)[] SpecColumns(string itemType) => itemType switch
     {
