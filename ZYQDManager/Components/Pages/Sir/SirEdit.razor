@@ -3,10 +3,13 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Rendering
 @inject SirService Sir
+@inject SirExcelService SirExcel
+@inject LibreOfficePdfService LibreOffice
 @inject CrmCustomerService Crm
 @inject CotractBaseService CotractBase
 @inject NavigationManager Nav
 @inject IConfiguration Config
+@inject IJSRuntime JS
 
 <PageTitle>遮阳产品测试报告</PageTitle>
 
@@ -46,12 +49,15 @@
             </div>
             <div class="sir-toolbar-right">
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/sir">返回列表</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.TableView"
+                           OnClick="ExportExcelAsync" Disabled="_busy || !_loaded">导出Excel</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
                            StartIcon="@Icons.Material.Filled.Visibility"
-                           OnClick="NotReadyPdf" Disabled="_busy">预览PDF</MudButton>
+                           OnClick="() => ExportPdfAsync(preview: true)" Disabled="_busy || !_loaded">预览PDF</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info"
                            StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                           OnClick="NotReadyPdf" Disabled="_busy">导出PDF</MudButton>
+                           OnClick="() => ExportPdfAsync(preview: false)" Disabled="_busy || !_loaded">导出PDF</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                            Class="sir-save-btn"
                            StartIcon="@Icons.Material.Filled.Save"
@@ -1001,7 +1007,73 @@
         }
     }
 
-    private void NotReadyPdf() => Notify.Show("PDF 预览/导出稍后移植", Severity.Info);
+    private void SyncMainForExport()
+    {
+        _main.guid = _guid;
+        _main.Report_type = _reportType;
+        _main.product_type = _productType;
+        _main.IssuanceDate = _issuanceDate?.Date ?? DateTime.Today;
+        _main.ImageUrls = ShowRemoteImages
+            ? string.Join(",", _images.Where(x => !string.IsNullOrWhiteSpace(x)))
+            : (_main.ImageUrls ?? "");
+    }
+
+    private async Task ExportExcelAsync()
+    {
+        if (!_loaded) return;
+        _busy = true;
+        try
+        {
+            SyncMainForExport();
+            Notify.Show("正在导出 Excel…", Severity.Info);
+            var xlsx = SirExcel.Build(_main, _details);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                SirExcelService.DownloadExcelName(_main),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(xlsx));
+            Notify.Show("Excel 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 Excel 失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportPdfAsync(bool preview)
+    {
+        if (!_loaded) return;
+        _busy = true;
+        try
+        {
+            SyncMainForExport();
+            Notify.Show(preview ? "正在生成预览…" : "正在导出 PDF…", Severity.Info);
+            var xlsx = SirExcel.Build(_main, _details);
+            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            var b64 = Convert.ToBase64String(pdf);
+            if (preview)
+                await JS.InvokeVoidAsync("openPdfFromBase64", b64);
+            else
+                await JS.InvokeVoidAsync(
+                    "downloadFileFromBase64",
+                    SirExcelService.DownloadPdfName(_main),
+                    "application/pdf",
+                    b64);
+            Notify.Show(preview ? "预览已打开" : "PDF 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show((preview ? "预览" : "导出") + "失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private string ImageDisplayUrl(string? path) => LegacyFileUrl.Resolve(path, ImageBase);
 

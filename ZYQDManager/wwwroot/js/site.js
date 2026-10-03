@@ -25,6 +25,14 @@ window.downloadFileFromBase64 = function (fileName, contentType, base64) {
     URL.revokeObjectURL(url);
 };
 
+window.openPdfFromBase64 = function (base64) {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60_000);
+};
+
 window.cpiUnfreezeHeader = function (wrapSel) {
     const wrap = document.querySelector(wrapSel);
     if (!wrap) return;

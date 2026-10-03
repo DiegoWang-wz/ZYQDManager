@@ -1,0 +1,198 @@
+@page "/tools/decrypt"
+@rendermode InteractiveServer
+@inject FileOperationService FileOp
+@inject IJSRuntime JS
+
+<PageTitle>文件解密</PageTitle>
+
+<div class="fd-page">
+    <MudPaper Class="pa-4 fd-card" Outlined="true">
+        <MudText Typo="Typo.h6" Class="mb-1">文件解密</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            上传公司加密文件，调用与老系统相同的解密服务，解密后自动下载。
+        </MudText>
+
+        <MudStack Spacing="2">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                <label class="fd-file-label">
+                    <InputFile OnChange="OnFileChanged" disabled="@_busy"/>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.UploadFile"
+                               Disabled="_busy"
+                               HtmlTag="span">
+                        选择文件
+                    </MudButton>
+                </label>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           StartIcon="@Icons.Material.Filled.LockOpen"
+                           Disabled="_busy || _pending is null"
+                           OnClick="DecryptAsync">
+                    @(_busy ? "解密中…" : "解密并下载")
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Disabled="_busy || _pending is null"
+                           OnClick="ClearPending">
+                    清除
+                </MudButton>
+            </MudStack>
+
+            @if (!string.IsNullOrEmpty(_fileName))
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="fd-file-alert">
+                    已选：@_fileName@(_fileSize > 0 ? $"（{FormatSize(_fileSize)}）" : "")
+                </MudAlert>
+            }
+
+            @if (_busy)
+            {
+                <MudProgressLinear Indeterminate="true"/>
+            }
+
+            @if (!string.IsNullOrEmpty(_lastMsg))
+            {
+                <MudAlert Severity="@_lastSeverity" Dense="true">@_lastMsg</MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+</div>
+
+<style>
+    .fd-page {
+        max-width: 640px;
+        margin: 12px auto 24px;
+        padding: 0 8px;
+    }
+    .fd-card { background: #fff; }
+    .fd-file-alert { word-break: break-all; }
+    .fd-file-label {
+        position: relative;
+        display: inline-flex;
+        margin: 0;
+        cursor: pointer;
+    }
+    .fd-file-label input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+    }
+</style>
+
+@code {
+    private const long MaxBytes = 50 * 1024 * 1024;
+
+    private IBrowserFile? _pending;
+    private string? _fileName;
+    private long _fileSize;
+    private bool _busy;
+    private string? _lastMsg;
+    private Severity _lastSeverity = Severity.Info;
+
+    private void OnFileChanged(InputFileChangeEventArgs e)
+    {
+        _lastMsg = null;
+        var file = e.File;
+        if (file is null)
+        {
+            ClearPending();
+            return;
+        }
+
+        if (file.Size <= 0)
+        {
+            Notify.Show("文件为空", Severity.Warning);
+            ClearPending();
+            return;
+        }
+
+        if (file.Size > MaxBytes)
+        {
+            Notify.Show($"文件不能超过 {FormatSize(MaxBytes)}", Severity.Warning);
+            ClearPending();
+            return;
+        }
+
+        _pending = file;
+        _fileName = file.Name;
+        _fileSize = file.Size;
+    }
+
+    private void ClearPending()
+    {
+        _pending = null;
+        _fileName = null;
+        _fileSize = 0;
+    }
+
+    private async Task DecryptAsync()
+    {
+        if (_pending is null) return;
+        _busy = true;
+        _lastMsg = null;
+        try
+        {
+            Notify.Show("正在解密…", Severity.Info);
+            await using var stream = _pending.OpenReadStream(MaxBytes);
+            var (bytes, apiMsg) = await FileOp.DecryptUploadAsync(stream, _pending.Name);
+
+            var downloadName = BuildDownloadName(_pending.Name);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                downloadName,
+                GuessContentType(downloadName),
+                Convert.ToBase64String(bytes));
+
+            _lastSeverity = Severity.Success;
+            _lastMsg = "解密完成，已开始下载。" + (string.IsNullOrWhiteSpace(apiMsg) ? "" : " 服务返回：" + apiMsg.Trim());
+            Notify.Show("解密完成", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _lastSeverity = Severity.Error;
+            _lastMsg = "解密失败：" + ex.Message;
+            Notify.Show(_lastMsg, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string BuildDownloadName(string original)
+    {
+        var name = Path.GetFileName(original);
+        if (string.IsNullOrWhiteSpace(name))
+            name = "file.bin";
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name;
+    }
+
+    private static string GuessContentType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls" => "application/vnd.ms-excel",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc" => "application/msword",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".zip" => "application/zip",
+            _ => "application/octet-stream",
+        };
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024.0).ToString("0.#") + " KB";
+        return (bytes / (1024.0 * 1024.0)).ToString("0.##") + " MB";
+    }
+}

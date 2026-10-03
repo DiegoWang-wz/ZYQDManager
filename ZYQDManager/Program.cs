@@ -168,6 +168,7 @@ builder.Services.AddScoped<CotractPiExcelService>();
 builder.Services.AddScoped<LibreOfficePdfService>();
 builder.Services.AddScoped<ExcelComPdfService>();
 builder.Services.AddScoped<CotractPiService>();
+builder.Services.AddScoped<SirExcelService>();
 builder.Services.AddScoped<SirService>();
 builder.Services.AddScoped<QuotationBaseService>();
 builder.Services.AddScoped<QuotationService>();
@@ -189,6 +190,21 @@ catch (Exception ex)
 {
     Log.Warning(ex, "启动时检查数据表失败");
 }
+
+// 后台预热 LibreOffice（固定配置目录 + --version），不阻塞启动
+_ = Task.Run(async () =>
+{
+    try
+    {
+        await Task.Delay(1500);
+        using var scope = app.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<LibreOfficePdfService>().WarmupAsync();
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "LibreOffice 后台预热失败");
+    }
+});
 
 var fwd = new ForwardedHeadersOptions
 {

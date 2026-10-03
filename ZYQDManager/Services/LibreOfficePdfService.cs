@@ -8,6 +8,10 @@ namespace ZYQDManager.Services;
 public class LibreOfficePdfService
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    /// <summary>复用固定配置目录，避免每次导出都冷初始化 UserInstallation。</summary>
+    private static readonly string SharedProfileDir =
+        Path.Combine(Path.GetTempPath(), "zyqd-lo-profile");
+
     private readonly IOptionsMonitor<LibreOfficeOptions> _options;
     private readonly FileOperationService _fileOp;
     private readonly ILogger<LibreOfficePdfService> _log;
@@ -22,21 +26,62 @@ public class LibreOfficePdfService
         _log = log;
     }
 
+    /// <summary>启动时后台预热，缩短首次导出等待。</summary>
+    public async Task WarmupAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var (ok, msg) = await TestAsync(ct);
+            if (ok)
+                _log.LogInformation("LibreOffice 预热完成：{Msg}", msg);
+            else
+                _log.LogWarning("LibreOffice 预热未成功：{Msg}", msg);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "LibreOffice 预热异常");
+        }
+    }
+
     public string? ResolvedPath()
     {
         var configured = (_options.CurrentValue.SofficePath ?? "").Trim().Trim('"');
-        if (configured.Length > 0 && File.Exists(configured))
-            return configured;
+        // Windows 上 soffice.exe 是 GUI 启动器，重定向 stdout 时经常不退出导致超时；CLI 应用 soffice.com。
+        var preferred = PreferConsoleLauncher(configured);
+        if (preferred.Length > 0 && File.Exists(preferred))
+            return preferred;
 
-        var fallback = @"C:\Program Files\LibreOffice\program\soffice.exe";
-        return File.Exists(fallback) ? fallback : (configured.Length > 0 ? configured : fallback);
+        var fallbackCom = @"C:\Program Files\LibreOffice\program\soffice.com";
+        if (File.Exists(fallbackCom))
+            return fallbackCom;
+
+        var fallbackExe = @"C:\Program Files\LibreOffice\program\soffice.exe";
+        if (File.Exists(fallbackExe))
+            return fallbackExe;
+
+        return preferred.Length > 0 ? preferred : fallbackCom;
+    }
+
+    /// <summary>
+    /// 配置若指向 soffice.exe，优先改用同目录 soffice.com（控制台版，适合 Process 调用）。
+    /// </summary>
+    private static string PreferConsoleLauncher(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "";
+
+        if (!path.EndsWith("soffice.exe", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var com = Path.Combine(Path.GetDirectoryName(path) ?? "", "soffice.com");
+        return File.Exists(com) ? com : path;
     }
 
     public async Task<(bool Ok, string Message)> TestAsync(CancellationToken ct = default)
     {
         var exe = ResolvedPath();
         if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
-            return (false, "未找到 soffice.exe：" + (exe ?? "(空路径)"));
+            return (false, "未找到 soffice：" + (exe ?? "(空路径)"));
 
         try
         {
@@ -60,7 +105,7 @@ public class LibreOfficePdfService
     {
         var exe = ResolvedPath();
         if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
-            throw new InvalidOperationException("未找到 soffice.exe：" + (exe ?? "(空路径)"));
+            throw new InvalidOperationException("未找到 soffice：" + (exe ?? "(空路径)"));
         if (xlsx is null || xlsx.Length == 0)
             throw new InvalidOperationException("没有可转换的 Excel 内容");
 
@@ -97,12 +142,15 @@ public class LibreOfficePdfService
         string? waitPdfDir = null)
     {
         await Gate.WaitAsync(ct);
-        var profile = Path.Combine(Path.GetTempPath(), "zyqd-lo-profile-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(profile);
         try
         {
-            var profileUri = new Uri(profile + Path.DirectorySeparatorChar).AbsoluteUri.TrimEnd('/');
-            var args = $"\"-env:UserInstallation={profileUri}\" {extraArgs}";
+            Directory.CreateDirectory(SharedProfileDir);
+            var profileUri = new Uri(SharedProfileDir + Path.DirectorySeparatorChar).AbsoluteUri.TrimEnd('/');
+            // 固定配置目录可能残留 .lock，加 nolockcheck；测试路径原先没有该参数
+            var flags = extraArgs.Contains("--nolockcheck", StringComparison.OrdinalIgnoreCase)
+                ? extraArgs
+                : "--nolockcheck " + extraArgs;
+            var args = $"\"-env:UserInstallation={profileUri}\" {flags}";
             using var proc = new Process();
             proc.StartInfo = new ProcessStartInfo
             {
@@ -124,9 +172,9 @@ public class LibreOfficePdfService
                 if (e.Data is not null) sb.AppendLine(e.Data);
             };
 
-            _log.LogInformation("LibreOffice 启动 {Exe} {Args}", exe, extraArgs);
+            _log.LogInformation("LibreOffice 启动 {Exe} {Args}", exe, flags);
             if (!proc.Start())
-                throw new InvalidOperationException("无法启动 soffice.exe");
+                throw new InvalidOperationException("无法启动 soffice：" + exe);
 
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
@@ -159,7 +207,6 @@ public class LibreOfficePdfService
         }
         finally
         {
-            TryDeleteDir(profile);
             Gate.Release();
         }
     }
@@ -180,7 +227,7 @@ public class LibreOfficePdfService
                 if (len > 0 && len == lastSize)
                 {
                     stable++;
-                    if (stable >= 3)
+                    if (stable >= 2)
                         return;
                 }
                 else
@@ -191,13 +238,13 @@ public class LibreOfficePdfService
             }
             else if (proc.HasExited)
             {
-                await Task.Delay(800, ct);
+                await Task.Delay(300, ct);
                 if (Directory.Exists(dir) && Directory.GetFiles(dir, "*.pdf").Length > 0)
                     continue;
                 return;
             }
 
-            await Task.Delay(400, ct);
+            await Task.Delay(200, ct);
         }
         ct.ThrowIfCancellationRequested();
     }

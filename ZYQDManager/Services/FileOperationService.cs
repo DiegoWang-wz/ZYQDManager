@@ -69,6 +69,67 @@ public class FileOperationService
            && bytes[2] == (byte)'D'
            && bytes[3] == (byte)'F';
 
+    /// <summary>
+    /// 上传加密文件到共享盘 upLoad，调用老解密服务后读回字节并清理临时文件。
+    /// </summary>
+    public async Task<(byte[] Bytes, string ApiMessage)> DecryptUploadAsync(
+        Stream content,
+        string originalFileName,
+        CancellationToken ct = default)
+    {
+        if (content is null)
+            throw new InvalidOperationException("文件为空");
+
+        var safeName = SanitizeFileName(originalFileName);
+        var shareName = "decode-" + Guid.NewGuid().ToString("N") + "-" + safeName;
+        var sharePath = _opt.UploadFullPath(shareName);
+        var dir = Path.GetDirectoryName(sharePath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+
+        await using (var fs = new FileStream(sharePath, FileMode.Create, FileAccess.Write, FileShare.None))
+            await content.CopyToAsync(fs, ct);
+
+        if (!File.Exists(sharePath) || new FileInfo(sharePath).Length == 0)
+            throw new InvalidOperationException("上传到共享盘失败或文件为空");
+
+        try
+        {
+            var before = await File.ReadAllBytesAsync(sharePath, ct);
+            var msg = await DecodeFileAsync(sharePath, ct);
+            var after = await File.ReadAllBytesAsync(sharePath, ct);
+            if (after.Length == 0)
+                throw new InvalidOperationException("解密后文件为空。服务返回：" + (msg ?? ""));
+
+            // 内容完全没变时给出提示，仍允许下载（可能本就未加密）
+            if (before.Length == after.Length && before.AsSpan().SequenceEqual(after))
+                msg = (msg ?? "").Trim() + "（文件内容未变化，可能未加密或解密未生效）";
+
+            return (after, msg ?? "");
+        }
+        finally
+        {
+            try { File.Delete(sharePath); } catch { /* ignore */ }
+            try { await DeleteFileAsync(sharePath, ct); } catch { /* ignore */ }
+        }
+    }
+
+    private static string SanitizeFileName(string? name)
+    {
+        var n = Path.GetFileName(name ?? "").Trim();
+        if (n.Length == 0)
+            n = "file.bin";
+        foreach (var c in Path.GetInvalidFileNameChars())
+            n = n.Replace(c, '_');
+        if (n.Length > 80)
+        {
+            var ext = Path.GetExtension(n);
+            var stem = Path.GetFileNameWithoutExtension(n);
+            n = stem[..Math.Min(60, stem.Length)] + ext;
+        }
+        return n;
+    }
+
     private async Task<string> PostAsync(string relativePath, string filePath, CancellationToken ct)
     {
         try
