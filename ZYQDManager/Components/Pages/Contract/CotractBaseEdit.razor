@@ -8,65 +8,336 @@
 <PageTitle>@Title</PageTitle>
 
 <div class="cb-edit-page">
-    <div class="cb-edit-toolbar">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-            <MudText Typo="Typo.h6">@Title</MudText>
-            <MudStack Row="true" Spacing="1">
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/contract-base">返回列表</MudButton>
-                @if (!IsDetail)
+    <div id="cb-edit-scroll" class="cb-edit-scroll">
+        <div class="cb-detail">
+            <MudPaper Outlined="true" Class="cb-detail-hero">
+                <div class="cb-detail-media">
+                    @if (HasHeroImage)
+                    {
+                        <LegacyRemoteImg Path="@HeroImagePath" CssClass="cb-detail-img"/>
+                    }
+                    else
+                    {
+                        <div class="cb-detail-img-placeholder">
+                            <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Class="cb-detail-img-icon"/>
+                            <span>暂无图片</span>
+                        </div>
+                    }
+                    @if (!IsBlank(HeroNameplateCaption))
+                    {
+                        <div class="cb-detail-media-caption">当前显示：@HeroNameplateCaption</div>
+                    }
+                </div>
+                <div class="cb-detail-hero-body">
+                    <div class="cb-detail-hero-top">
+                        @if (IsCreate)
+                        {
+                            <MudText Typo="Typo.subtitle1" Class="cb-edit-hero-title">@Title</MudText>
+                        }
+                        else
+                        {
+                            <div class="cb-detail-chips">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                                         Icon="@Icons.Material.Filled.Business">
+                                    @Display(_model.ClientNo)
+                                </MudChip>
+                                @if (!IsBlank(_model.Customer_destination_country))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                                             Icon="@Icons.Material.Filled.Public">
+                                        @_model.Customer_destination_country
+                                    </MudChip>
+                                }
+                                @if (_editing)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                                        编辑中
+                                    </MudChip>
+                                }
+                            </div>
+                        }
+                        <div class="cb-detail-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/contract-base">返回列表</MudButton>
+                            @if (IsReadOnly)
+                            {
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Edit"
+                                           OnClick="StartEdit">编辑</MudButton>
+                            }
+                            else
+                            {
+                                @if (!IsCreate)
+                                {
+                                    <MudButton Size="Size.Small"
+                                               Variant="Variant.Outlined"
+                                               Disabled="_busy"
+                                               OnClick="CancelEditAsync">取消</MudButton>
+                                }
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="_busy"
+                                           OnClick="SaveAsync">
+                                    @(IsCopy ? "创建" : "保存")
+                                </MudButton>
+                            }
+                        </div>
+                    </div>
+
+                    @if (IsReadOnly)
+                    {
+                        <MudText Typo="Typo.h5" Class="cb-detail-title">@Display(_model.ClientName)</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="cb-detail-subtitle">
+                            @Display(_model.materialNo)
+                            @if (!IsBlank(_model.materialName))
+                            {
+                                <span class="cb-detail-subsep">·</span>
+                                @_model.materialName
+                    }
+                </MudText>
+                    }
+                    else
+                    {
+                        <div class="cb-hero-fields">
+                            <MudTextField @bind-Value="_model.ClientName"
+                                          Label="客户名称"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Required="true"
+                                          Disabled="_busy"/>
+                            <MudTextField @bind-Value="_model.materialNo"
+                                          Label="物料编号"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Required="true"
+                                          Disabled="_busy"/>
+                        </div>
+                    }
+
+                    <div class="cb-detail-meta">
+                        <span>
+                            <MudIcon Icon="@Icons.Material.Outlined.ManageAccounts" Size="Size.Small"/>
+                            负责人 @Display(_model.Customer_Manager)
+                        </span>
+                        <span>
+                            <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small"/>
+                            创建时间 · @FormatDate(_model.CreateTime)
+                        </span>
+                        <span>
+                            <MudIcon Icon="@Icons.Material.Outlined.Update" Size="Size.Small"/>
+                            更新时间
+                            @if (!IsBlank(_model.UpdatePerson))
+                            {
+                                <text> @Display(_model.UpdatePerson)</text>
+                            }
+                            <text> · @FormatDate(_model.UpdateTime)</text>
+                        </span>
+                        @if (!IsBlank(_model.CreatePerson))
+                        {
+                            <span>
+                                <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small"/>
+                                创建人 @Display(_model.CreatePerson)
+                            </span>
+                        }
+                    </div>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="cb-detail-panel">
+                <div class="cb-detail-panel-title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Storefront" Size="Size.Small"/>
+                    <span>客户信息</span>
+                </div>
+                <div class="cb-spec-grid">
+                    <CbSpecText Label="客户编号" @bind-Value="_model.ClientNo" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="客户名称" @bind-Value="_model.ClientName" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="客户目的国" @bind-Value="_model.Customer_destination_country" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="客户 PO 号" @bind-Value="_model.Client_poNo" ReadOnly="IsReadOnly" Disabled="_busy"/>
+                    <CbSpecText Label="客户型号" @bind-Value="_model.Client_Model" ReadOnly="IsReadOnly" Disabled="_busy"/>
+                    <CbSpecText Label="负责人" @bind-Value="_model.Customer_Manager" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="cb-detail-panel">
+                <div class="cb-detail-panel-title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Small"/>
+                    <span>物料信息</span>
+                </div>
+                <div class="cb-spec-grid">
+                    <CbSpecText Label="物料编号" @bind-Value="_model.materialNo" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="物料名称" @bind-Value="_model.materialName" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="物料类型" @bind-Value="_model.materialType" ReadOnly="IsReadOnly" Disabled="_busy"/>
+                    <CbSpecText Label="物料 Model" @bind-Value="_model.materialModel" ReadOnly="IsReadOnly" Disabled="_busy"/>
+                    <CbSpecText Label="物料 specs" @bind-Value="_model.materiaSpecs" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="物料 Powered" @bind-Value="_model.materiaPowered" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="物料 Cust" @bind-Value="_model.materiaCust" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="SAP 单号" @bind-Value="_model.SAP_order_NO" ReadOnly="IsReadOnly" Disabled="_busy"/>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="cb-detail-panel">
+                <div class="cb-detail-panel-title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Payments" Size="Size.Small"/>
+                    <span>价格信息</span>
+                </div>
+                <div class="cb-spec-grid">
+                    <CbSpecNumber Label="单价" @bind-Value="_model.price" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="单价单位" @bind-Value="_model.price_unit" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="货币单位" @bind-Value="_model.currency_unit" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="数量单位" @bind-Value="_model.Quantity_unit" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="cb-detail-panel">
+                <div class="cb-detail-panel-title">
+                    <MudIcon Icon="@Icons.Material.Outlined.LocalShipping" Size="Size.Small"/>
+                    <span>包装与物流</span>
+                </div>
+                <div class="cb-spec-grid">
+                    <CbSpecText Label="打包方式" @bind-Value="_model.Packing_method" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="打包方式单位" @bind-Value="_model.Packing_method_unit" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="纸箱尺寸" @bind-Value="_model.Carton_Size" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="托盘尺寸" @bind-Value="_model.Pallet_Size" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="打托方式" @bind-Value="_model.palletizing_method" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecText Label="打托方式单位" @bind-Value="_model.palletizing_method_unit" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecNumber Label="净重" @bind-Value="_model.Net_weight" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                    <CbSpecNumber Label="毛重" @bind-Value="_model.gross_weight" ReadOnly="IsReadOnly" Required="true" Disabled="_busy"/>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="cb-detail-panel">
+                <div class="cb-detail-panel-title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Small"/>
+                    <span>标识图片</span>
+                </div>
+                <div class="cb-img-grid">
+                    <CbKvImage Label="客户外箱标志" @bind-Value="_model.Customer_outer_box_logo" ReadOnly="IsReadOnly" AllowNa="true" Required="true"/>
+                    <CbKvImage Label="托唛图" @bind-Value="_model.Tuo_Mark_url" ReadOnly="IsReadOnly" Required="true"/>
+                    <CbKvImage Label="箱唛图例1" @bind-Value="_model.Box_label_url" ReadOnly="IsReadOnly" Required="true"/>
+                    <CbKvImage Label="箱唛图例2" @bind-Value="_model.Box_label_url2" ReadOnly="IsReadOnly"/>
+                    <CbKvImage Label="铭牌图片" @bind-Value="_model.nameplate_url" ReadOnly="IsReadOnly" Required="true"/>
+                    <CbKvImage Label="铭牌图片2" @bind-Value="_model.nameplate_url2" ReadOnly="IsReadOnly" Required="true"/>
+                </div>
+            </MudPaper>
+
+            @if (IsReadOnly)
+            {
+                @if (!IsBlank(_model.Box_label) || !IsBlank(_model.Box_label2) || !IsBlank(_model.Notes) || !IsBlank(_model.Tuo_Mark))
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
-                        @(IsCopy ? "创建" : "保存")
-                    </MudButton>
+                    <div class="cb-detail-notes">
+                        @if (!IsBlank(_model.Tuo_Mark))
+                        {
+                            <MudPaper Outlined="true" Class="cb-detail-panel">
+                                <div class="cb-detail-panel-title">
+                                    <MudIcon Icon="@Icons.Material.Outlined.QrCode2" Size="Size.Small"/>
+                                    <span>托唛</span>
+                                </div>
+                                <div class="cb-detail-note-body">@_model.Tuo_Mark</div>
+                            </MudPaper>
+                        }
+                        @if (!IsBlank(_model.Box_label))
+                        {
+                            <MudPaper Outlined="true" Class="cb-detail-panel">
+                                <div class="cb-detail-panel-title">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Label" Size="Size.Small"/>
+                                    <span>箱唛1</span>
+                                </div>
+                                <div class="cb-detail-note-body">@_model.Box_label</div>
+                            </MudPaper>
+                        }
+                        @if (!IsBlank(_model.Box_label2))
+                        {
+                            <MudPaper Outlined="true" Class="cb-detail-panel">
+                                <div class="cb-detail-panel-title">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Label" Size="Size.Small"/>
+                                    <span>箱唛2</span>
+                                </div>
+                                <div class="cb-detail-note-body">@_model.Box_label2</div>
+                            </MudPaper>
+                        }
+                        @if (!IsBlank(_model.Notes))
+                        {
+                            <MudPaper Outlined="true" Class="cb-detail-panel">
+                                <div class="cb-detail-panel-title">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small"/>
+                                    <span>备注 Notes</span>
+                                </div>
+                                <div class="cb-detail-note-body">@_model.Notes</div>
+                            </MudPaper>
+                        }
+                    </div>
                 }
-            </MudStack>
-        </MudStack>
+            }
+            else
+            {
+                <div class="cb-detail-notes">
+                    <MudPaper Outlined="true" Class="cb-detail-panel">
+                        <div class="cb-detail-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.QrCode2" Size="Size.Small"/>
+                            <span>托唛 *</span>
+                        </div>
+                        <MudTextField @bind-Value="_model.Tuo_Mark"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="3"
+                                      AutoGrow="true"
+                                      MaxLines="10"
+                                      Required="true"
+                                      Disabled="_busy"/>
+                    </MudPaper>
+                    <MudPaper Outlined="true" Class="cb-detail-panel">
+                        <div class="cb-detail-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Label" Size="Size.Small"/>
+                            <span>箱唛1 *</span>
+                        </div>
+                        <MudTextField @bind-Value="_model.Box_label"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="3"
+                                      AutoGrow="true"
+                                      MaxLines="10"
+                                      Required="true"
+                                      Disabled="_busy"/>
+                    </MudPaper>
+                    <MudPaper Outlined="true" Class="cb-detail-panel">
+                        <div class="cb-detail-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Label" Size="Size.Small"/>
+                            <span>箱唛2</span>
+                        </div>
+                        <MudTextField @bind-Value="_model.Box_label2"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="3"
+                                      AutoGrow="true"
+                                      MaxLines="10"
+                                      Disabled="_busy"/>
+                    </MudPaper>
+                    <MudPaper Outlined="true" Class="cb-detail-panel">
+                        <div class="cb-detail-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small"/>
+                            <span>备注 Notes</span>
+    </div>
+                        <MudTextField @bind-Value="_model.Notes"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="3"
+                                      AutoGrow="true"
+                                      MaxLines="10"
+                                      Disabled="_busy"/>
+        </MudPaper>
+                </div>
+            }
+        </div>
     </div>
 
-    <div class="cb-edit-scroll">
-        <MudPaper Outlined="true" Class="pa-4 cb-edit-card">
-            <fieldset class="cb-form" disabled="@IsDetail">
-                <div class="cb-kv-list">
-                    <CbKvImage Label="客户外箱标志" @bind-Value="_model.Customer_outer_box_logo" ReadOnly="IsDetail" AllowNa="true" Required="true"/>
-                    <CbKvText Label="托唛" @bind-Value="_model.Tuo_Mark" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvImage Label="托唛图" @bind-Value="_model.Tuo_Mark_url" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="客户目的国" @bind-Value="_model.Customer_destination_country" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="客户编号" @bind-Value="_model.ClientNo" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="客户名称" @bind-Value="_model.ClientName" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="物料编号" @bind-Value="_model.materialNo" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="物料名称" @bind-Value="_model.materialName" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="物料类型" @bind-Value="_model.materialType" ReadOnly="IsDetail"/>
-                    <CbKvText Label="物料 Model" @bind-Value="_model.materialModel" ReadOnly="IsDetail"/>
-                    <CbKvText Label="物料 specs" @bind-Value="_model.materiaSpecs" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="物料 Powered" @bind-Value="_model.materiaPowered" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="物料 Cust" @bind-Value="_model.materiaCust" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="备注 Notes" @bind-Value="_model.Notes" ReadOnly="IsDetail" Multiline="true"/>
-                    <CbKvText Label="数量单位" @bind-Value="_model.Quantity_unit" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="货币单位" @bind-Value="_model.currency_unit" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvNumber Label="单价" @bind-Value="_model.price" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="单价单位" @bind-Value="_model.price_unit" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="箱唛1" @bind-Value="_model.Box_label" ReadOnly="IsDetail" Multiline="true" Required="true"/>
-                    <CbKvImage Label="箱唛图例1" @bind-Value="_model.Box_label_url" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="箱唛2" @bind-Value="_model.Box_label2" ReadOnly="IsDetail" Multiline="true"/>
-                    <CbKvImage Label="箱唛图例2" @bind-Value="_model.Box_label_url2" ReadOnly="IsDetail"/>
-                    <CbKvText Label="客户 PO 号" @bind-Value="_model.Client_poNo" ReadOnly="IsDetail"/>
-                    <CbKvText Label="客户型号" @bind-Value="_model.Client_Model" ReadOnly="IsDetail"/>
-                    <CbKvImage Label="铭牌图片" @bind-Value="_model.nameplate_url" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvImage Label="铭牌图片2" @bind-Value="_model.nameplate_url2" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="SAP 单号" @bind-Value="_model.SAP_order_NO" ReadOnly="IsDetail"/>
-                    <CbKvText Label="打包方式" @bind-Value="_model.Packing_method" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="打包方式单位" @bind-Value="_model.Packing_method_unit" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="纸箱尺寸" @bind-Value="_model.Carton_Size" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="托盘尺寸" @bind-Value="_model.Pallet_Size" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="打托方式" @bind-Value="_model.palletizing_method" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="打托方式单位" @bind-Value="_model.palletizing_method_unit" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvNumber Label="净重" @bind-Value="_model.Net_weight" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvNumber Label="毛重" @bind-Value="_model.gross_weight" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvText Label="负责人" @bind-Value="_model.Customer_Manager" ReadOnly="IsDetail" Required="true"/>
-                </div>
-            </fieldset>
-        </MudPaper>
-    </div>
+    <MudScrollToTop Selector="#cb-edit-scroll" TopOffset="240" Class="cb-scroll-to-top">
+        <MudFab Color="Color.Primary"
+                Size="Size.Medium"
+                StartIcon="@Icons.Material.Filled.KeyboardArrowUp"
+                Title="回到顶部"/>
+    </MudScrollToTop>
 </div>
 
 <style>
@@ -76,11 +347,6 @@
         flex-direction: column;
         height: 100%;
         min-height: 0;
-        gap: 12px;
-    }
-
-    .cb-edit-toolbar {
-        flex: 0 0 auto;
     }
 
     .cb-edit-scroll {
@@ -89,47 +355,335 @@
         overflow: auto;
         display: flex;
         justify-content: center;
+        padding-bottom: 16px;
     }
 
-    .cb-edit-card {
+    .cb-detail {
         width: 100%;
-        max-width: 720px;
+        max-width: 1360px;
         align-self: flex-start;
-        flex: 0 1 720px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 0 4px;
     }
 
-    .cb-form {
-        border: 0;
-        padding: 0;
+    .cb-edit-hero-title {
+        font-weight: 600;
         margin: 0;
-        min-inline-size: 0;
+    }
+
+    .cb-hero-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+    }
+
+    .cb-hero-fields .mud-input-control {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    .cb-detail-hero {
+        display: grid;
+        grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+        gap: 0;
+        overflow: hidden;
+        background:
+            linear-gradient(135deg, rgba(var(--mud-palette-primary-rgb), 0.06), transparent 55%),
+            var(--mud-palette-surface);
+    }
+
+    .cb-detail-media {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 220px;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.03);
+        border-right: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .cb-detail-media-caption {
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.3;
+        text-align: center;
+    }
+
+    .cb-detail-img {
+        max-width: 100%;
+        max-height: 220px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .cb-detail-img-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: var(--mud-palette-text-secondary);
+        opacity: 0.7;
+        font-size: 13px;
+    }
+
+    .cb-detail-img-icon {
+        font-size: 2.5rem !important;
+        width: 2.5rem;
+        height: 2.5rem;
+        opacity: 0.5;
+    }
+
+    .cb-detail-hero-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 10px;
+        padding: 24px 28px;
+        min-width: 0;
+    }
+
+    .cb-detail-hero-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .cb-detail-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .cb-detail-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
+    .cb-detail-title {
+        font-weight: 600;
+        word-break: break-word;
+        line-height: 1.35;
+        margin: 0;
+    }
+
+    .cb-detail-subtitle {
+        color: var(--mud-palette-text-secondary);
+        word-break: break-word;
+        margin: 0;
+        line-height: 1.4;
+    }
+
+    .cb-detail-subsep {
+        margin: 0 6px;
+        opacity: 0.5;
+    }
+
+    .cb-detail-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        color: var(--mud-palette-text-secondary);
+        font-size: 13px;
+    }
+
+    .cb-detail-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+
+    .cb-detail-panel {
+        padding: 16px 20px 18px;
+    }
+
+    .cb-detail-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .cb-spec-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px 12px;
+    }
+
+    .cb-spec-item {
+        min-width: 0;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.025);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .cb-spec-item.cb-spec-edit {
+        padding-bottom: 6px;
+    }
+
+    .cb-spec-item .mud-input-control {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    .cb-spec-label {
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+
+    .cb-spec-req {
+        color: var(--mud-palette-error);
+        margin-left: 2px;
+    }
+
+    .cb-spec-value {
+        font-size: 15px;
+        font-weight: 500;
+        word-break: break-word;
+        line-height: 1.4;
+    }
+
+    .cb-spec-value.cb-spec-empty {
+        color: var(--mud-palette-text-disabled);
+        font-weight: 400;
+    }
+
+    .cb-img-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    .cb-detail-notes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 14px;
+    }
+
+    .cb-detail-note-body {
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .cb-scroll-to-top.mud-scroll-to-top {
+        right: 48px !important;
+        bottom: 28px !important;
+    }
+
+    .cb-scroll-to-top .mud-fab {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    @@media (max-width: 1100px) {
+        .cb-spec-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 800px) {
+        .cb-detail-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .cb-detail-media {
+            border-right: 0;
+            border-bottom: 1px solid var(--mud-palette-lines-default);
+            min-height: 180px;
+        }
+
+        .cb-spec-grid,
+        .cb-hero-fields {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
 @code {
     [Parameter] public int Id { get; set; }
+    [SupplyParameterFromQuery(Name = "edit")] public bool? EditQuery { get; set; }
 
     private bool _busy;
+    private bool _editing;
     private string? _loadedKey;
     private ZyqdCotractBaseModel _model = new();
 
     private bool IsCopy => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/copy", StringComparison.OrdinalIgnoreCase);
-    private bool IsDetail => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/detail", StringComparison.OrdinalIgnoreCase);
     private bool IsCreate => Id == 0 || IsCopy;
-    private string Title => IsDetail ? "合同基础数据详情" : IsCopy ? "复制合同基础数据" : Id == 0 ? "新建合同基础数据" : "编辑合同基础数据";
+    private bool IsReadOnly => !IsCreate && !_editing;
+    private string Title => IsCopy ? "复制合同基础数据"
+        : Id == 0 ? "新建合同基础数据"
+        : _editing ? "编辑合同基础数据"
+        : "合同基础数据详情";
+
+    private string? HeroImagePath =>
+        FirstImage(
+            _model.nameplate_url,
+            _model.nameplate_url2,
+            _model.Customer_outer_box_logo,
+            _model.Tuo_Mark_url,
+            _model.Box_label_url);
+
+    private bool HasHeroImage => !LegacyFileUrl.IsBlankOrPlaceholder(HeroImagePath);
+
+    /// <summary>铭牌 1/2 选择性必填：有图时优先 1，底部标注当前显示哪张。</summary>
+    private string? HeroNameplateCaption
+    {
+        get
+        {
+            if (!LegacyFileUrl.IsBlankOrPlaceholder(_model.nameplate_url)
+                && string.Equals(HeroImagePath, _model.nameplate_url, StringComparison.Ordinal))
+                return "铭牌图片1";
+            if (!LegacyFileUrl.IsBlankOrPlaceholder(_model.nameplate_url2)
+                && string.Equals(HeroImagePath, _model.nameplate_url2, StringComparison.Ordinal))
+                return "铭牌图片2";
+            return null;
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
-        var key = $"{Id}:{IsCopy}:{IsDetail}";
+        var key = $"{Id}:{IsCopy}:{EditQuery == true}";
         if (_loadedKey == key) return;
         _loadedKey = key;
+        await LoadAsync(enterEdit: IsCreate || EditQuery == true);
+    }
 
+    private async Task LoadAsync(bool enterEdit)
+    {
         if (Id == 0)
         {
             _model = new ZyqdCotractBaseModel();
             var empNo = await Auth.GetCurrentEmpNoAsync();
             _model.Customer_Manager = empNo;
             _model.CreatePerson = empNo;
+            _editing = true;
             return;
         }
 
@@ -154,12 +708,38 @@
         {
             _model.Id = 0;
             _model.CreatePerson = await Auth.GetCurrentEmpNoAsync();
+            _editing = true;
+        }
+        else
+        {
+            _editing = enterEdit;
+        }
+    }
+
+    private void StartEdit() => _editing = true;
+
+    private async Task CancelEditAsync()
+    {
+        if (IsCreate) return;
+        _busy = true;
+        try
+        {
+            await LoadAsync(enterEdit: false);
+            if (EditQuery == true)
+            {
+                _loadedKey = null;
+                NavManager.NavigateTo($"/contract-base/{Id}", replace: true);
+            }
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 
     private async Task SaveAsync()
     {
-        if (IsDetail) return;
+        if (IsReadOnly) return;
         _busy = true;
         try
         {
@@ -174,9 +754,28 @@
 
             Notify.Show(IsCopy ? "创建成功" : "保存成功", Severity.Success);
             if (IsCopy)
-                NavManager.NavigateTo("/contract-base");
-            else if (wasCreate && id > 0)
+            {
+            NavManager.NavigateTo("/contract-base");
+                return;
+            }
+
+            if (wasCreate && id > 0)
+            {
+                _loadedKey = null;
                 NavManager.NavigateTo($"/contract-base/{id}", replace: true);
+                return;
+            }
+
+            _editing = false;
+            if (EditQuery == true)
+            {
+                _loadedKey = null;
+                NavManager.NavigateTo($"/contract-base/{Id}", replace: true);
+            }
+            else
+            {
+                await LoadAsync(enterEdit: false);
+            }
         }
         catch (Exception ex)
         {
@@ -208,4 +807,12 @@
             AssignedCustomerCodes = assigned
         };
     }
+
+    private static string? FirstImage(params string?[] paths)
+        => paths.FirstOrDefault(p => !LegacyFileUrl.IsBlankOrPlaceholder(p));
+
+    private static bool IsBlank(string? value) => string.IsNullOrWhiteSpace(value);
+    private static string Display(string? value) => IsBlank(value) ? "—" : value!.Trim();
+    private static string FormatDate(DateTime? dt)
+        => dt is null ? "—" : dt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 }

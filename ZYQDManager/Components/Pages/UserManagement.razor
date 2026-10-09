@@ -105,6 +105,7 @@
                 <MudStack Spacing="2">
                     <MudTextField @bind-Value="_edit.EmpNo" Label="工号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@(!_edit.IsCreate)"/>
                     <MudTextField @bind-Value="_edit.DisplayName" Label="姓名" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="_edit.EnglishName" Label="英文名" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudTextField @bind-Value="_edit.Password"
                                   Label="@(_edit.IsCreate ? "密码" : "新密码（不填则不改）")"
                                   Variant="Variant.Outlined"
@@ -114,11 +115,11 @@
                     <MudTextField @bind-Value="_edit.Email" Label="邮箱" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudTextField @bind-Value="_edit.Phone" Label="电话" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudSelect T="string" @bind-Value="RoleBind" Label="本系统角色" Variant="Variant.Outlined" Margin="Margin.Dense">
-                        <MudSelectItem Value="@("operator")">操作员</MudSelectItem>
+                        <MudSelectItem Value="@("operator")">业务员</MudSelectItem>
                         <MudSelectItem Value="@("admin")">管理员</MudSelectItem>
                     </MudSelect>
                     <MudSwitch @bind-Value="_edit.IsActive" Color="Color.Primary"
-                               Label="@(_edit.IsCreate ? "立即启用（默认关闭，需管理员确认）" : "启用账号")"/>
+                               Label="@(_edit.IsCreate ? "立即启用本系统（默认关闭，需管理员确认）" : "启用本系统权限")"/>
                     <MudSwitch T="bool" @bind-Value="ViewAllSwitch"
                                Color="Color.Primary"
                                Disabled="@IsAdminRole"
@@ -130,21 +131,21 @@
                 </MudStack>
             </MudTabPanel>
             <MudTabPanel Text="报价签名" Icon="@Icons.Material.Filled.Draw">
-                <MudStack Spacing="2">
+                <MudStack Spacing="3">
                     <MudAlert Severity="Severity.Info" Dense="true">
-                        签名挂在人员档案上（JcCommonApi UserInformation），报价录入时可按人选择，不再使用 T_ZYQD_Quotation_signature 表。
+                        每人可维护中文、英文两套签名；报价录入时按「名称（中文/英文）」选择。
                     </MudAlert>
+                    <MudText Typo="Typo.subtitle2">中文签名</MudText>
                     <MudTextField @bind-Value="_edit.Signature"
-                                  Label="签名名称"
+                                  Label="中文签名名称"
                                   Placeholder="默认可用姓名"
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"/>
                     <MudTextField @bind-Value="_edit.SignatureUrl"
-                                  Label="签名图片路径"
+                                  Label="中文签名图片路径"
                                   Placeholder="/Img/..."
                                   Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  HelperText="可手工填写路径，或下方上传"/>
+                                  Margin="Margin.Dense"/>
                     <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
                         <label class="personnel-sig-upload">
                             <InputFile OnChange="OnSignatureFile" accept=".png,.jpg,.jpeg,.gif,.bmp,image/*" disabled="@(_busy || _sigUploading)"/>
@@ -152,7 +153,7 @@
                                        StartIcon="@Icons.Material.Filled.Upload"
                                        Disabled="@(_busy || _sigUploading)"
                                        HtmlTag="span">
-                                @(_sigUploading ? "上传中…" : "上传签名图")
+                                @(_sigUploading ? "上传中…" : "上传中文签名")
                             </MudButton>
                         </label>
                         @if (!string.IsNullOrWhiteSpace(_edit.SignatureUrl))
@@ -163,6 +164,38 @@
                     @if (!string.IsNullOrWhiteSpace(_edit.SignatureUrl))
                     {
                         <LegacyRemoteImg Path="@_edit.SignatureUrl" CssClass="personnel-sig-preview"/>
+                    }
+
+                    <MudDivider Class="my-1"/>
+                    <MudText Typo="Typo.subtitle2">英文签名</MudText>
+                    <MudTextField @bind-Value="_edit.SignatureEn"
+                                  Label="英文签名名称"
+                                  Placeholder="默认可用英文名"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="_edit.SignatureUrlEn"
+                                  Label="英文签名图片路径"
+                                  Placeholder="/Img/..."
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"/>
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                        <label class="personnel-sig-upload">
+                            <InputFile OnChange="OnSignatureEnFile" accept=".png,.jpg,.jpeg,.gif,.bmp,image/*" disabled="@(_busy || _sigUploadingEn)"/>
+                            <MudButton Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.Upload"
+                                       Disabled="@(_busy || _sigUploadingEn)"
+                                       HtmlTag="span">
+                                @(_sigUploadingEn ? "上传中…" : "上传英文签名")
+                            </MudButton>
+                        </label>
+                        @if (!string.IsNullOrWhiteSpace(_edit.SignatureUrlEn))
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="ClearSignatureEn" Disabled="@(_busy || _sigUploadingEn)">清除</MudButton>
+                        }
+                    </MudStack>
+                    @if (!string.IsNullOrWhiteSpace(_edit.SignatureUrlEn))
+                    {
+                        <LegacyRemoteImg Path="@_edit.SignatureUrlEn" CssClass="personnel-sig-preview"/>
                     }
                 </MudStack>
             </MudTabPanel>
@@ -343,6 +376,7 @@
     private bool _busy;
     private bool _dialogOpen;
     private bool _sigUploading;
+    private bool _sigUploadingEn;
     private const long MaxSigBytes = 8L * 1024 * 1024;
     private string _filterColumn = "EmpNo";
     private string _keyword = "";
@@ -443,19 +477,24 @@
                 grouped.TryGetValue(u.EmpNo, out var customers);
                 var isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(u.EmpNo, "JcAdmin", StringComparison.OrdinalIgnoreCase);
+                // 本系统 Enabled；并兼容旧数据用全局 IsActive=0 表示待审/停用
+                var appEnabled = appPerm is not null && appPerm.Enabled && u.IsActive;
                 rows.Add(new ManagedUserRowDto
                 {
                     EmpNo = u.EmpNo,
                     DisplayName = u.DisplayName,
-                    IsActive = u.IsActive,
+                    IsActive = appEnabled,
                     Role = role,
                     ViewAllCustomers = isAdmin || p?.ViewAllCustomers == true,
                     CanViewInvoiceKp = isAdmin || HasInvoiceKpVisible(appPerm),
                     Department = p?.Department,
                     Email = p?.Email,
                     Phone = p?.Phone,
+                    EnglishName = p?.EnglishName,
                     Signature = p?.Signature,
                     SignatureUrl = p?.SignatureUrl,
+                    SignatureEn = p?.SignatureEn,
+                    SignatureUrlEn = p?.SignatureUrlEn,
                     Customers = customers ?? []
                 });
             }
@@ -504,8 +543,11 @@
             Department = row.Department,
             Email = row.Email,
             Phone = row.Phone,
+            EnglishName = row.EnglishName,
             Signature = row.Signature,
             SignatureUrl = row.SignatureUrl,
+            SignatureEn = row.SignatureEn,
+            SignatureUrlEn = row.SignatureUrlEn,
             Customers = row.Customers.Select(x => new CustomerOptionDto { Code = x.Code, Name = x.Name }).ToList()
         };
         _picked = null;
@@ -602,7 +644,16 @@
         _edit.SignatureUrl = null;
     }
 
-    private async Task OnSignatureFile(InputFileChangeEventArgs e)
+    private void ClearSignatureEn()
+    {
+        _edit.SignatureUrlEn = null;
+    }
+
+    private Task OnSignatureFile(InputFileChangeEventArgs e) => UploadSignatureAsync(e, chinese: true);
+
+    private Task OnSignatureEnFile(InputFileChangeEventArgs e) => UploadSignatureAsync(e, chinese: false);
+
+    private async Task UploadSignatureAsync(InputFileChangeEventArgs e, bool chinese)
     {
         var file = e.File;
         if (file is null) return;
@@ -612,15 +663,29 @@
             return;
         }
 
-        _sigUploading = true;
+        if (chinese) _sigUploading = true;
+        else _sigUploadingEn = true;
         try
         {
             await using var stream = file.OpenReadStream(MaxSigBytes);
             var path = await CotractBase.UploadImageAsync(stream, file.Name);
-            _edit.SignatureUrl = path;
-            if (string.IsNullOrWhiteSpace(_edit.Signature) && !string.IsNullOrWhiteSpace(_edit.DisplayName))
-                _edit.Signature = _edit.DisplayName.Trim();
-            Notify.Show("签名图片已上传", Severity.Success);
+            if (chinese)
+            {
+                _edit.SignatureUrl = path;
+                if (string.IsNullOrWhiteSpace(_edit.Signature) && !string.IsNullOrWhiteSpace(_edit.DisplayName))
+                    _edit.Signature = _edit.DisplayName.Trim();
+            }
+            else
+            {
+                _edit.SignatureUrlEn = path;
+                if (string.IsNullOrWhiteSpace(_edit.SignatureEn))
+                {
+                    _edit.SignatureEn = !string.IsNullOrWhiteSpace(_edit.EnglishName)
+                        ? _edit.EnglishName.Trim()
+                        : _edit.DisplayName?.Trim();
+                }
+            }
+            Notify.Show((chinese ? "中文" : "英文") + "签名已上传", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -628,7 +693,8 @@
         }
         finally
         {
-            _sigUploading = false;
+            if (chinese) _sigUploading = false;
+            else _sigUploadingEn = false;
         }
     }
 
@@ -671,12 +737,14 @@
                     EmpNo = _edit.EmpNo.Trim(),
                     DisplayName = _edit.DisplayName?.Trim() ?? "",
                     Password = _edit.Password!,
-                    IsActive = _edit.IsActive,
+                    // 全局账号保持可用；是否能进遮阳由 SystemPermissions.Enabled 决定
+                    IsActive = true,
                     SystemPermissions = new Dictionary<string, SystemPermissionEntryApiDto>
                     {
                         [CentralApiOptions.AppSystemKey] = new()
                         {
                             Role = role,
+                            Enabled = _edit.IsActive,
                             Controls = controls
                         }
                     }
@@ -693,8 +761,7 @@
                 var update = new UpdateCentralUserRequestDto
                 {
                     DisplayName = _edit.DisplayName?.Trim() ?? "",
-                    Password = string.IsNullOrWhiteSpace(_edit.Password) ? null : _edit.Password,
-                    IsActive = _edit.IsActive
+                    Password = string.IsNullOrWhiteSpace(_edit.Password) ? null : _edit.Password
                 };
                 var (ok, msg) = await UsersApi.UpdateUserAsync(_edit.EmpNo, update);
                 if (!ok)
@@ -703,7 +770,8 @@
                     return;
                 }
 
-                var (roleOk, roleMsg) = await UsersApi.SaveAppPermissionsAsync(_edit.EmpNo, role, controls);
+                var (roleOk, roleMsg) = await UsersApi.SaveAppPermissionsAsync(
+                    _edit.EmpNo, role, controls, _edit.IsActive);
                 if (!roleOk)
                 {
                     Notify.Show(roleMsg ?? "保存角色/页面权限失败", Severity.Error);
@@ -716,9 +784,12 @@
                 Department = _edit.Department,
                 Email = email,
                 Phone = _edit.Phone,
+                EnglishName = string.IsNullOrWhiteSpace(_edit.EnglishName) ? null : _edit.EnglishName.Trim(),
                 ViewAllCustomers = viewAll,
                 Signature = string.IsNullOrWhiteSpace(_edit.Signature) ? null : _edit.Signature.Trim(),
-                SignatureUrl = string.IsNullOrWhiteSpace(_edit.SignatureUrl) ? null : _edit.SignatureUrl.Trim()
+                SignatureUrl = string.IsNullOrWhiteSpace(_edit.SignatureUrl) ? null : _edit.SignatureUrl.Trim(),
+                SignatureEn = string.IsNullOrWhiteSpace(_edit.SignatureEn) ? null : _edit.SignatureEn.Trim(),
+                SignatureUrlEn = string.IsNullOrWhiteSpace(_edit.SignatureUrlEn) ? null : _edit.SignatureUrlEn.Trim()
             }, _edit.DisplayName?.Trim());
             if (!infoOk)
                 Notify.Show(infoMsg ?? "保存档案失败", Severity.Warning);
@@ -760,61 +831,32 @@
             ? row.EmpNo
             : $"{row.DisplayName}（{row.EmpNo}）";
         var confirmed = await DialogService.ShowMessageBoxAsync(
-            enable ? "确认启用" : "确认禁用",
+            enable ? "确认启用本系统" : "确认禁用本系统",
             enable
-                ? $"确定要启用 {who} 吗？启用后该账号可以登录系统，并会向员工邮箱发送通知。"
-                : $"确定要禁用 {who} 吗？禁用后该账号将无法登录，并会向员工邮箱发送通知。",
+                ? $"确定要为 {who} 启用遮阳系统权限吗？启用后可登录本系统，并会向员工邮箱发送通知（不影响其在其它系统的权限）。"
+                : $"确定要为 {who} 禁用遮阳系统权限吗？禁用后无法登录本系统，并会向员工邮箱发送通知（不影响其在其它系统的权限）。",
             yesText: enable ? "启用" : "禁用",
             cancelText: "取消");
         if (confirmed != true)
             return;
 
-        if (enable)
-            await ActivateAsync(row);
-        else
-            await DeactivateAsync(row);
+        await SetAppEnabledAsync(row, enable);
     }
 
-    private async Task ActivateAsync(ManagedUserRowDto row)
+    private async Task SetAppEnabledAsync(ManagedUserRowDto row, bool enable)
     {
         _busy = true;
         try
         {
-            var (ok, msg) = await UsersApi.UpdateUserAsync(row.EmpNo, new UpdateCentralUserRequestDto
-            {
-                DisplayName = row.DisplayName,
-                IsActive = true
-            });
+            var (ok, msg) = await UsersApi.SetAppEnabledAsync(row.EmpNo, enable);
             if (!ok)
             {
-                Notify.Show(msg ?? "启用失败", Severity.Error);
+                Notify.Show(msg ?? (enable ? "启用失败" : "禁用失败"), Severity.Error);
                 return;
             }
 
-            Notify.Show("已启用，该账号可以登录", Severity.Success);
-            await NotifyAccountStatusAsync(row, enabled: true);
-            await ReloadAsync();
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private async Task DeactivateAsync(ManagedUserRowDto row)
-    {
-        _busy = true;
-        try
-        {
-            var (ok, msg) = await UsersApi.DeactivateUserAsync(row.EmpNo);
-            if (!ok)
-            {
-                Notify.Show(msg ?? "停用失败", Severity.Error);
-                return;
-            }
-
-            Notify.Show("已停用", Severity.Success);
-            await NotifyAccountStatusAsync(row, enabled: false);
+            Notify.Show(enable ? "已启用本系统权限" : "已禁用本系统权限", Severity.Success);
+            await NotifyAccountStatusAsync(row, enabled: enable);
             await ReloadAsync();
         }
         finally
@@ -903,7 +945,7 @@
             return "超级管理员";
         if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
             return "管理员";
-        return "操作员";
+        return "业务员";
     }
 
     private static bool HasInvoiceKpVisible(SystemPermissionEntryApiDto? entry)

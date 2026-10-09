@@ -5,7 +5,7 @@ namespace ZYQDManager.DataDtos;
 public sealed class CotractPiQueryDto
 {
     public string DocumentType { get; set; } = "客户PI";
-    public string FilterColumn { get; set; } = "Customer";
+    public string FilterColumn { get; set; } = "客户编号";
     public string? Keyword { get; set; }
     public string? ClientNo { get; set; }
     public bool RequireClientNo { get; set; }
@@ -28,6 +28,8 @@ public static class CotractPiTypes
     public static IReadOnlyList<string> CustomerPi => Opt.ResolvedOrderTypes();
     public static IReadOnlyList<string> CustomerCi
         => CustomerPi.Select(ToCustomerCiType).ToList();
+    public static IReadOnlyList<string> CustomsPi
+        => CustomerPi.Select(ToCustomsPiType).ToList();
     public static IReadOnlyList<string> TradeTerms => Opt.ResolvedTradeTerms();
     public static IReadOnlyList<SelectOptionItem> PaymentMethods => Opt.ResolvedPaymentMethods();
     public static string DefaultTradeTerm
@@ -81,6 +83,14 @@ public static class CotractPiTypes
         return baseType + "-客户CI";
     }
 
+    public static string ToCustomsPiType(string? orderType)
+    {
+        var baseType = BaseOrderType(orderType);
+        if (baseType.Length == 0)
+            baseType = CustomerPi.Count > 0 ? CustomerPi[0] : "标准订单";
+        return baseType + "-报关PI";
+    }
+
     public static string DocumentKind(string? orderType)
     {
         var s = orderType ?? "";
@@ -93,6 +103,9 @@ public static class CotractPiTypes
 
     public static bool IsCustomerCi(string? orderType)
         => DocumentKind(orderType) == "客户CI";
+
+    public static bool IsCustomsPi(string? orderType)
+        => DocumentKind(orderType) == "报关PI";
 
     public static string InvoiceTitle(string? orderType)
         => IsCustomerCi(orderType) ? "COMMERCIAL INVOICE" : "PROFORMA INVOICE";
@@ -297,12 +310,14 @@ public sealed class CotractPiCompanyInfo
 
 public static class CotractPiFilterFields
 {
+    /// <summary>与合同列表表头一一对应（不含日期列）。Key/Label 同为中文表头名。</summary>
     public static readonly (string Key, string Label)[] All =
     [
-        ("Customer", "客户"),
-        ("INVOICE_NO", "INVOICE NO"),
-        ("Person", "需求人"),
-        ("var6", "订单类型"),
-        ("BILL_TO_PO_REF", "PO号")
+        ("客户编号", "客户编号"),
+        ("客户名称", "客户名称"),
+        ("订单类型", "订单类型"),
+        ("需求人", "需求人"),
+        ("发票号", "发票号"),
+        ("PO号", "PO号")
     ];
 }

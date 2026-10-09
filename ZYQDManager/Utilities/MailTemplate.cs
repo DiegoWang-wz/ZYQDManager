@@ -96,7 +96,7 @@ public static class MailTemplate
         string? phone,
         string? loginUrl)
         => Wrap(
-            "您的遮阳管理系统账号已由管理员启用，现在可以使用工号和密码登录。",
+            "您的遮阳管理系统权限已由管理员启用，现在可以使用工号和密码登录本系统。",
             [
                 ..UserRows(empNo, displayName, department, email, phone, DateTime.Now),
                 ("状态", "已启用")
@@ -113,7 +113,7 @@ public static class MailTemplate
         string? email,
         string? phone)
         => Wrap(
-            "您的遮阳管理系统账号已被管理员禁用，暂时无法登录。",
+            "您的遮阳管理系统权限已被管理员禁用，暂时无法登录本系统（其它系统不受影响）。",
             [
                 ..UserRows(empNo, displayName, department, email, phone, DateTime.Now),
                 ("状态", "已禁用")

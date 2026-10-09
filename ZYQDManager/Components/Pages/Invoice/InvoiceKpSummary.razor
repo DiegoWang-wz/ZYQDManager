@@ -68,7 +68,7 @@
             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-0">当前为只读权限（Controls.disabled）。</MudAlert>
         }
 
-        <MudPaper Class="invoice-kp-table-wrap pa-0" Outlined="true">
+        <MudPaper Class="@($"invoice-kp-table-wrap pa-0{(_rows.Count > 0 ? " has-rows" : " is-empty")}")" Outlined="true">
             <MudTable T="InvoiceKpSummaryRow"
                       Items="_rows"
                       Dense="true"
@@ -77,9 +77,9 @@
                       Bordered="true"
                       Loading="_busy"
                       Breakpoint="Breakpoint.None"
-                      FixedHeader="true"
-                      FixedFooter="true"
-                      Height="@_tableHeight"
+                      FixedHeader="@(_rows.Count > 0)"
+                      FixedFooter="@(_rows.Count > 0)"
+                      Height="@(_rows.Count > 0 ? _tableHeight : null)"
                       Class="invoice-kp-table"
                       Style="min-width: 960px;">
                 <HeaderContent>
@@ -97,14 +97,24 @@
                     <MudTd DataLabel="金额" Style="text-align:right">@FormatNum(context.AmountUsd)</MudTd>
                 </RowTemplate>
                 <FooterContent>
-                    <MudTd><b>合计</b></MudTd>
-                    <MudTd></MudTd>
-                    <MudTd></MudTd>
-                    <MudTd Style="text-align:right"><b>@FormatNum(_totalQty)</b></MudTd>
-                    <MudTd Style="text-align:right"><b>@FormatNum(_totalAmount)</b></MudTd>
+                    @if (_rows.Count > 0)
+                    {
+                        <MudTd><b>合计</b></MudTd>
+                        <MudTd></MudTd>
+                        <MudTd></MudTd>
+                        <MudTd Style="text-align:right"><b>@FormatNum(_totalQty)</b></MudTd>
+                        <MudTd Style="text-align:right"><b>@FormatNum(_totalAmount)</b></MudTd>
+                    }
                 </FooterContent>
                 <NoRecordsContent>
-                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无数据")</MudText>
+                    <div class="invoice-kp-empty">
+                        <MudIcon Icon="@Icons.Material.Outlined.Inbox" Class="invoice-kp-empty-icon"/>
+                        <MudText Typo="Typo.body1">@(_busy ? "加载中…" : "暂无数据")</MudText>
+                        @if (!_busy)
+                        {
+                            <MudText Typo="Typo.caption" Class="invoice-kp-empty-hint">请调整日期或客户条件后重新搜索</MudText>
+                        }
+                    </div>
                 </NoRecordsContent>
             </MudTable>
         </MudPaper>
@@ -136,7 +146,7 @@
         padding-right: 4px;
     }
 
-    .invoice-kp-table-wrap {
+    .invoice-kp-table-wrap.has-rows {
         flex: 1 1 0;
         min-height: 0;
         display: flex;
@@ -144,12 +154,41 @@
         overflow: hidden;
     }
 
-    .invoice-kp-table {
+    .invoice-kp-table-wrap.is-empty {
+        flex: 0 0 auto;
+    }
+
+    .invoice-kp-table-wrap.is-empty tfoot {
+        display: none;
+    }
+
+    .invoice-kp-table-wrap.has-rows .invoice-kp-table {
         height: 100%;
     }
 
-    .invoice-kp-table .mud-table-container {
+    .invoice-kp-table-wrap.has-rows .mud-table-container {
         overflow: auto !important;
+    }
+
+    .invoice-kp-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 40px 16px 36px;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .invoice-kp-empty-icon {
+        font-size: 2.25rem !important;
+        width: 2.25rem;
+        height: 2.25rem;
+        opacity: 0.45;
+    }
+
+    .invoice-kp-empty-hint {
+        opacity: 0.8;
     }
 </style>
 

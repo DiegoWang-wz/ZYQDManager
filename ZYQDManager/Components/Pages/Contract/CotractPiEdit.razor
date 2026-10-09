@@ -2,11 +2,12 @@
 @page "/contract-pi/{DocumentGuid}"
 @page "/contract-ci/new"
 @page "/contract-ci/{DocumentGuid}"
+@page "/contract-bg/new"
+@page "/contract-bg/{DocumentGuid}"
 @rendermode InteractiveServer
 @inject CotractPiService CotractPi
 @inject CotractPiExcelService PiExcel
 @inject LibreOfficePdfService LibreOffice
-@inject ExcelComPdfService ExcelPdf
 @inject CotractBaseService CotractBase
 @inject CrmCustomerService Crm
 @inject IJSRuntime JS
@@ -16,7 +17,7 @@
 <div class="cpi-edit-page">
     <div class="cpi-topbar">
         <label>订单类型：</label>
-        <select class="cpi-topbar-select" value="@_header.var6" @onchange="OnOrderTypeNative" disabled="@(_busy || IsCustomerCi)">
+        <select class="cpi-topbar-select" value="@_header.var6" @onchange="OnOrderTypeNative" disabled="@(_busy || IsDerivedDoc)">
             @foreach (var t in OrderTypeOptions)
             {
                 <option value="@t">@t</option>
@@ -24,16 +25,10 @@
         </select>
         <button type="button" class="cpi-btn" disabled="@_busy" @onclick="SaveAsync">保存</button>
         <button type="button" class="cpi-btn" disabled="@(_busy || IsCreate)" @onclick="ExportExcelAsync">导出Excel</button>
-        <button type="button" class="cpi-btn cpi-btn-lo" disabled="@(_busy || IsCreate)" @onclick="() => ExportPdfAsync(false)">导出PDF(LO)</button>
-        <button type="button" class="cpi-btn cpi-btn-xl" disabled="@(_busy || IsCreate)" @onclick="() => ExportPdfAsync(true)">导出PDF(Excel)</button>
-        <button type="button" class="cpi-btn cpi-btn-lo" disabled="@_busy" @onclick="TestLibreOfficeAsync">测试LibreOffice</button>
-        @if (_loStatus.Length > 0)
-        {
-            <span class="cpi-lo-status @(_loOk ? "ok" : "bad")" title="@_loStatus">@_loStatus</span>
-        }
+        <button type="button" class="cpi-btn cpi-btn-lo" disabled="@(_busy || IsCreate)" @onclick="ExportPdfAsync">导出PDF</button>
         <button type="button" class="cpi-btn cpi-btn-freeze" @onclick="ToggleFreeze">@(_freeze ? "取消冻结" : "冻结表头")</button>
         <a class="cpi-link" href="@ListHref">返回列表</a>
-        <span class="cpi-topbar-split"></span>
+        <span class="cpi-topbar-spacer"></span>
         <input class="cpi-cell cpi-edit cpi-picker-client cpi-lookup" placeholder="选择客户编号" @bind="_productClientNo" @bind:event="oninput" @onkeydown="OnProductKey" @onblur="LoadProductsAsync"/>
         <label>选择产品信息</label>
         <select class="cpi-cell cpi-edit cpi-picker-product" value="@_productId" @onchange="OnProductNative" @onfocus="EnsureProductsAsync">
@@ -351,27 +346,14 @@
     .cpi-btn:disabled { opacity: .55; cursor: not-allowed; }
     .cpi-btn-freeze { background: #F56C6C; }
     .cpi-btn-lo { background: #67c23a; }
-    .cpi-btn-xl { background: #e6a23c; }
-    .cpi-lo-status {
-        max-width: 320px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-size: 12px;
-        color: #606266;
-    }
-    .cpi-lo-status.ok { color: #67c23a; }
-    .cpi-lo-status.bad { color: #f56c6c; }
     .cpi-btn-add { padding: 5px 12px; }
     .cpi-btn-del { background: #409eff; padding: 2px 8px; font-size: 12px; }
     .cpi-link { color: #409eff; white-space: nowrap; }
-    .cpi-topbar-split {
-        width: 1px;
-        align-self: stretch;
-        background: #dcdfe6;
-        margin: 0 4px;
+    .cpi-topbar-spacer {
+        flex: 1 1 auto;
+        min-width: 12px;
     }
     .cpi-picker-client { width: 120px; flex: 0 0 120px; }
-    .cpi-picker-product { flex: 1 1 280px; min-width: 180px; }
     .cpi-sheet-wrap {
         flex: 1 1 0;
         min-height: 0;
@@ -522,6 +504,12 @@
         appearance: auto;
         padding-right: 20px;
     }
+    select.cpi-cell.cpi-edit.cpi-picker-product {
+        flex: 0 0 320px;
+        width: 320px !important;
+        max-width: 320px;
+        min-width: 0;
+    }
     .cpi-date-wrap {
         position: relative;
         width: 100%;
@@ -611,28 +599,33 @@
 
     private bool IsCreate => string.IsNullOrWhiteSpace(DocumentGuid)
         || string.Equals(DocumentGuid, "new", StringComparison.OrdinalIgnoreCase);
-    private bool IsCiRoute
-    {
-        get
-        {
-            var path = NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0];
-            return path.StartsWith("contract-ci", StringComparison.OrdinalIgnoreCase);
-        }
-    }
+    private string RoutePath => NavManager.ToBaseRelativePath(NavManager.Uri).Split('?')[0];
+    private bool IsCiRoute => RoutePath.StartsWith("contract-ci", StringComparison.OrdinalIgnoreCase);
+    private bool IsBgRoute => RoutePath.StartsWith("contract-bg", StringComparison.OrdinalIgnoreCase);
     private bool IsCustomerCi => IsCiRoute || CotractPiTypes.IsCustomerCi(_header.var6);
+    private bool IsCustomsPi => IsBgRoute || CotractPiTypes.IsCustomsPi(_header.var6);
+    private bool IsDerivedDoc => IsCustomerCi || IsCustomsPi;
     private string Title => IsCustomerCi
         ? (IsCreate ? "生成客户CI" : "编辑客户CI")
-        : (IsCreate ? "新增客户PI" : "编辑客户PI");
+        : IsCustomsPi
+            ? (IsCreate ? "生成报关PI" : "编辑报关PI")
+            : (IsCreate ? "新增客户PI" : "编辑客户PI");
     private string InvoiceTitle => CotractPiTypes.InvoiceTitle(_header.var6);
-    private string ListHref => IsCustomerCi ? "/contract-ci/from-pi" : "/contract-pi";
+    private string ListHref => IsCustomerCi
+        ? "/contract?type=客户CI"
+        : IsCustomsPi
+            ? "/contract?type=报关PI"
+            : "/contract?type=客户PI";
     private IReadOnlyList<string> OrderTypeOptions
     {
         get
         {
-            if (!IsCustomerCi)
+            if (!IsDerivedDoc)
                 return CotractPiTypes.CustomerPi;
             var current = (_header.var6 ?? "").Trim();
-            return current.Length > 0 ? [current] : CotractPiTypes.CustomerCi;
+            if (current.Length > 0)
+                return [current];
+            return IsCustomsPi ? CotractPiTypes.CustomsPi : CotractPiTypes.CustomerCi;
         }
     }
     private string TemplateType => CotractPiTypes.ResolveTemplateType(_header.var6, _header.ClientNo);
@@ -651,8 +644,6 @@
         }
     }
     private bool _unfreezeAfterRender;
-    private string _loStatus = "";
-    private bool _loOk;
 
     private async Task OpenDatePickerAsync()
     {
@@ -707,13 +698,20 @@
     {
         if (!RendererInfo.IsInteractive) return;
 
-        var key = $"{(IsCiRoute ? "ci" : "pi")}|{DocumentGuid ?? "new"}|{SourceGuids}|{CiOrderType}";
+        var routeKind = IsCiRoute ? "ci" : IsBgRoute ? "bg" : "pi";
+        var key = $"{routeKind}|{DocumentGuid ?? "new"}|{SourceGuids}|{CiOrderType}";
         if (_loadedKey == key) return;
         _loadedKey = key;
 
         if (IsCiRoute && IsCreate)
         {
-            await LoadCiDraftAsync();
+            await LoadDerivedDraftAsync("客户CI");
+            return;
+        }
+
+        if (IsBgRoute && IsCreate)
+        {
+            await LoadDerivedDraftAsync("报关PI");
             return;
         }
 
@@ -773,20 +771,22 @@
         RefreshCompany();
     }
 
-    private async Task LoadCiDraftAsync()
+    private async Task LoadDerivedDraftAsync(string documentKind)
     {
+        var backHref = "/contract?type=" + Uri.EscapeDataString("客户PI") + "&hint=generate";
         if (string.IsNullOrWhiteSpace(SourceGuids))
         {
-            Notify.Show("请先在客户CI生成入口勾选客户PI", Severity.Warning);
-            NavManager.NavigateTo("/contract-ci/from-pi");
+            NavManager.NavigateTo(backHref);
             return;
         }
 
-        var rows = await CotractPi.LoadCustomerCiDraftAsync(SourceGuids, CiOrderType);
+        var rows = documentKind == "报关PI"
+            ? await CotractPi.LoadCustomsPiDraftAsync(SourceGuids, CiOrderType)
+            : await CotractPi.LoadCustomerCiDraftAsync(SourceGuids, CiOrderType);
         if (rows.Count == 0)
         {
             Notify.Show("未找到选中的客户PI", Severity.Warning);
-            NavManager.NavigateTo("/contract-ci/from-pi");
+            NavManager.NavigateTo(backHref);
             return;
         }
 
@@ -794,7 +794,7 @@
         if (!CotractPi.CanAccess(rows[0], scope))
         {
             Notify.Show("没有这条数据的权限", Severity.Warning);
-            NavManager.NavigateTo("/contract-ci/from-pi");
+            NavManager.NavigateTo(backHref);
             return;
         }
 
@@ -1265,7 +1265,7 @@
             _invoiceLocked = true;
             if (IsCreate && !string.IsNullOrWhiteSpace(guid))
             {
-                var prefix = IsCustomerCi ? "/contract-ci/" : "/contract-pi/";
+                var prefix = IsCustomerCi ? "/contract-ci/" : IsCustomsPi ? "/contract-bg/" : "/contract-pi/";
                 NavManager.NavigateTo(prefix + guid, replace: true);
             }
         }
@@ -1312,7 +1312,7 @@
         }
     }
 
-    private async Task ExportPdfAsync(bool useExcelCom)
+    private async Task ExportPdfAsync()
     {
         if (IsCreate)
         {
@@ -1320,10 +1320,9 @@
             return;
         }
         _busy = true;
-        var tag = useExcelCom ? "Excel" : "LO";
         try
         {
-            Notify.Show(useExcelCom ? "正在用 Excel 生成 PDF…" : "正在用 LibreOffice 生成 PDF…", Severity.Info);
+            Notify.Show("正在生成 PDF…", Severity.Info);
             var rows = await CotractPi.GetByGuidAsync(DocumentGuid);
             if (rows.Count == 0)
             {
@@ -1331,42 +1330,17 @@
                 return;
             }
             var xlsx = PiExcel.Build(rows);
-            var english = string.Equals(rows[0].Cotract_PI_type, "JS", StringComparison.OrdinalIgnoreCase);
-            var pdf = useExcelCom
-                ? await ExcelPdf.ConvertXlsxToPdfAsync(xlsx, rows.Count, english)
-                : await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
             await JS.InvokeVoidAsync(
                 "downloadFileFromBase64",
-                CotractPiExcelService.DownloadPdfName(rows[0], tag),
+                CotractPiExcelService.DownloadPdfName(rows[0]),
                 "application/pdf",
                 Convert.ToBase64String(pdf));
-            Notify.Show(tag + " PDF 已导出", Severity.Success);
+            Notify.Show("PDF 已导出", Severity.Success);
         }
         catch (Exception ex)
         {
-            Notify.Show("导出" + tag + " PDF失败：" + ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private async Task TestLibreOfficeAsync()
-    {
-        _busy = true;
-        try
-        {
-            var (ok, msg) = await LibreOffice.TestAsync();
-            _loOk = ok;
-            _loStatus = msg;
-            Notify.Show(msg, ok ? Severity.Success : Severity.Error);
-        }
-        catch (Exception ex)
-        {
-            _loOk = false;
-            _loStatus = ex.Message;
-            Notify.Show("LibreOffice 测试失败：" + ex.Message, Severity.Error);
+            Notify.Show("导出 PDF 失败：" + ex.Message, Severity.Error);
         }
         finally
         {

@@ -1,0 +1,336 @@
+@page "/contract-pk"
+@rendermode InteractiveServer
+@inject CustomsAndPackingService Packing
+@inject CentralAuthService Auth
+@inject CentralUserInformationService UserInfo
+
+<PageTitle>装箱单列表</PageTitle>
+
+<div class="cpk-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="cpk-toolbar">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-left">
+                <MudDatePicker @bind-Date="_dateStart"
+                               Label="开始"
+                               DateFormat="yyyy-MM-dd"
+                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Editable="true"
+                               Clearable="true"
+                               Class="cpk-filter-date"/>
+                <MudDatePicker @bind-Date="_dateEnd"
+                               Label="结束"
+                               DateFormat="yyyy-MM-dd"
+                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Editable="true"
+                               Clearable="true"
+                               Class="cpk-filter-date"/>
+                <MudSelect T="string"
+                           @bind-Value="_filterColumn"
+                           Label="条件"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="cpk-filter-select">
+                    @foreach (var field in CustomsAndPackingFilterFields.All)
+                    {
+                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_keyword"
+                              Label="内容"
+                              Placeholder="输入查询内容"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="cpk-filter-input"
+                              OnKeyUp="OnKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+            </MudStack>
+            <div class="cpk-toolbar-spacer"></div>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-right">
+                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="GoCustomerPiForCreate">新建</MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="cpk-table-wrap pa-0" Outlined="true">
+        @if (_ready)
+        {
+            <MudTable @ref="_table"
+                      T="ZyqdCustomsAndPackingModel"
+                      ServerData="LoadServerData"
+                      RowsPerPage="20"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      MultiSelection="true"
+                      SelectOnRowClick="false"
+                      @bind-SelectedItems="_selected"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      SortMode="SortMode.Single"
+                      OnRowClick="OnRowClick"
+                      Class="cpk-table">
+                <HeaderContent>
+                    <MudTh Class="cpk-no-cell">序号</MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="ClientNo">客户编码</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="ClientName">客户名称</MudTableSortLabel></MudTh>
+                    <MudTh>目的国</MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="PIcotract_code">PI合同</MudTableSortLabel></MudTh>
+                    <MudTh>SAP订单</MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="Person">需求人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-ops-cell">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="cpk-no-cell">@RowNo(context)</MudTd>
+                    <MudTd>@Dash(context.ClientNo)</MudTd>
+                    <MudTd>@Dash(context.ClientName)</MudTd>
+                    <MudTd>@Dash(context.Customer_destination_country)</MudTd>
+                    <MudTd>@Dash(context.PIcotract_code)</MudTd>
+                    <MudTd>@Dash(context.SAP_order_NO)</MudTd>
+                    <MudTd>@Dash(context.Person)</MudTd>
+                    <MudTd>@(context.CreateTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</MudTd>
+                    <MudTd Class="cpk-ops-cell">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   Href="@EditHref(context)">编辑</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.Delete"
+                                   Disabled="_busy"
+                                   OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无装箱单，请在客户PI列表中点击「生成」")</MudText>
+                </NoRecordsContent>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                                   InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+                </PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .cpk-page { flex: 1 1 0; display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 12px; }
+    .cpk-toolbar { width: 100%; }
+    .cpk-toolbar-left, .cpk-toolbar-right { flex: 0 0 auto; }
+    .cpk-toolbar-right { margin-left: auto; }
+    .cpk-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .cpk-filter-select { width: 140px; min-width: 140px; }
+    .cpk-filter-input { width: 200px; min-width: 200px; }
+    .cpk-filter-date { width: 180px; min-width: 180px; flex: 0 0 180px; }
+    .cpk-table-wrap { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .cpk-table { height: 100%; display: flex; flex-direction: column; }
+    .cpk-table .mud-table-container { flex: 1 1 0 !important; min-height: 0 !important; overflow: auto !important; }
+    .cpk-table .mud-table-pagination { flex: 0 0 auto !important; margin-top: auto; border-top: 1px solid var(--mud-palette-lines-default); }
+    .cpk-table .mud-table-head .mud-table-cell:not(.cpk-ops-cell):not(.cpk-no-cell):not(:first-child),
+    .cpk-table .mud-table-body .mud-table-cell:not(.cpk-ops-cell):not(.cpk-no-cell):not(:first-child) {
+        white-space: nowrap; min-width: 88px; vertical-align: middle;
+    }
+    .cpk-table .mud-table-cell:first-child,
+    .cpk-table .mud-table-cell.cpk-no-cell {
+        position: sticky; z-index: 4; box-sizing: border-box; background-color: #fff !important; vertical-align: middle !important;
+    }
+    .cpk-table .mud-table-head .mud-table-cell:first-child,
+    .cpk-table .mud-table-head .mud-table-cell.cpk-no-cell { z-index: 6; }
+    .cpk-table .mud-table-cell:first-child {
+        left: 0; width: 42px !important; min-width: 42px !important; max-width: 42px !important; padding: 0 !important; text-align: center !important;
+    }
+    .cpk-table .mud-table-cell.cpk-no-cell {
+        left: 42px; width: 48px !important; min-width: 48px !important; max-width: 48px !important; padding: 0 2px !important; text-align: center; border-right: 1px solid #e0e0e0;
+    }
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpk-no-cell,
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpk-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+    .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
+    .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-no-cell,
+    .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-ops-cell {
+        background-color: #eeeeee !important;
+    }
+    .cpk-table .mud-table-cell.cpk-ops-cell {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        min-width: 160px;
+        white-space: nowrap;
+        vertical-align: middle;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+    }
+    .cpk-table .mud-table-head .mud-table-cell.cpk-ops-cell { z-index: 6; background-color: #fff !important; }
+    .cpk-table .mud-table-body .mud-table-row { cursor: pointer; }
+</style>
+
+@code {
+    private MudTable<ZyqdCustomsAndPackingModel>? _table;
+    private bool _ready;
+    private bool _busy;
+    private string _filterColumn = "客户编码";
+    private string? _keyword;
+    private DateTime? _dateStart = DateTime.Today.AddDays(-30);
+    private DateTime? _dateEnd = DateTime.Today;
+    private List<ZyqdCustomsAndPackingModel> _rows = [];
+    private HashSet<ZyqdCustomsAndPackingModel> _selected = new();
+    private int _skip;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _ready) return;
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private int RowNo(ZyqdCustomsAndPackingModel row)
+    {
+        var i = _rows.IndexOf(row);
+        return i < 0 ? 0 : _skip + i + 1;
+    }
+
+    private static string Dash(string? s) => string.IsNullOrWhiteSpace(s) ? "-" : s;
+    private static string EditHref(ZyqdCustomsAndPackingModel row)
+        => $"/contract-pk/{Uri.EscapeDataString((row.DocumentGuid ?? "").Trim())}";
+
+    private void GoCustomerPiForCreate()
+        => NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("客户PI")}&hint=generate");
+
+    private void OnRowClick(TableRowClickEventArgs<ZyqdCustomsAndPackingModel> args)
+    {
+        if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
+        var guid = (args.Item.DocumentGuid ?? "").Trim();
+        if (guid.Length == 0) return;
+        NavManager.NavigateTo(EditHref(args.Item));
+    }
+
+    private Task OnKeyUp(KeyboardEventArgs e)
+        => e.Key is "Enter" or "NumpadEnter" ? SearchAsync() : Task.CompletedTask;
+
+    private async Task SearchAsync() => await ReloadTableAsync(resetPage: true);
+
+    private async Task ClearAsync()
+    {
+        _keyword = null;
+        _filterColumn = "客户编码";
+        _dateStart = DateTime.Today.AddDays(-30);
+        _dateEnd = DateTime.Today;
+        await SearchAsync();
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private async Task DeleteAsync(ZyqdCustomsAndPackingModel row)
+    {
+        var guid = (row.DocumentGuid ?? "").Trim();
+        if (guid.Length == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "删除装箱单",
+            $"确定删除客户「{row.ClientName}」的装箱单（PI：{row.PIcotract_code}）吗？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+        _busy = true;
+        try
+        {
+            var (success, msg) = await Packing.DeleteByGuidAsync(guid);
+            if (!success) { Notify.Show(msg ?? "删除失败", Severity.Error); return; }
+            Notify.Show("已删除", Severity.Success);
+            _selected.Remove(row);
+            await ReloadTableAsync(false);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "批量删除",
+            $"确定删除选中的 {_selected.Count} 张装箱单吗？",
+            yesText: "删除", cancelText: "取消");
+        if (ok != true) return;
+        _busy = true;
+        try
+        {
+            foreach (var row in _selected.ToList())
+            {
+                var (success, msg) = await Packing.DeleteByGuidAsync(row.DocumentGuid);
+                if (!success) { Notify.Show(msg ?? "删除失败", Severity.Error); return; }
+            }
+            Notify.Show("已删除", Severity.Success);
+            _selected.Clear();
+            await ReloadTableAsync(false);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ReloadTableAsync(bool resetPage)
+    {
+        if (_table is null) return;
+        if (resetPage && _table.CurrentPage != 0)
+        {
+            _table.NavigateTo(Page.First);
+            return;
+        }
+        await _table.ReloadServerData();
+    }
+
+    private async Task<TableData<ZyqdCustomsAndPackingModel>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        if (!_ready) return new TableData<ZyqdCustomsAndPackingModel> { Items = [], TotalItems = 0 };
+        _busy = true;
+        try
+        {
+            var query = await BuildQueryAsync();
+            query.SortLabel = string.IsNullOrWhiteSpace(state.SortLabel) || state.SortDirection == SortDirection.None
+                ? null : state.SortLabel;
+            query.SortDescending = state.SortDirection != SortDirection.Ascending;
+            var take = state.PageSize <= 0 ? 20 : state.PageSize;
+            _skip = state.Page * take;
+            var (rows, total) = await Packing.QueryPageAsync(query, _skip, take, ct);
+            _rows = rows;
+            return new TableData<ZyqdCustomsAndPackingModel> { Items = rows, TotalItems = total };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new TableData<ZyqdCustomsAndPackingModel> { Items = _rows, TotalItems = _rows.Count };
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+            return new TableData<ZyqdCustomsAndPackingModel> { Items = [], TotalItems = 0 };
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task<CustomsAndPackingQueryDto> BuildQueryAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        var viewAll = Auth.CanManageUsers(auth);
+        if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
+        {
+            var (ok, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
+            if (ok) viewAll = Auth.CanViewAllCustomers(auth, info);
+        }
+        return new CustomsAndPackingQueryDto
+        {
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            DateStart = _dateStart,
+            DateEnd = _dateEnd,
+            ViewAll = viewAll,
+            ViewerEmpNo = auth?.EmpNo
+        };
+    }
+}

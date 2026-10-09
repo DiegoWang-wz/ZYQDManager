@@ -71,8 +71,6 @@ builder.Services.AddDbContext<SqlServerDbContext>(opt =>
     opt.UseSqlServer(conn);
 });
 
-builder.Services.AddAutoMapper(typeof(AutoMapperSetting));
-
 var jsonOptions = new JsonSerializerOptions
 {
     PropertyNameCaseInsensitive = true,
@@ -166,12 +164,13 @@ builder.Services.AddScoped<CotractBaseService>();
 builder.Services.AddScoped<CrmCustomerService>();
 builder.Services.AddScoped<CotractPiExcelService>();
 builder.Services.AddScoped<LibreOfficePdfService>();
-builder.Services.AddScoped<ExcelComPdfService>();
 builder.Services.AddScoped<CotractPiService>();
+builder.Services.AddScoped<CustomsAndPackingService>();
 builder.Services.AddScoped<SirExcelService>();
 builder.Services.AddScoped<SirService>();
 builder.Services.AddScoped<QuotationBaseService>();
 builder.Services.AddScoped<QuotationService>();
+builder.Services.AddScoped<QuotationExcelService>();
 builder.Services.AddScoped<InvoiceKpService>();
 builder.Services.AddScoped<SnackbarHelper>();
 builder.Services.AddHttpContextAccessor();

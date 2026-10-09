@@ -17,6 +17,7 @@ public class SqlServerDbContext : DbContext
     public DbSet<ApprovalFlowModel> ApprovalFlows => Set<ApprovalFlowModel>();
     public DbSet<ZyqdCotractBaseModel> CotractBases => Set<ZyqdCotractBaseModel>();
     public DbSet<ZyqdCotractPiModel> CotractPis => Set<ZyqdCotractPiModel>();
+    public DbSet<ZyqdCustomsAndPackingModel> CustomsAndPackings => Set<ZyqdCustomsAndPackingModel>();
     public DbSet<ZyqdSirMainModel> SirMains => Set<ZyqdSirMainModel>();
     public DbSet<ZyqdSirDetailModel> SirDetails => Set<ZyqdSirDetailModel>();
     public DbSet<ZyqdSirSampleForFilingModel> SirSamples => Set<ZyqdSirSampleForFilingModel>();
@@ -102,6 +103,14 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.DocumentGuid).HasColumnName("Guid");
             entity.Property(e => e.SignDate).HasColumnName("DATE");
+        });
+
+        modelBuilder.Entity<ZyqdCustomsAndPackingModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_CustomsAndPacking_List");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.DocumentGuid).HasColumnName("Guid");
         });
 
         modelBuilder.Entity<ZyqdSirMainModel>(entity =>

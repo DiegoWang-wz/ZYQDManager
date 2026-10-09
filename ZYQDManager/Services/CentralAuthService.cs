@@ -72,7 +72,7 @@ public class CentralAuthService
             var storedEmpNo = string.IsNullOrWhiteSpace(data.EmpNo) ? empNo.Trim() : data.EmpNo.Trim();
             var (role, controls) = await LoadAppPermissionsAsync(data.Token, storedEmpNo, ct);
             if (string.IsNullOrWhiteSpace(role))
-                return (false, "该账号无权登录遮阳系统（缺少 ZYQDManager 权限）");
+                return (false, "该账号无权登录遮阳系统（未开通或已禁用本系统权限，请联系管理员）");
 
             var stored = new StoredCentralAuth
             {
@@ -290,9 +290,10 @@ public class CentralAuthService
 
         var perms = parsed.Data.Permissions;
         if (perms.ValueKind != JsonValueKind.Object)
-            return ("operator", controls);
+            return (null, controls);
 
         string role = "operator";
+        var enabled = true; // 旧数据无 Enabled 字段视为已启用
         foreach (var p in perms.EnumerateObject())
         {
             if (p.Name.Equals("Role", StringComparison.OrdinalIgnoreCase)
@@ -300,6 +301,11 @@ public class CentralAuthService
             {
                 var r = (p.Value.GetString() ?? "").Trim();
                 role = string.IsNullOrEmpty(r) ? "operator" : r;
+            }
+            else if (p.Name.Equals("Enabled", StringComparison.OrdinalIgnoreCase)
+                     && (p.Value.ValueKind is JsonValueKind.True or JsonValueKind.False))
+            {
+                enabled = p.Value.GetBoolean();
             }
             else if (p.Name.Equals("Controls", StringComparison.OrdinalIgnoreCase)
                      && p.Value.ValueKind == JsonValueKind.Object)
@@ -327,6 +333,9 @@ public class CentralAuthService
                 }
             }
         }
+
+        if (!enabled)
+            return (null, controls);
 
         return (role, controls);
     }

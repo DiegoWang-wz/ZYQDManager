@@ -1,108 +1,226 @@
 @page "/quotation-base/new"
 @page "/quotation-base/{Id:int}/copy"
-@page "/quotation-base/{Id:int}/detail"
 @page "/quotation-base/{Id:int}"
 @rendermode InteractiveServer
-@using ZYQDManager.Components.Pages.Contract
 @using ZYQDManager.DataModels.Quotation
 @inject QuotationBaseService QuotationBase
-@inject CentralAuthService Auth
+@inject CotractBaseService CotractBase
 
 <PageTitle>@Title</PageTitle>
 
 <div class="qb-edit-page">
-    <div class="qb-edit-toolbar">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-            <MudText Typo="Typo.h6">@Title</MudText>
-            <MudStack Row="true" Spacing="1">
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@ListHref">返回列表</MudButton>
-                @if (!IsDetail)
-                {
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
-                        @(IsCopy ? "创建" : "保存")
-                    </MudButton>
-                }
-            </MudStack>
-        </MudStack>
-    </div>
-
-    <div class="qb-edit-scroll">
-        <MudPaper Outlined="true" Class="pa-4 qb-edit-card">
-            <fieldset class="qb-form" disabled="@IsDetail">
-                <div class="cb-kv-list">
-                    <CbKvRow Label="类型" Required="true">
-                        @if (IsCreate && !IsCopy)
-                        {
-                            <MudSelect T="string"
-                                       Value="_itemType"
-                                       ValueChanged="OnTypeChanged"
-                                       Variant="Variant.Outlined"
-                                       Margin="Margin.Dense"
-                                       Dense="true"
-                                       Disabled="_busy">
-                                @foreach (var t in QuotationBaseTypes.All)
+    <div id="qb-edit-scroll" class="qb-edit-scroll">
+        <div class="qb-detail">
+            <MudPaper Outlined="true" Class="qb-detail-hero">
+                <div class="qb-detail-media">
+                    @if (HasImage)
+                    {
+                        <div class="qb-detail-img-wrap">
+                            <LegacyRemoteImg Path="@_model.Quotation_logo" CssClass="qb-detail-img"/>
+                            @if (!IsReadOnly && !_imgUploading)
+                            {
+                                <button type="button"
+                                        class="qb-img-slot-x"
+                                        title="删除图片"
+                                        @onclick="ClearLogoAsync"
+                                        @onclick:stopPropagation="true">×</button>
+                            }
+                        </div>
+                    }
+                    else if (IsReadOnly)
+                    {
+                        <div class="qb-detail-img-placeholder">
+                            <MudIcon Icon="@ChipIconOf(_itemType)" Class="qb-detail-img-icon"/>
+                            <span>暂无图片</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <label class="qb-img-slot qb-img-slot-add @(_busy || _imgUploading ? "qb-img-slot-disabled" : null)">
+                            <InputFile OnChange="OnLogoFile"
+                                       accept=".png,.jpg,.jpeg,.gif,.bmp,image/*"
+                                       disabled="@(_busy || _imgUploading)"/>
+                            <span class="qb-img-slot-add-inner">
+                                @if (_imgUploading)
                                 {
-                                    <MudSelectItem Value="@t.Key">@t.Label</MudSelectItem>
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true"/>
+                                    <span>上传中…</span>
                                 }
-                            </MudSelect>
-                        }
-                        else
-                        {
-                            <span>@QuotationBaseTypes.LabelOf(_itemType)</span>
-                        }
-                    </CbKvRow>
-
-                    <CbKvText Label="型号" @bind-Value="_model.Part_No" ReadOnly="IsDetail" Required="true"/>
-                    <CbKvImage Label="图片" @bind-Value="_model.Quotation_logo" ReadOnly="IsDetail"/>
-
-                    @if (_itemType == QuotationBaseTypes.Motor)
-                    {
-                        <CbKvText Label="额定扭矩" @bind-Value="_model.Rated_torque" ReadOnly="IsDetail"/>
-                        <CbKvText Label="额定转速" @bind-Value="_model.Rated_speed" ReadOnly="IsDetail"/>
-                        <CbKvText Label="电源" @bind-Value="_model.Power_supply" ReadOnly="IsDetail"/>
-                        <CbKvText Label="额定功率" @bind-Value="_model.Rated_Power" ReadOnly="IsDetail"/>
-                        <CbKvText Label="额定电流" @bind-Value="_model.Rated_Current" ReadOnly="IsDetail"/>
-                        <CbKvText Label="噪音" @bind-Value="_model.Noise_dBA" ReadOnly="IsDetail"/>
-                        <CbKvText Label="电机长度" @bind-Value="_model.Motor_Length" ReadOnly="IsDetail"/>
-                        <CbKvText Label="管径" @bind-Value="_model.Tube_diameter" ReadOnly="IsDetail"/>
-                        <CbKvText Label="电池容量" @bind-Value="_model.Battery_Capacity" ReadOnly="IsDetail"/>
-                        <CbKvText Label="价格排除" @bind-Value="_model.Exclude_text" ReadOnly="IsDetail" Multiline="true"/>
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Add" Class="qb-img-slot-add-icon"/>
+                                    <span>上传</span>
+                                }
+                            </span>
+                        </label>
                     }
-                    else if (_itemType == QuotationBaseTypes.Remote)
-                    {
-                        <CbKvText Label="遥控器型号" @bind-Value="_model.Remote_controller_type" ReadOnly="IsDetail"/>
-                        <CbKvText Label="电池型号" @bind-Value="_model.Battery_Type" ReadOnly="IsDetail"/>
-                        <CbKvText Label="频率" @bind-Value="_model.Radio_Frequency" ReadOnly="IsDetail"/>
-                        <CbKvText Label="工作温度" @bind-Value="_model.Working_Temperature" ReadOnly="IsDetail"/>
-                        <CbKvText Label="通道数" @bind-Value="_model.NoOfChannels" ReadOnly="IsDetail"/>
-                    }
-                    else if (_itemType == QuotationBaseTypes.Accessory)
-                    {
-                        <CbKvText Label="配件名" @bind-Value="_model.adaptor" ReadOnly="IsDetail"/>
-                    }
-                    else if (_itemType == QuotationBaseTypes.CB)
-                    {
-                        <CbKvText Label="额定电压" @bind-Value="_model.Rated_Voltage" ReadOnly="IsDetail"/>
-                        <CbKvText Label="尺寸" @bind-Value="_model.Size" ReadOnly="IsDetail"/>
-                        <CbKvText Label="额定功率" @bind-Value="_model.Rated_Power" ReadOnly="IsDetail"/>
-                        <CbKvText Label="执行器数量" @bind-Value="_model.No_Of_Actuator" ReadOnly="IsDetail"/>
-                        <CbKvText Label="输出控制" @bind-Value="_model.Output_Control" ReadOnly="IsDetail"/>
-                        <CbKvText Label="传感器" @bind-Value="_model.Sensor" ReadOnly="IsDetail"/>
-                        <CbKvText Label="防护等级" @bind-Value="_model.Protection_Degree" ReadOnly="IsDetail"/>
-                    }
-                    else if (_itemType == QuotationBaseTypes.PR)
-                    {
-                        <CbKvText Label="最大负载" @bind-Value="_model.Max_Loading" ReadOnly="IsDetail"/>
-                        <CbKvText Label="最大行程" @bind-Value="_model.Max_Stroke" ReadOnly="IsDetail"/>
-                        <CbKvText Label="防护等级" @bind-Value="_model.Protection_Degree2" ReadOnly="IsDetail"/>
-                        <CbKvText Label="噪音" @bind-Value="_model.Noise" ReadOnly="IsDetail"/>
-                    }
-
-                    <CbKvText Label="备注" @bind-Value="_model.Remark" ReadOnly="IsDetail" Multiline="true"/>
                 </div>
-            </fieldset>
-        </MudPaper>
+                <div class="qb-detail-hero-body">
+                    <div class="qb-detail-hero-top">
+                        <div class="qb-detail-chips">
+                            @if (IsCreate && !IsCopy)
+                            {
+                                <MudSelect T="string"
+                                           Value="_itemType"
+                                           ValueChanged="OnTypeChanged"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Dense="true"
+                                           Class="@($"qb-type-select qb-type-{TypeCss(_itemType)}")"
+                                           ToStringFunc="@(v => QuotationBaseTypes.LabelOf(v))"
+                                           Disabled="_busy">
+                                    @foreach (var t in QuotationBaseTypes.All)
+                                    {
+                                        <MudSelectItem Value="@t.Key">
+                                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="@($"qb-type-item qb-type-{TypeCss(t.Key)}")">
+                                                <MudIcon Icon="@ChipIconOf(t.Key)" Size="Size.Small"/>
+                                                <span>@t.Label</span>
+                                            </MudStack>
+                                        </MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Color="@ChipColorOf(_itemType)"
+                                         Icon="@ChipIconOf(_itemType)"
+                                         Variant="Variant.Filled">
+                                    @QuotationBaseTypes.LabelOf(_itemType)
+                                </MudChip>
+                            }
+                            @if (_editing && !IsCreate)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                                    编辑中
+                                </MudChip>
+                            }
+                        </div>
+                        <div class="qb-detail-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@ListHref">返回列表</MudButton>
+                            @if (IsReadOnly)
+                            {
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Edit"
+                                           OnClick="StartEdit">编辑</MudButton>
+                            }
+                            else
+                            {
+                                @if (!IsCreate)
+                                {
+                                    <MudButton Size="Size.Small"
+                                               Variant="Variant.Outlined"
+                                               Disabled="_busy"
+                                               OnClick="CancelEditAsync">取消</MudButton>
+                                }
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Disabled="_busy"
+                                           OnClick="SaveAsync">
+                                    @(IsCopy ? "创建" : "保存")
+                                </MudButton>
+                            }
+                        </div>
+                    </div>
+
+                    <MudTextField @bind-Value="_model.Part_No"
+                                  Label="型号"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  ReadOnly="IsReadOnly"
+                                  Class="qb-part-field"
+                                  Disabled="_busy"/>
+
+                    <div class="qb-detail-meta">
+                        <span>
+                            <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small"/>
+                            创建时间 · @FormatDate(_model.CreateTime)
+                        </span>
+                        <span>
+                            <MudIcon Icon="@Icons.Material.Outlined.Update" Size="Size.Small"/>
+                            更新时间
+                            @if (!IsBlank(_model.UpdatePerson))
+                            {
+                                <text> @Display(_model.UpdatePerson)</text>
+                            }
+                            <text> · @FormatDate(_model.UpdateTime)</text>
+                        </span>
+                        @if (!IsBlank(_model.CreatePerson))
+                        {
+                            <span>
+                                <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small"/>
+                                创建人 @Display(_model.CreatePerson)
+                            </span>
+                        }
+                    </div>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Class="qb-detail-panel">
+                <div class="qb-detail-panel-title">
+                    <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small"/>
+                    <span>规格参数</span>
+                </div>
+                <div class="qb-spec-grid">
+                    @foreach (var key in SpecKeys())
+                    {
+                        var specKey = key;
+                        <CbSpecText Label="@SpecLabel(specKey)"
+                                    Value="@GetSpec(specKey)"
+                                    ValueChanged="@(v => SetSpec(specKey, v))"
+                                    ReadOnly="IsReadOnly"
+                                    Disabled="_busy"/>
+                    }
+                </div>
+            </MudPaper>
+
+            <div class="qb-detail-notes">
+                @if (_itemType == QuotationBaseTypes.Motor || !IsBlank(_model.Exclude_text))
+                {
+                    <MudPaper Outlined="true" Class="qb-detail-panel">
+                        <div class="qb-detail-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.MoneyOff" Size="Size.Small"/>
+                            <span>价格排除</span>
+                        </div>
+                        <MudTextField @bind-Value="_model.Exclude_text"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="3"
+                                      AutoGrow="true"
+                                      MaxLines="10"
+                                      ReadOnly="IsReadOnly"
+                                      Disabled="_busy"/>
+                    </MudPaper>
+                }
+                <MudPaper Outlined="true" Class="qb-detail-panel">
+                    <div class="qb-detail-panel-title">
+                        <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small"/>
+                        <span>备注</span>
+                    </div>
+                    <MudTextField @bind-Value="_model.Remark"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Lines="3"
+                                  AutoGrow="true"
+                                  MaxLines="10"
+                                  ReadOnly="IsReadOnly"
+                                  Disabled="_busy"/>
+                </MudPaper>
+            </div>
+        </div>
     </div>
+
+    <MudScrollToTop Selector="#qb-edit-scroll" TopOffset="240" Class="qb-scroll-to-top">
+        <MudFab Color="Color.Primary"
+                Size="Size.Medium"
+                StartIcon="@Icons.Material.Filled.KeyboardArrowUp"
+                Title="回到顶部"/>
+    </MudScrollToTop>
 </div>
 
 <style>
@@ -112,10 +230,7 @@
         flex-direction: column;
         height: 100%;
         min-height: 0;
-        gap: 12px;
     }
-
-    .qb-edit-toolbar { flex: 0 0 auto; }
 
     .qb-edit-scroll {
         flex: 1 1 0;
@@ -123,57 +238,407 @@
         overflow: auto;
         display: flex;
         justify-content: center;
+        padding-bottom: 16px;
     }
 
-    .qb-edit-card {
+    .qb-detail {
         width: 100%;
-        max-width: 720px;
+        max-width: 1360px;
         align-self: flex-start;
-        flex: 0 1 720px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 0 4px;
     }
 
-    .qb-form {
-        border: 0;
-        padding: 0;
+    .qb-detail-hero {
+        display: grid;
+        grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+        gap: 0;
+        overflow: hidden;
+        background:
+            linear-gradient(135deg, rgba(var(--mud-palette-primary-rgb), 0.06), transparent 55%),
+            var(--mud-palette-surface);
+    }
+
+    .qb-detail-media {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 220px;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.03);
+        border-right: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .qb-detail-img-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+    }
+
+    .qb-detail-img {
+        max-width: 100%;
+        max-height: 220px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .qb-img-slot {
+        width: 200px;
+        height: 140px;
+        border-radius: 8px;
+        flex: 0 0 auto;
+        position: relative;
+        box-sizing: border-box;
+    }
+
+    .qb-img-slot-add {
+        position: relative;
+        border: 1px dashed #c4c4c4;
+        background: #f3f4f6;
+        color: #6b7280;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
         margin: 0;
-        min-inline-size: 0;
+        user-select: none;
+    }
+
+    .qb-img-slot-add:hover {
+        background: #eaecef;
+        border-color: #9ca3af;
+        color: #4b5563;
+    }
+
+    .qb-img-slot-disabled {
+        opacity: 0.55;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+
+    .qb-img-slot-add input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+
+    .qb-img-slot-add-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 0.9rem;
+        line-height: 1.1;
+    }
+
+    .qb-img-slot-add-icon {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 28px !important;
+    }
+
+    .qb-img-slot-x {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 22px;
+        height: 22px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        font-size: 16px;
+        line-height: 22px;
+        text-align: center;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .qb-img-slot-x:hover {
+        background: rgba(211, 47, 47, 0.9);
+    }
+
+    .qb-detail-img-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: var(--mud-palette-text-secondary);
+        opacity: 0.7;
+        font-size: 13px;
+        width: 200px;
+        height: 140px;
+    }
+
+    .qb-detail-img-icon {
+        font-size: 2.5rem !important;
+        width: 2.5rem;
+        height: 2.5rem;
+        opacity: 0.5;
+    }
+
+    .qb-detail-hero-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px 28px;
+        min-width: 0;
+    }
+
+    .qb-detail-hero-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .qb-detail-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .qb-type-select {
+        width: 160px;
+        min-width: 140px;
+    }
+    .qb-type-select .mud-input-slot,
+    .qb-type-select input.mud-select-input {
+        font-weight: 600;
+    }
+    .qb-type-motor .mud-input-outlined-border { border-color: #1976d2 !important; }
+    .qb-type-motor .mud-input-slot,
+    .qb-type-motor input.mud-select-input,
+    .qb-type-motor .mud-input-label { color: #1976d2 !important; }
+    .qb-type-remote .mud-input-outlined-border { border-color: #0288d1 !important; }
+    .qb-type-remote .mud-input-slot,
+    .qb-type-remote input.mud-select-input,
+    .qb-type-remote .mud-input-label { color: #0288d1 !important; }
+    .qb-type-cb .mud-input-outlined-border { border-color: #ed6c02 !important; }
+    .qb-type-cb .mud-input-slot,
+    .qb-type-cb input.mud-select-input,
+    .qb-type-cb .mud-input-label { color: #ed6c02 !important; }
+    .qb-type-pr .mud-input-outlined-border { border-color: #2e7d32 !important; }
+    .qb-type-pr .mud-input-slot,
+    .qb-type-pr input.mud-select-input,
+    .qb-type-pr .mud-input-label { color: #2e7d32 !important; }
+    .qb-type-accessory .mud-input-outlined-border { border-color: #7b1fa2 !important; }
+    .qb-type-accessory .mud-input-slot,
+    .qb-type-accessory input.mud-select-input,
+    .qb-type-accessory .mud-input-label { color: #7b1fa2 !important; }
+    .qb-type-item {
+        font-weight: 600;
+        min-width: 120px;
+    }
+    .qb-type-item.qb-type-motor { color: #1976d2; }
+    .qb-type-item.qb-type-remote { color: #0288d1; }
+    .qb-type-item.qb-type-cb { color: #ed6c02; }
+    .qb-type-item.qb-type-pr { color: #2e7d32; }
+    .qb-type-item.qb-type-accessory { color: #7b1fa2; }
+
+    .qb-detail-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        margin-left: auto;
+    }
+
+    .qb-detail-part {
+        font-weight: 600;
+        word-break: break-word;
+        line-height: 1.35;
+        margin: 0;
+    }
+
+    .qb-part-field {
+        max-width: 480px;
+    }
+
+    .qb-detail-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        color: var(--mud-palette-text-secondary);
+        font-size: 13px;
+    }
+
+    .qb-detail-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+
+    .qb-detail-panel {
+        padding: 16px 20px 18px;
+    }
+
+    .qb-detail-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .qb-spec-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px 12px;
+    }
+
+    .qb-spec-item {
+        min-width: 0;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.025);
+        border: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .qb-spec-item.qb-spec-edit {
+        padding-bottom: 6px;
+    }
+
+    .qb-spec-item .mud-input-control {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    .qb-spec-label {
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+
+    .qb-spec-value {
+        font-size: 15px;
+        font-weight: 500;
+        word-break: break-word;
+        line-height: 1.4;
+    }
+
+    .qb-spec-value.qb-spec-empty {
+        color: var(--mud-palette-text-disabled);
+        font-weight: 400;
+    }
+
+    .qb-detail-notes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 14px;
+    }
+
+    .qb-detail-note-body {
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .qb-scroll-to-top.mud-scroll-to-top {
+        right: 48px !important;
+        bottom: 28px !important;
+    }
+
+    .qb-scroll-to-top .mud-fab {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    @@media (max-width: 1100px) {
+        .qb-spec-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 800px) {
+        .qb-detail-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .qb-detail-media {
+            border-right: 0;
+            border-bottom: 1px solid var(--mud-palette-lines-default);
+            min-height: 180px;
+        }
+
+        .qb-spec-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
 @code {
+    private const long MaxImageBytes = 8L * 1024 * 1024;
+
     [Parameter] public int Id { get; set; }
 
     [SupplyParameterFromQuery(Name = "type")]
     public string? TypeFromQuery { get; set; }
 
+    [SupplyParameterFromQuery(Name = "edit")]
+    public bool? EditQuery { get; set; }
+
     private bool _busy;
+    private bool _editing;
+    private bool _imgUploading;
     private string? _loadedKey;
     private string _itemType = QuotationBaseTypes.Motor;
     private QuotationBaseListItemDto _model = new();
 
     private bool IsCopy => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/copy", StringComparison.OrdinalIgnoreCase);
-    private bool IsDetail => NavManager.ToBaseRelativePath(NavManager.Uri).Contains("/detail", StringComparison.OrdinalIgnoreCase);
     private bool IsCreate => Id == 0 || IsCopy;
+    private bool IsReadOnly => !IsCreate && !_editing;
     private string ListHref => $"/quotation-base?type={Uri.EscapeDataString(_itemType)}";
-    private string Title => IsDetail
-        ? $"报价基础数据详情（{QuotationBaseTypes.LabelOf(_itemType)}）"
-        : IsCopy
-            ? $"复制报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
-            : Id == 0
-                ? $"新建报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
-                : $"编辑报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）";
+    private bool HasImage => !LegacyFileUrl.IsBlankOrPlaceholder(_model.Quotation_logo);
+
+    private string Title => IsCopy
+        ? $"复制报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
+        : Id == 0
+            ? $"新建报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
+            : _editing
+                ? $"编辑报价基础数据（{QuotationBaseTypes.LabelOf(_itemType)}）"
+                : $"报价基础数据详情（{QuotationBaseTypes.LabelOf(_itemType)}）";
 
     protected override async Task OnParametersSetAsync()
     {
         var type = QuotationBaseTypes.Normalize(TypeFromQuery);
-        var key = $"{Id}:{type}:{IsCopy}:{IsDetail}";
+        var key = $"{Id}:{type}:{IsCopy}:{EditQuery == true}";
         if (_loadedKey == key) return;
         _loadedKey = key;
         _itemType = type;
+        await LoadAsync(enterEdit: IsCreate || EditQuery == true);
+    }
 
+    private async Task LoadAsync(bool enterEdit)
+    {
         if (Id == 0)
         {
-            // 新建切类型时保留公共字段，规格字段随类型切换清空
             var keepPart = _model.Part_No;
             var keepLogo = _model.Quotation_logo;
             var keepRemark = _model.Remark;
@@ -184,6 +649,7 @@
                 Quotation_logo = keepLogo,
                 Remark = keepRemark,
             };
+            _editing = true;
             return;
         }
 
@@ -204,20 +670,49 @@
             _model.CreateTime = null;
             _model.UpdatePerson = null;
             _model.UpdateTime = null;
+            _editing = true;
+        }
+        else
+        {
+            _editing = enterEdit;
         }
     }
 
-    private Task OnTypeChanged(string value)
+    private void StartEdit()
+    {
+        if (IsCreate || _editing) return;
+        _editing = true;
+    }
+
+    private async Task CancelEditAsync()
+    {
+        if (IsCreate) return;
+        _busy = true;
+        try
+        {
+            await LoadAsync(enterEdit: false);
+            if (EditQuery == true)
+            {
+                _loadedKey = null;
+                NavManager.NavigateTo($"/quotation-base/{Id}?type={Uri.EscapeDataString(_itemType)}", replace: true);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void OnTypeChanged(string value)
     {
         _itemType = QuotationBaseTypes.Normalize(value);
         _model.ItemType = _itemType;
         NavManager.NavigateTo($"/quotation-base/new?type={Uri.EscapeDataString(_itemType)}", replace: true);
-        return Task.CompletedTask;
     }
 
     private async Task SaveAsync()
     {
-        if (IsDetail) return;
+        if (IsReadOnly) return;
         _busy = true;
         try
         {
@@ -235,11 +730,25 @@
             if (IsCopy)
             {
                 NavManager.NavigateTo(ListHref);
+                return;
             }
-            else if (wasCreate && id > 0)
+
+            if (wasCreate && id > 0)
             {
-                _model.Id = id;
+                _loadedKey = null;
                 NavManager.NavigateTo($"/quotation-base/{id}?type={Uri.EscapeDataString(_itemType)}", replace: true);
+                return;
+            }
+
+            _editing = false;
+            if (EditQuery == true)
+            {
+                _loadedKey = null;
+                NavManager.NavigateTo($"/quotation-base/{Id}?type={Uri.EscapeDataString(_itemType)}", replace: true);
+            }
+            else
+            {
+                await LoadAsync(enterEdit: false);
             }
         }
         catch (Exception ex)
@@ -251,4 +760,192 @@
             _busy = false;
         }
     }
+
+    private async Task OnLogoFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+        if (file.Size > MaxImageBytes)
+        {
+            Notify.Show("图片不能超过 8MB", Severity.Warning);
+            return;
+        }
+
+        _imgUploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxImageBytes);
+            var path = await CotractBase.UploadImageAsync(stream, file.Name);
+            _model.Quotation_logo = path;
+            Notify.Show("图片已上传", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _imgUploading = false;
+        }
+    }
+
+    private async Task ClearLogoAsync()
+    {
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "删除图片",
+            "确定删除这张图片吗？",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+        _model.Quotation_logo = null;
+    }
+
+    private string[] SpecKeys() => _itemType switch
+    {
+        QuotationBaseTypes.Motor =>
+        [
+            "Rated_torque", "Rated_speed", "Power_supply", "Rated_Power", "Rated_Current",
+            "Noise_dBA", "Motor_Length", "Tube_diameter", "Battery_Capacity",
+        ],
+        QuotationBaseTypes.Remote =>
+        [
+            "Remote_controller_type", "Battery_Type", "Radio_Frequency", "Working_Temperature", "NoOfChannels",
+        ],
+        QuotationBaseTypes.Accessory => ["adaptor"],
+        QuotationBaseTypes.CB =>
+        [
+            "Rated_Voltage", "Size", "Rated_Power", "No_Of_Actuator", "Output_Control", "Sensor", "Protection_Degree",
+        ],
+        QuotationBaseTypes.PR =>
+        [
+            "Max_Loading", "Max_Stroke", "Protection_Degree2", "Noise",
+        ],
+        _ => [],
+    };
+
+    private static string SpecLabel(string key) => key switch
+    {
+        "Rated_torque" => "额定扭矩",
+        "Rated_speed" => "额定转速",
+        "Power_supply" => "电源",
+        "Rated_Power" => "额定功率",
+        "Rated_Current" => "额定电流",
+        "Noise_dBA" => "噪音",
+        "Motor_Length" => "电机长度",
+        "Tube_diameter" => "管径",
+        "Battery_Capacity" => "电池容量",
+        "Remote_controller_type" => "遥控器型号",
+        "Battery_Type" => "电池型号",
+        "Radio_Frequency" => "频率",
+        "Working_Temperature" => "工作温度",
+        "NoOfChannels" => "通道数",
+        "adaptor" => "配件名",
+        "Rated_Voltage" => "额定电压",
+        "Size" => "尺寸",
+        "No_Of_Actuator" => "执行器数量",
+        "Output_Control" => "输出控制",
+        "Sensor" => "传感器",
+        "Protection_Degree" => "防护等级",
+        "Max_Loading" => "最大负载",
+        "Max_Stroke" => "最大行程",
+        "Protection_Degree2" => "防护等级",
+        "Noise" => "噪音",
+        _ => key,
+    };
+
+    private string? GetSpec(string key) => key switch
+    {
+        "Rated_torque" => _model.Rated_torque,
+        "Rated_speed" => _model.Rated_speed,
+        "Power_supply" => _model.Power_supply,
+        "Rated_Power" => _model.Rated_Power,
+        "Rated_Current" => _model.Rated_Current,
+        "Noise_dBA" => _model.Noise_dBA,
+        "Motor_Length" => _model.Motor_Length,
+        "Tube_diameter" => _model.Tube_diameter,
+        "Battery_Capacity" => _model.Battery_Capacity,
+        "Remote_controller_type" => _model.Remote_controller_type,
+        "Battery_Type" => _model.Battery_Type,
+        "Radio_Frequency" => _model.Radio_Frequency,
+        "Working_Temperature" => _model.Working_Temperature,
+        "NoOfChannels" => _model.NoOfChannels,
+        "adaptor" => _model.adaptor,
+        "Rated_Voltage" => _model.Rated_Voltage,
+        "Size" => _model.Size,
+        "No_Of_Actuator" => _model.No_Of_Actuator,
+        "Output_Control" => _model.Output_Control,
+        "Sensor" => _model.Sensor,
+        "Protection_Degree" => _model.Protection_Degree,
+        "Max_Loading" => _model.Max_Loading,
+        "Max_Stroke" => _model.Max_Stroke,
+        "Protection_Degree2" => _model.Protection_Degree2,
+        "Noise" => _model.Noise,
+        _ => null,
+    };
+
+    private void SetSpec(string key, string? value)
+    {
+        switch (key)
+        {
+            case "Rated_torque": _model.Rated_torque = value; break;
+            case "Rated_speed": _model.Rated_speed = value; break;
+            case "Power_supply": _model.Power_supply = value; break;
+            case "Rated_Power": _model.Rated_Power = value; break;
+            case "Rated_Current": _model.Rated_Current = value; break;
+            case "Noise_dBA": _model.Noise_dBA = value; break;
+            case "Motor_Length": _model.Motor_Length = value; break;
+            case "Tube_diameter": _model.Tube_diameter = value; break;
+            case "Battery_Capacity": _model.Battery_Capacity = value; break;
+            case "Remote_controller_type": _model.Remote_controller_type = value; break;
+            case "Battery_Type": _model.Battery_Type = value; break;
+            case "Radio_Frequency": _model.Radio_Frequency = value; break;
+            case "Working_Temperature": _model.Working_Temperature = value; break;
+            case "NoOfChannels": _model.NoOfChannels = value; break;
+            case "adaptor": _model.adaptor = value; break;
+            case "Rated_Voltage": _model.Rated_Voltage = value; break;
+            case "Size": _model.Size = value; break;
+            case "No_Of_Actuator": _model.No_Of_Actuator = value; break;
+            case "Output_Control": _model.Output_Control = value; break;
+            case "Sensor": _model.Sensor = value; break;
+            case "Protection_Degree": _model.Protection_Degree = value; break;
+            case "Max_Loading": _model.Max_Loading = value; break;
+            case "Max_Stroke": _model.Max_Stroke = value; break;
+            case "Protection_Degree2": _model.Protection_Degree2 = value; break;
+            case "Noise": _model.Noise = value; break;
+        }
+    }
+
+    private static string TypeCss(string? itemType) => itemType switch
+    {
+        QuotationBaseTypes.Remote => "remote",
+        QuotationBaseTypes.CB => "cb",
+        QuotationBaseTypes.PR => "pr",
+        QuotationBaseTypes.Accessory => "accessory",
+        _ => "motor",
+    };
+
+    private static Color ChipColorOf(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Motor => Color.Primary,
+        QuotationBaseTypes.Remote => Color.Info,
+        QuotationBaseTypes.CB => Color.Warning,
+        QuotationBaseTypes.PR => Color.Success,
+        QuotationBaseTypes.Accessory => Color.Secondary,
+        _ => Color.Default,
+    };
+
+    private static string ChipIconOf(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Motor => Icons.Material.Filled.Blinds,
+        QuotationBaseTypes.Remote => Icons.Material.Filled.SettingsRemote,
+        QuotationBaseTypes.CB => Icons.Material.Filled.DeveloperBoard,
+        QuotationBaseTypes.PR => Icons.Material.Filled.SwapVert,
+        QuotationBaseTypes.Accessory => Icons.Material.Filled.Extension,
+        _ => Icons.Material.Filled.Label,
+    };
+
+    private static bool IsBlank(string? value) => string.IsNullOrWhiteSpace(value);
+    private static string Display(string? value) => IsBlank(value) ? "—" : value!.Trim();
+    private static string FormatDate(DateTime? dt)
+        => dt is null ? "—" : dt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 }

@@ -104,7 +104,14 @@ public sealed class UserDetailApiDto
 public sealed class SystemPermissionEntryApiDto
 {
     public string Role { get; set; } = "";
+    /// <summary>本系统是否启用；缺省 true（旧数据无字段视为已启用）。</summary>
+    public bool Enabled { get; set; } = true;
     public Dictionary<string, ControlPermissionApiDto>? Controls { get; set; }
+}
+
+public sealed class SetSystemEnabledRequestDto
+{
+    public bool Enabled { get; set; }
 }
 
 public sealed class CreateCentralUserRequestDto
@@ -138,14 +145,23 @@ public sealed class ZyqdUserInformationDto
     public string? Email { get; set; }
     public string? Phone { get; set; }
 
+    /// <summary>英文名（个人信息页左侧展示等）</summary>
+    public string? EnglishName { get; set; }
+
     /// <summary>操作员也可查看全部客户；管理员始终为 true。</summary>
     public bool ViewAllCustomers { get; set; }
 
-    /// <summary>报价签名名称（替代旧表 T_ZYQD_Quotation_signature.signature）</summary>
+    /// <summary>中文报价签名名称（替代旧表 T_ZYQD_Quotation_signature.signature）</summary>
     public string? Signature { get; set; }
 
-    /// <summary>报价签名图片路径（替代旧表 signature_url，一般为 /Img/...）</summary>
+    /// <summary>中文报价签名图片路径（一般为 /Img/...）</summary>
     public string? SignatureUrl { get; set; }
+
+    /// <summary>英文报价签名名称</summary>
+    public string? SignatureEn { get; set; }
+
+    /// <summary>英文报价签名图片路径</summary>
+    public string? SignatureUrlEn { get; set; }
 }
 
 public sealed class JoinSystemRequestDto
@@ -216,8 +232,11 @@ public sealed class ManagedUserRowDto
     public string? Department { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? EnglishName { get; set; }
     public string? Signature { get; set; }
     public string? SignatureUrl { get; set; }
+    public string? SignatureEn { get; set; }
+    public string? SignatureUrlEn { get; set; }
     public List<CustomerOptionDto> Customers { get; set; } = new();
     public string CustomersText =>
         ViewAllCustomers
@@ -227,12 +246,18 @@ public sealed class ManagedUserRowDto
                 : string.Join("、", Customers.Select(x => x.Code));
 }
 
-/// <summary>报价签名下拉项（人员档案汇总，替代旧 T_ZYQD_Quotation_signature）</summary>
+/// <summary>报价签名下拉项（人员档案中/英签名汇总，替代旧 T_ZYQD_Quotation_signature）</summary>
 public sealed class QuotationSignatureOptionDto
 {
     public string EmpNo { get; set; } = "";
+    /// <summary>cn / en</summary>
+    public string Kind { get; set; } = "cn";
     public string Signature { get; set; } = "";
     public string SignatureUrl { get; set; } = "";
+    public string Key => $"{EmpNo}|{Kind}";
+    public string Label => Kind == "en"
+        ? $"{Signature}（英文）"
+        : $"{Signature}（中文）";
 }
 
 public sealed class SaveManagedUserDto
@@ -247,8 +272,11 @@ public sealed class SaveManagedUserDto
     public string? Department { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public string? EnglishName { get; set; }
     public string? Signature { get; set; }
     public string? SignatureUrl { get; set; }
+    public string? SignatureEn { get; set; }
+    public string? SignatureUrlEn { get; set; }
     public List<CustomerOptionDto> Customers { get; set; } = new();
     public bool IsCreate { get; set; }
 }

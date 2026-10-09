@@ -9,6 +9,14 @@
                  loading="eager"
                  decoding="async"
                  style="@ImgStyle"/>
+            <button type="button"
+                    class="legacy-preview-close"
+                    title="关闭"
+                    aria-label="关闭"
+                    @onclick="Close"
+                    @onclick:stopPropagation="true">
+                <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Medium"/>
+            </button>
         </div>
     </DialogContent>
 </MudDialog>
@@ -19,15 +27,16 @@
     }
 
     .mud-dialog.legacy-img-lightbox {
-        background: #fff !important;
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28) !important;
+        background: transparent !important;
+        box-shadow: none !important;
         width: auto !important;
         min-width: 0 !important;
         max-width: none !important;
         height: auto !important;
-        overflow: hidden !important;
-        border-radius: 4px;
-        padding: 12px;
+        overflow: visible !important;
+        border-radius: 0;
+        padding: 0 !important;
+        border: none !important;
     }
 
     .mud-dialog.legacy-img-lightbox .mud-dialog-title,
@@ -40,14 +49,41 @@
         padding: 0 !important;
         margin: 0 !important;
         overflow: visible !important;
-        background: #fff !important;
+        background: transparent !important;
+        position: relative;
     }
 
     .legacy-preview-wrap {
+        position: relative;
         display: inline-flex;
         line-height: 0;
         cursor: default;
-        background: #fff;
+        background: transparent;
+        overflow: visible;
+    }
+
+    .legacy-preview-close {
+        position: absolute;
+        top: 0;
+        left: 100%;
+        margin-left: 10px;
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.62);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    .legacy-preview-close:hover {
+        background: rgba(0, 0, 0, 0.82);
     }
 
     .legacy-preview-wrap img {
@@ -60,7 +96,7 @@
         transform-origin: center center;
         user-select: none;
         -webkit-user-drag: none;
-        background: #fff;
+        background: transparent;
     }
 </style>
 
@@ -71,6 +107,8 @@
     private double _scale = 1;
 
     private string ImgStyle => $"transform: scale({_scale.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)});";
+
+    private void Close() => MudDialog.Close();
 
     private void OnWheel(WheelEventArgs e)
     {

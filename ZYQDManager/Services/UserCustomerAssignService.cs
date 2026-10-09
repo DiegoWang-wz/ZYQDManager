@@ -20,12 +20,16 @@ public class UserCustomerAssignService
             .OrderBy(x => x.CustomerCode)
             .ToListAsync(ct);
 
-        return rows
+        var grouped = rows
             .GroupBy(x => x.EmpNo, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 g => g.Key,
                 g => g.Select(ToOption).ToList(),
                 StringComparer.OrdinalIgnoreCase);
+
+        foreach (var list in grouped.Values)
+            await FillCustomerNamesAsync(list, ct);
+        return grouped;
     }
 
     public async Task<List<CustomerOptionDto>> GetByEmpNoAsync(string empNo, CancellationToken ct = default)
@@ -33,7 +37,7 @@ public class UserCustomerAssignService
         empNo = (empNo ?? "").Trim();
         if (string.IsNullOrEmpty(empNo)) return [];
 
-        return await _db.UserCustomerAssigns.AsNoTracking()
+        var list = await _db.UserCustomerAssigns.AsNoTracking()
             .Where(x => x.EmpNo == empNo)
             .OrderBy(x => x.CustomerCode)
             .Select(x => new CustomerOptionDto
@@ -42,6 +46,9 @@ public class UserCustomerAssignService
                 Name = x.CustomerName
             })
             .ToListAsync(ct);
+
+        await FillCustomerNamesAsync(list, ct);
+        return list;
     }
 
     public async Task<List<string>> GetCodesByEmpNoAsync(string empNo, CancellationToken ct = default)
@@ -148,4 +155,48 @@ public class UserCustomerAssignService
         Code = x.CustomerCode,
         Name = x.CustomerName
     };
+
+    /// <summary>分配表缺名称时，从合同基础/PI 按客户编号补全。</summary>
+    private async Task FillCustomerNamesAsync(List<CustomerOptionDto> list, CancellationToken ct)
+    {
+        var missing = list
+            .Where(x => !string.IsNullOrWhiteSpace(x.Code) && string.IsNullOrWhiteSpace(x.Name))
+            .Select(x => x.Code.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (missing.Count == 0) return;
+
+        var fromBase = await _db.CotractBases.AsNoTracking()
+            .Where(x => x.ClientNo != null
+                        && x.ClientName != null
+                        && x.ClientName != ""
+                        && missing.Contains(x.ClientNo))
+            .Select(x => new { x.ClientNo, x.ClientName })
+            .ToListAsync(ct);
+
+        var fromPi = await _db.CotractPis.AsNoTracking()
+            .Where(x => x.ClientNo != null
+                        && x.ClientName != null
+                        && x.ClientName != ""
+                        && missing.Contains(x.ClientNo))
+            .Select(x => new { x.ClientNo, x.ClientName })
+            .ToListAsync(ct);
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in fromBase.Concat(fromPi))
+        {
+            var code = (row.ClientNo ?? "").Trim();
+            var name = (row.ClientName ?? "").Trim();
+            if (code.Length == 0 || name.Length == 0) continue;
+            map.TryAdd(code, name);
+        }
+
+        foreach (var item in list)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Name)) continue;
+            var code = (item.Code ?? "").Trim();
+            if (code.Length > 0 && map.TryGetValue(code, out var n))
+                item.Name = n;
+        }
+    }
 }

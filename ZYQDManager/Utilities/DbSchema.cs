@@ -68,7 +68,6 @@ public static class DbSchema
                         ItemType NVARCHAR(20) NOT NULL,
                         BaseId INT NULL,
                         Part_No NVARCHAR(100) NULL,
-                        Quotation_logo NVARCHAR(500) NULL,
                         Qty DECIMAL(18,4) NULL,
                         Price DECIMAL(18,4) NULL,
                         Discount DECIMAL(18,4) NULL,

@@ -101,6 +101,7 @@
                   MultiSelection="true"
                   SelectOnRowClick="false"
                   @bind-SelectedItems="_selected"
+                  OnRowClick="OnRowClick"
                   Breakpoint="Breakpoint.None"
                   FixedHeader="true"
                   SortMode="SortMode.Single"
@@ -190,11 +191,11 @@
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Edit"
                                    Class="cb-ops-btn"
-                                   Href="@($"/contract-base/{context.Id}")">编辑</MudButton>
+                                   Href="@($"/contract-base/{context.Id}?edit=true")">编辑</MudButton>
                         <MudButton Size="Size.Small" Variant="Variant.Text"
                                    StartIcon="@Icons.Material.Filled.Visibility"
                                    Class="cb-ops-btn"
-                                   Href="@($"/contract-base/{context.Id}/detail")">详情</MudButton>
+                                   Href="@($"/contract-base/{context.Id}")">详情</MudButton>
                         <MudButton Size="Size.Small" Variant="Variant.Text"
                                    StartIcon="@Icons.Material.Filled.ContentCopy"
                                    Class="cb-ops-btn"
@@ -502,6 +503,12 @@
     }
 
     private void ClearSelection() => _selected.Clear();
+
+    private void OnRowClick(TableRowClickEventArgs<ZyqdCotractBaseModel> args)
+    {
+        if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
+        NavManager.NavigateTo($"/contract-base/{args.Item.Id}");
+    }
 
     private async Task DeleteSelectedAsync()
     {

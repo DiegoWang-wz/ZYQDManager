@@ -17,105 +17,99 @@ else
 
     <MudLayout>
         <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
-            <MudMenu Label="遮阳项目管理"
-                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                     Variant="Variant.Text"
-                     Color="Color.Inherit"
-                     Dense="true"
-                     Class="zyqd-nav-menu"
-                     AnchorOrigin="Origin.BottomLeft"
-                     TransformOrigin="Origin.TopLeft">
-                <MudMenuItem OnClick="@(() => GoTo("/project-list"))">遮阳项目列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => GoTo("/dev/motor-doc-schema-test"))">电机文档字段测试</MudMenuItem>
-            </MudMenu>
-
-            <MudMenu Label="遮阳合同管理"
-                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                     Variant="Variant.Text"
-                     Color="Color.Inherit"
-                     Dense="true"
-                     Class="zyqd-nav-menu"
-                     AnchorOrigin="Origin.BottomLeft"
-                     TransformOrigin="Origin.TopLeft">
-                <MudMenuItem OnClick="@(() => GoTo("/contract-pi"))">客户PI列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("报关PI列表"))">报关PI列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("客户CI列表"))">客户CI列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("报关PI生成入口"))">报关PI生成入口</MudMenuItem>
-                <MudMenuItem OnClick="@(() => GoTo("/contract-ci/from-pi"))">客户CI生成入口</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("装箱单生成入口"))">装箱单生成入口</MudMenuItem>
-                <MudMenuItem OnClick="@(() => NotReady("报关/装箱单列表"))">报关/装箱单列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => GoTo("/contract-base"))">合同基础数据</MudMenuItem>
-            </MudMenu>
-
-            <MudMenu Label="报价"
-                     EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                     Variant="Variant.Text"
-                     Color="Color.Inherit"
-                     Dense="true"
-                     Class="zyqd-nav-menu"
-                     AnchorOrigin="Origin.BottomLeft"
-                     TransformOrigin="Origin.TopLeft">
-                <MudMenuItem OnClick="@(() => GoTo("/quotation"))">报价列表</MudMenuItem>
-                <MudMenuItem OnClick="@(() => GoTo("/quotation/new"))">报价录入</MudMenuItem>
-                <MudMenuItem OnClick="@(() => GoTo("/quotation-base"))">基础数据维护</MudMenuItem>
-            </MudMenu>
-
-            @if (_canViewInvoiceKp)
-            {
-                <MudMenu Label="遮阳开票管理"
-                         EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                         Variant="Variant.Text"
-                         Color="Color.Inherit"
-                         Dense="true"
+            <div class="zyqd-nav">
+                <MudMenu Dense="true"
                          Class="zyqd-nav-menu"
                          AnchorOrigin="Origin.BottomLeft"
                          TransformOrigin="Origin.TopLeft">
-                    <MudMenuItem OnClick="@(() => GoTo("/invoice-kp"))">遮阳开票汇总</MudMenuItem>
+                    <ActivatorContent>
+                        <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                            <span>项目管理</span>
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
+                        </button>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem OnClick="@(() => GoTo("/project-list"))">项目列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/dev/motor-doc-schema-test"))">电机文档字段测试</MudMenuItem>
+                    </ChildContent>
                 </MudMenu>
-            }
 
-            <MudButton Variant="Variant.Text"
-                       Color="Color.Inherit"
-                       Class="zyqd-nav-menu mud-button-root"
-                       OnClick="@(() => GoTo("/sir"))">
-                检测报告管理
-            </MudButton>
-
-            @if (_canManageUsers)
-            {
-                <MudMenu Label="系统管理"
-                         EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                         Variant="Variant.Text"
-                         Color="Color.Inherit"
-                         Dense="true"
+                <MudMenu Dense="true"
                          Class="zyqd-nav-menu"
                          AnchorOrigin="Origin.BottomLeft"
                          TransformOrigin="Origin.TopLeft">
-                    <MudMenuItem OnClick="@(() => GoTo("/personnel"))">人员管理</MudMenuItem>
+                    <ActivatorContent>
+                        <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                            <span>合同管理</span>
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
+                        </button>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem OnClick="@(() => GoTo("/contract"))">合同列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/contract-base"))">合同基础数据</MudMenuItem>
+                    </ChildContent>
                 </MudMenu>
-            }
+
+                <MudMenu Dense="true"
+                         Class="zyqd-nav-menu"
+                         AnchorOrigin="Origin.BottomLeft"
+                         TransformOrigin="Origin.TopLeft">
+                    <ActivatorContent>
+                        <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                            <span>报价</span>
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
+                        </button>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem OnClick="@(() => GoTo("/quotation"))">报价列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/quotation-base"))">基础数据维护</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+
+                @if (_canViewInvoiceKp)
+                {
+                    <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/invoice-kp"))">
+                        <span>开票管理</span>
+                    </button>
+                }
+
+                <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/sir"))">
+                    <span>检测报告管理</span>
+                </button>
+            </div>
+
+            <div class="zyqd-page-title" title="@CurrentPageTitle">
+                <span class="zyqd-page-title-badge">@CurrentPageTitle</span>
+            </div>
 
             <MudSpacer/>
             @if (!string.IsNullOrEmpty(_empNo))
             {
-                <MudChip T="string" Size="Size.Small" Class="mr-2 zyqd-emp-chip">@_empNo</MudChip>
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Class="mr-2 zyqd-emp-chip"
+                         OnClick="@(() => GoTo("/Profile"))">@_empNo</MudChip>
             }
-            <MudMenu Label="菜单"
-                     StartIcon="@Icons.Material.Filled.Menu"
-                     Variant="Variant.Text"
-                     Color="Color.Inherit"
-                     Dense="true"
+            <MudMenu Dense="true"
                      Class="zyqd-nav-menu"
                      AnchorOrigin="Origin.BottomRight"
                      TransformOrigin="Origin.TopRight">
-                <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo("/project-list"))"/>
-                <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
-                @if (_canManageUsers)
-                {
-                    <MudMenuItem Label="人员管理" Icon="@Icons.Material.Filled.ManageAccounts" OnClick="@(() => GoTo("/personnel"))"/>
-                }
-                <MudDivider/>
-                <MudMenuItem Label="登出" Icon="@Icons.Material.Filled.Logout" OnClick="LogoutAsync"/>
+                <ActivatorContent>
+                    <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync" aria-label="菜单">
+                        <MudIcon Icon="@Icons.Material.Filled.Menu" Class="zyqd-nav-caret"/>
+                        <span>菜单</span>
+                    </button>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo("/project-list"))"/>
+                    <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
+                    @if (_canManageUsers)
+                    {
+                        <MudMenuItem Label="人员管理" Icon="@Icons.Material.Filled.ManageAccounts" OnClick="@(() => GoTo("/personnel"))"/>
+                    }
+                    <MudDivider/>
+                    <MudMenuItem Label="登出" Icon="@Icons.Material.Filled.Logout" OnClick="LogoutAsync"/>
+                </ChildContent>
             </MudMenu>
         </MudAppBar>
 
@@ -139,6 +133,8 @@ else
     }
 
     .mud-layout {
+        --zyqd-appbar-height: 45px;
+        --mud-appbar-height: var(--zyqd-appbar-height);
         height: 100%;
         min-height: 100%;
     }
@@ -155,41 +151,129 @@ else
         min-height: 0;
         overflow: hidden;
         box-sizing: border-box;
-        padding-top: calc(var(--mud-appbar-height, 48px)) !important;
+        /* 顶栏占位 + 与左右/底一致的 16px 间距，避免内容贴住菜单 */
+        padding-top: calc(var(--zyqd-appbar-height) + 16px) !important;
         padding-left: 16px !important;
         padding-right: 16px !important;
         padding-bottom: 16px !important;
     }
 
     .zyqd-appbar.mud-appbar {
+        --mud-appbar-height: var(--zyqd-appbar-height);
+        height: var(--zyqd-appbar-height) !important;
+        min-height: var(--zyqd-appbar-height) !important;
         background-color: #222 !important;
         color: #fff !important;
         border-bottom: 1px solid #111;
     }
 
-    .zyqd-nav-menu .mud-button-root,
-    .zyqd-appbar .zyqd-nav-menu .mud-menu-button {
-        color: #fff !important;
-        text-transform: none !important;
-        font-size: 0.9rem !important;
-        font-weight: 500 !important;
-        letter-spacing: 0;
-        min-width: 0 !important;
-        padding: 0 10px !important;
-        height: 48px !important;
-        border-radius: 0 !important;
+    .zyqd-appbar .mud-toolbar {
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        min-height: var(--zyqd-appbar-height) !important;
+        height: var(--zyqd-appbar-height) !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        padding-left: 8px !important;
+        padding-right: 8px !important;
     }
 
-    .zyqd-nav-menu .mud-button-root:hover,
-    .zyqd-appbar .zyqd-nav-menu .mud-menu-button:hover {
-        background-color: #808080 !important;
-        color: #000 !important;
+    .zyqd-nav {
+        display: flex;
+        align-items: center;
+        height: 100%;
+        min-width: 0;
+        z-index: 1;
+    }
+
+    .zyqd-page-title {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .zyqd-page-title-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: min(42vw, 360px);
+        height: 28px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.06) 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        color: #fff;
+        font-size: 0.92rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        line-height: 1;
+        box-sizing: border-box;
+    }
+
+    .zyqd-appbar .mud-spacer,
+    .zyqd-appbar .zyqd-emp-chip,
+    .zyqd-appbar .zyqd-nav-menu:last-child {
+        z-index: 1;
+    }
+
+    .zyqd-appbar .zyqd-nav-menu.mud-menu {
+        display: inline-flex;
+        align-items: center;
+        height: 100%;
+    }
+
+    .zyqd-nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1px;
+        height: var(--zyqd-appbar-height);
+        margin: 0;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #fff;
+        font-size: 0.95rem;
+        font-weight: 500;
+        letter-spacing: 0;
+        line-height: 1;
+        white-space: nowrap;
+        cursor: pointer;
+        box-sizing: border-box;
+    }
+
+    .zyqd-nav-btn:hover {
+        background-color: #808080;
+        color: #000;
+    }
+
+    .zyqd-nav-btn .zyqd-nav-caret {
+        width: 16px;
+        height: 16px;
+        font-size: 16px;
+        margin: 0;
+        flex: 0 0 auto;
     }
 
     .zyqd-emp-chip.mud-chip {
         background-color: #fff !important;
         color: #000 !important;
         border: 1px solid #ddd;
+        cursor: pointer;
+    }
+
+    .zyqd-emp-chip.mud-chip:hover {
+        background-color: #f0f0f0 !important;
     }
 </style>
 
@@ -257,15 +341,46 @@ else
     {
         get
         {
-            var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+            var path = CurrentPath;
             return path.Equals("login", StringComparison.OrdinalIgnoreCase)
                    || path.Equals("Error", StringComparison.OrdinalIgnoreCase);
         }
     }
 
-    private void GoTo(string url) => Nav.NavigateTo(url, forceLoad: false);
+    private string CurrentPath => Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Trim('/');
 
-    private void NotReady(string name) => Notify.Show($"{name} 功能开发中", Severity.Info);
+    private string CurrentPageTitle
+    {
+        get
+        {
+            var path = CurrentPath;
+            if (path.Length == 0) return "首页";
+
+            if (Starts(path, "quotation-base")) return path is "quotation-base" ? "报价基础数据" : "报价基础数据详情";
+            if (Starts(path, "quotation")) return path is "quotation" ? "报价列表" : "报价详情";
+            if (Starts(path, "contract-base")) return path is "contract-base" ? "合同基础数据" : "合同基础数据详情";
+            if (Starts(path, "contract-pi") || path is "contract") return path is "contract" or "contract-pi" ? "合同列表" : "合同详情";
+            if (Starts(path, "contract-pk")) return path is "contract-pk" ? "装箱单列表" : "装箱单编辑";
+            if (Starts(path, "contract-ci")) return "客户CI";
+            if (Starts(path, "contract-bg")) return "报关PI";
+            if (Starts(path, "invoice-kp")) return "开票管理";
+            if (Starts(path, "sir")) return path is "sir" ? "检测报告管理" : "检测报告详情";
+            if (Starts(path, "project-list")) return "项目列表";
+            if (Starts(path, "project/motor")) return "电机立项单";
+            if (Starts(path, "project/")) return "立项单";
+            if (Starts(path, "personnel") || Starts(path, "UserManagement")) return "人员管理";
+            if (Starts(path, "Profile")) return "个人信息";
+            if (Starts(path, "dev/motor-doc-schema-test")) return "电机文档字段测试";
+            if (Starts(path, "tools/decrypt")) return "文件解密";
+            return "遮阳管理系统";
+        }
+    }
+
+    private static bool Starts(string path, string prefix)
+        => path.Equals(prefix, StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase);
+
+    private void GoTo(string url) => Nav.NavigateTo(url, forceLoad: false);
 
     private async Task LogoutAsync()
     {

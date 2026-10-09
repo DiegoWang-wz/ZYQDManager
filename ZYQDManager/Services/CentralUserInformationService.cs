@@ -148,24 +148,51 @@ public class CentralUserInformationService
         {
             var (ok, displayName, info, _) = await GetAsync(u.EmpNo, ct);
             if (!ok || info is null) continue;
-            var url = (info.SignatureUrl ?? "").Trim();
-            if (url.Length == 0) continue;
 
-            var name = (info.Signature ?? "").Trim();
-            if (name.Length == 0)
-                name = string.IsNullOrWhiteSpace(displayName) ? u.DisplayName : displayName;
-            if (string.IsNullOrWhiteSpace(name))
-                name = u.EmpNo;
+            var fallbackName = string.IsNullOrWhiteSpace(displayName) ? u.DisplayName : displayName;
+            if (string.IsNullOrWhiteSpace(fallbackName))
+                fallbackName = u.EmpNo;
 
-            result.Add(new QuotationSignatureOptionDto
-            {
-                EmpNo = u.EmpNo,
-                Signature = name,
-                SignatureUrl = url
-            });
+            TryAddSignatureOption(result, u.EmpNo, "cn", info.Signature, info.SignatureUrl, fallbackName);
+            TryAddSignatureOption(
+                result,
+                u.EmpNo,
+                "en",
+                info.SignatureEn,
+                info.SignatureUrlEn,
+                string.IsNullOrWhiteSpace(info.EnglishName) ? fallbackName : info.EnglishName!);
         }
 
-        return (true, result.OrderBy(x => x.Signature, StringComparer.OrdinalIgnoreCase).ToList(), null);
+        return (true, result
+            .OrderBy(x => x.Signature, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Kind, StringComparer.OrdinalIgnoreCase)
+            .ToList(), null);
+    }
+
+    private static void TryAddSignatureOption(
+        List<QuotationSignatureOptionDto> list,
+        string empNo,
+        string kind,
+        string? signature,
+        string? signatureUrl,
+        string fallbackName)
+    {
+        var url = (signatureUrl ?? "").Trim();
+        if (url.Length == 0) return;
+
+        var name = (signature ?? "").Trim();
+        if (name.Length == 0)
+            name = (fallbackName ?? "").Trim();
+        if (name.Length == 0)
+            name = empNo;
+
+        list.Add(new QuotationSignatureOptionDto
+        {
+            EmpNo = empNo,
+            Kind = kind,
+            Signature = name,
+            SignatureUrl = url
+        });
     }
 
     private async Task<(HttpClient Client, string? Token, string? Error)> CreateAuthedClientAsync(CancellationToken ct)

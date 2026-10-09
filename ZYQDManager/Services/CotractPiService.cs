@@ -105,16 +105,28 @@ public class CotractPiService
             .ToList();
     }
 
-    public async Task<List<ZyqdCotractPiModel>> LoadCustomerCiDraftAsync(
+    public Task<List<ZyqdCotractPiModel>> LoadCustomerCiDraftAsync(
         string? sourceGuids, string? orderType, CancellationToken ct = default)
+        => LoadDerivedDraftAsync(sourceGuids, orderType, "客户CI", ct);
+
+    public Task<List<ZyqdCotractPiModel>> LoadCustomsPiDraftAsync(
+        string? sourceGuids, string? orderType, CancellationToken ct = default)
+        => LoadDerivedDraftAsync(sourceGuids, orderType, "报关PI", ct);
+
+    public async Task<List<ZyqdCotractPiModel>> LoadDerivedDraftAsync(
+        string? sourceGuids, string? orderType, string documentKind, CancellationToken ct = default)
     {
         var rows = await GetByGuidsAsync(sourceGuids, ct);
         if (rows.Count == 0)
             return [];
 
+        var kind = (documentKind ?? "").Trim();
+        var isCi = kind == "客户CI";
         var today = CotractPiTypes.FormatDate(DateTime.Today);
-        var ciType = CotractPiTypes.ToCustomerCiType(
-            string.IsNullOrWhiteSpace(orderType) ? rows[0].var6 : orderType);
+        var sourceType = string.IsNullOrWhiteSpace(orderType) ? rows[0].var6 : orderType;
+        var targetType = isCi
+            ? CotractPiTypes.ToCustomerCiType(sourceType)
+            : CotractPiTypes.ToCustomsPiType(sourceType);
 
         var unique = rows
             .GroupBy(x => x.DocumentGuid ?? "", StringComparer.OrdinalIgnoreCase)
@@ -129,8 +141,8 @@ public class CotractPiService
         {
             row.Id = 0;
             row.DocumentGuid = null;
-            row.var6 = ciType;
-            row.var11 = "客户CI";
+            row.var6 = targetType;
+            row.var11 = isCi ? "客户CI" : "报关PI";
             if (string.IsNullOrWhiteSpace(row.var13))
                 row.var13 = row.INVOICE_NO;
             row.BILL_TO_DATE = today;
@@ -393,10 +405,13 @@ public class CotractPiService
 
         return query.FilterColumn switch
         {
-            "INVOICE_NO" => q.Where(x => x.INVOICE_NO != null && x.INVOICE_NO.Contains(keyword)),
-            "Person" => q.Where(x => x.Person != null && x.Person.Contains(keyword)),
-            "var6" => q.Where(x => x.var6 != null && x.var6.Contains(keyword)),
-            "BILL_TO_PO_REF" => q.Where(x => x.BILL_TO_PO_REF != null && x.BILL_TO_PO_REF.Contains(keyword)),
+            "客户编号" or "ClientNo" => q.Where(x => x.ClientNo != null
+                && (x.ClientNo.Contains(keyword) || x.ClientNo.EndsWith(keyword))),
+            "客户名称" or "ClientName" => q.Where(x => x.ClientName != null && x.ClientName.Contains(keyword)),
+            "订单类型" or "var6" => q.Where(x => x.var6 != null && x.var6.Contains(keyword)),
+            "需求人" or "Person" => q.Where(x => x.Person != null && x.Person.Contains(keyword)),
+            "发票号" or "INVOICE_NO" => q.Where(x => x.INVOICE_NO != null && x.INVOICE_NO.Contains(keyword)),
+            "PO号" or "BILL_TO_PO_REF" => q.Where(x => x.BILL_TO_PO_REF != null && x.BILL_TO_PO_REF.Contains(keyword)),
             _ => q.Where(x =>
                 (x.ClientName != null && x.ClientName.Contains(keyword))
                 || (x.ClientNo != null && (x.ClientNo.Contains(keyword) || x.ClientNo.EndsWith(keyword))))
@@ -425,9 +440,13 @@ public class CotractPiService
         var t = (documentType ?? "").Trim();
         if (t.Length == 0 || t == "客户PI")
             return CotractPiTypes.CustomerPi;
+        if (t == "报关PI")
+            return CotractPiTypes.CustomsPi;
         if (t == "客户CI")
             return CotractPiTypes.CustomerCi;
         if (CotractPiTypes.CustomerPi.Contains(t))
+            return [t];
+        if (CotractPiTypes.CustomsPi.Contains(t))
             return [t];
         if (CotractPiTypes.CustomerCi.Contains(t))
             return [t];

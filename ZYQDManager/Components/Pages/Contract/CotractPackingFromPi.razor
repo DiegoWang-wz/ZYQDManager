@@ -1,0 +1,9 @@
+@page "/contract-pk/from-pi"
+@rendermode InteractiveServer
+
+@code {
+    protected override void OnInitialized()
+        => NavManager.NavigateTo(
+            "/contract?type=" + Uri.EscapeDataString("客户PI") + "&hint=generate",
+            replace: true);
+}

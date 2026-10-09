@@ -18,11 +18,17 @@
                            Label="类型"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Class="qb-type-select"
+                           Class="@($"qb-type-select qb-type-{TypeCss(_itemType)}")"
+                           ToStringFunc="@(v => QuotationBaseTypes.LabelOf(v))"
                            Disabled="_busy">
                     @foreach (var t in QuotationBaseTypes.All)
                     {
-                        <MudSelectItem Value="@t.Key">@t.Label</MudSelectItem>
+                        <MudSelectItem Value="@t.Key">
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="@($"qb-type-item qb-type-{TypeCss(t.Key)}")">
+                                <MudIcon Icon="@ChipIconOf(t.Key)" Size="Size.Small"/>
+                                <span>@t.Label</span>
+                            </MudStack>
+                        </MudSelectItem>
                     }
                 </MudSelect>
                 <MudSelect T="string"
@@ -71,6 +77,7 @@
                       MultiSelection="true"
                       SelectOnRowClick="false"
                       @bind-SelectedItems="_selected"
+                      OnRowClick="OnRowClick"
                       Breakpoint="Breakpoint.None"
                       FixedHeader="true"
                       SortMode="SortMode.Single"
@@ -222,7 +229,40 @@
     .qb-toolbar-left, .qb-toolbar-right { flex: 0 0 auto; }
     .qb-toolbar-right { margin-left: auto; }
     .qb-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
-    .qb-type-select { width: 120px; min-width: 120px; }
+    .qb-type-select { width: 160px; min-width: 160px; }
+    .qb-type-select .mud-input-slot,
+    .qb-type-select input.mud-select-input {
+        font-weight: 600;
+    }
+    .qb-type-motor .mud-input-outlined-border { border-color: #1976d2 !important; }
+    .qb-type-motor .mud-input-slot,
+    .qb-type-motor input.mud-select-input,
+    .qb-type-motor .mud-input-label { color: #1976d2 !important; }
+    .qb-type-remote .mud-input-outlined-border { border-color: #0288d1 !important; }
+    .qb-type-remote .mud-input-slot,
+    .qb-type-remote input.mud-select-input,
+    .qb-type-remote .mud-input-label { color: #0288d1 !important; }
+    .qb-type-cb .mud-input-outlined-border { border-color: #ed6c02 !important; }
+    .qb-type-cb .mud-input-slot,
+    .qb-type-cb input.mud-select-input,
+    .qb-type-cb .mud-input-label { color: #ed6c02 !important; }
+    .qb-type-pr .mud-input-outlined-border { border-color: #2e7d32 !important; }
+    .qb-type-pr .mud-input-slot,
+    .qb-type-pr input.mud-select-input,
+    .qb-type-pr .mud-input-label { color: #2e7d32 !important; }
+    .qb-type-accessory .mud-input-outlined-border { border-color: #7b1fa2 !important; }
+    .qb-type-accessory .mud-input-slot,
+    .qb-type-accessory input.mud-select-input,
+    .qb-type-accessory .mud-input-label { color: #7b1fa2 !important; }
+    .qb-type-item {
+        font-weight: 600;
+        min-width: 120px;
+    }
+    .qb-type-item.qb-type-motor { color: #1976d2; }
+    .qb-type-item.qb-type-remote { color: #0288d1; }
+    .qb-type-item.qb-type-cb { color: #ed6c02; }
+    .qb-type-item.qb-type-pr { color: #2e7d32; }
+    .qb-type-item.qb-type-accessory { color: #7b1fa2; }
     .qb-filter-select { width: 140px; min-width: 140px; }
     .qb-filter-input { width: 200px; min-width: 200px; }
     .qb-table-wrap {
@@ -428,16 +468,51 @@
 
     private void ClearSelection() => _selected.Clear();
 
+    private void OnRowClick(TableRowClickEventArgs<QuotationBaseListItemDto> args)
+    {
+        if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
+        NavManager.NavigateTo(DetailHref(args.Item));
+    }
+
     private string NewHref => $"/quotation-base/new?type={Uri.EscapeDataString(_itemType)}";
 
     private string EditHref(QuotationBaseListItemDto row)
-        => $"/quotation-base/{row.Id}?type={Uri.EscapeDataString(_itemType)}";
+        => $"/quotation-base/{row.Id}?type={Uri.EscapeDataString(_itemType)}&edit=true";
 
     private string DetailHref(QuotationBaseListItemDto row)
-        => $"/quotation-base/{row.Id}/detail?type={Uri.EscapeDataString(_itemType)}";
+        => $"/quotation-base/{row.Id}?type={Uri.EscapeDataString(_itemType)}";
 
     private string CopyHref(QuotationBaseListItemDto row)
         => $"/quotation-base/{row.Id}/copy?type={Uri.EscapeDataString(_itemType)}";
+
+    private static string TypeCss(string? itemType) => itemType switch
+    {
+        QuotationBaseTypes.Remote => "remote",
+        QuotationBaseTypes.CB => "cb",
+        QuotationBaseTypes.PR => "pr",
+        QuotationBaseTypes.Accessory => "accessory",
+        _ => "motor",
+    };
+
+    private static Color ChipColorOf(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Motor => Color.Primary,
+        QuotationBaseTypes.Remote => Color.Info,
+        QuotationBaseTypes.CB => Color.Warning,
+        QuotationBaseTypes.PR => Color.Success,
+        QuotationBaseTypes.Accessory => Color.Secondary,
+        _ => Color.Default,
+    };
+
+    private static string ChipIconOf(string itemType) => itemType switch
+    {
+        QuotationBaseTypes.Motor => Icons.Material.Filled.Blinds,
+        QuotationBaseTypes.Remote => Icons.Material.Filled.SettingsRemote,
+        QuotationBaseTypes.CB => Icons.Material.Filled.DeveloperBoard,
+        QuotationBaseTypes.PR => Icons.Material.Filled.SwapVert,
+        QuotationBaseTypes.Accessory => Icons.Material.Filled.Extension,
+        _ => Icons.Material.Filled.Label,
+    };
 
     private async Task ReloadTableAsync(bool resetPage)
     {

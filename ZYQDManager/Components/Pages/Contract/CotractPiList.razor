@@ -1,16 +1,33 @@
+@page "/contract"
 @page "/contract-pi"
 @rendermode InteractiveServer
 @inject CotractPiService CotractPi
 @inject CentralAuthService Auth
 @inject CentralUserInformationService UserInfo
 
-<PageTitle>客户PI列表</PageTitle>
+<PageTitle>合同列表</PageTitle>
 
 <div class="cotract-pi-page">
     <MudPaper Class="pa-3" Outlined="true">
         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="cpi-toolbar">
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpi-toolbar-left">
-                <MudText Typo="Typo.body2" Class="cpi-date-label">提出日期</MudText>
+                <MudSelect T="string"
+                           Value="_documentType"
+                           ValueChanged="OnDocumentTypeChanged"
+                           Label="单据类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="@($"cpi-doc-type-select cpi-doc-type-{DocKindCss(_documentType)}")">
+                    @foreach (var kind in DocumentKinds)
+                    {
+                        <MudSelectItem Value="@kind">
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="@($"cpi-doc-type-item cpi-doc-type-{DocKindCss(kind)}")">
+                                <MudIcon Icon="@DocKindIcon(kind)" Size="Size.Small"/>
+                                <span>@kind</span>
+                            </MudStack>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
                 <MudDatePicker @bind-Date="_dateStart"
                                Label="开始"
                                DateFormat="yyyy-MM-dd"
@@ -34,10 +51,10 @@
                            Label="条件"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Class="cpi-filter-select">
+                           Class="cpi-filter-select-wide">
                     @foreach (var field in CotractPiFilterFields.All)
                     {
-                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                        <MudSelectItem Value="@field.Label">@field.Label</MudSelectItem>
                     }
                 </MudSelect>
                 <MudTextField @bind-Value="_keyword"
@@ -53,9 +70,17 @@
             </MudStack>
             <div class="cpi-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpi-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-pi/new">新增</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0 || IsPackingList">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy || IsPackingList">删除</MudButton>
+                @if (IsCustomerPi)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-pi/new">新建</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="GoCustomerPiForCreateAsync">新建</MudButton>
+                }
             </MudStack>
         </MudStack>
     </MudPaper>
@@ -86,7 +111,7 @@
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="ClientName">客户名称</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="var6">订单类型</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="Person">需求人</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="INVOICE_NO">INVOICE NO</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="INVOICE_NO">发票号</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_DATE">日期</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="CreateTime">创建日期</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_PO_REF">PO号</MudTableSortLabel></MudTh>
@@ -103,17 +128,29 @@
                     <MudTd>@FormatCreateTime(context)</MudTd>
                     <MudTd>@Dash(context.BILL_TO_PO_REF)</MudTd>
                     <MudTd Class="cpi-ops-cell">
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Edit"
-                                   Href="@EditHref(context)">编辑</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.Delete"
-                                   Disabled="_busy"
-                                   OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                        <div class="cpi-ops-grid">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       Class="cpi-ops-btn"
+                                       Href="@EditHref(context)">编辑</MudButton>
+                            @if (IsCustomerPi)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Secondary"
+                                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                           Class="cpi-ops-btn"
+                                           Disabled="_busy"
+                                           OnClick="@(() => OpenGenerateAsync(context))">生成</MudButton>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       Class="cpi-ops-btn"
+                                       Disabled="_busy"
+                                       OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                        </div>
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
-                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无可见数据")</MudText>
+                    <MudText Class="pa-4">@EmptyText</MudText>
                 </NoRecordsContent>
                 <PagerContent>
                     <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
@@ -139,6 +176,36 @@
     .cpi-toolbar-right { margin-left: auto; }
     .cpi-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
     .cpi-filter-select { width: 160px; min-width: 160px; }
+    .cpi-filter-select-wide { width: 140px; min-width: 140px; }
+    .cpi-doc-type-select { width: 180px; min-width: 180px; }
+    .cpi-doc-type-select .mud-input-slot,
+    .cpi-doc-type-select input.mud-select-input {
+        font-weight: 600;
+    }
+    .cpi-doc-type-pi .mud-input-outlined-border { border-color: #1976d2 !important; }
+    .cpi-doc-type-pi .mud-input-slot,
+    .cpi-doc-type-pi input.mud-select-input,
+    .cpi-doc-type-pi .mud-input-label { color: #1976d2 !important; }
+    .cpi-doc-type-bg .mud-input-outlined-border { border-color: #ed6c02 !important; }
+    .cpi-doc-type-bg .mud-input-slot,
+    .cpi-doc-type-bg input.mud-select-input,
+    .cpi-doc-type-bg .mud-input-label { color: #ed6c02 !important; }
+    .cpi-doc-type-ci .mud-input-outlined-border { border-color: #7b1fa2 !important; }
+    .cpi-doc-type-ci .mud-input-slot,
+    .cpi-doc-type-ci input.mud-select-input,
+    .cpi-doc-type-ci .mud-input-label { color: #7b1fa2 !important; }
+    .cpi-doc-type-pk .mud-input-outlined-border { border-color: #2e7d32 !important; }
+    .cpi-doc-type-pk .mud-input-slot,
+    .cpi-doc-type-pk input.mud-select-input,
+    .cpi-doc-type-pk .mud-input-label { color: #2e7d32 !important; }
+    .cpi-doc-type-item {
+        font-weight: 600;
+        min-width: 140px;
+    }
+    .cpi-doc-type-item.cpi-doc-type-pi { color: #1976d2; }
+    .cpi-doc-type-item.cpi-doc-type-bg { color: #ed6c02; }
+    .cpi-doc-type-item.cpi-doc-type-ci { color: #7b1fa2; }
+    .cpi-doc-type-item.cpi-doc-type-pk { color: #2e7d32; }
     .cpi-filter-input { width: 220px; min-width: 220px; }
     .cpi-date-label {
         flex: 0 0 auto;
@@ -238,14 +305,22 @@
         position: sticky;
         right: 0;
         z-index: 4;
-        min-width: 148px;
-        white-space: nowrap;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        box-sizing: border-box;
+        padding: 6px 8px !important;
+        white-space: normal;
+        vertical-align: middle;
+        overflow: hidden;
         background-color: #fff !important;
         border-left: 1px solid #e0e0e0;
-        vertical-align: middle;
     }
 
-    .cotract-pi-table .mud-table-head .mud-table-cell.cpi-ops-cell { z-index: 6; }
+    .cotract-pi-table .mud-table-head .mud-table-cell.cpi-ops-cell {
+        z-index: 6;
+        background-color: #fff !important;
+    }
 
     .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpi-ops-cell {
         background-color: #f5f5f5 !important;
@@ -255,16 +330,51 @@
         background-color: #eeeeee !important;
     }
 
+    .cpi-ops-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 28px 28px;
+        gap: 2px 4px;
+        width: 100%;
+    }
+
+    .cpi-ops-grid .cpi-ops-btn.mud-button-root {
+        min-width: 0 !important;
+        width: 100%;
+        height: 28px;
+        padding: 0 2px !important;
+        margin: 0;
+        font-size: 12px;
+        line-height: 28px;
+        justify-content: center;
+    }
+
+    .cpi-ops-grid .cpi-ops-btn .mud-button-label {
+        font-size: 12px !important;
+    }
+
+    .cpi-ops-grid .cpi-ops-btn .mud-icon-root {
+        font-size: 16px !important;
+        margin-right: 2px !important;
+    }
+
     .cotract-pi-table .mud-table-body .mud-table-row {
         cursor: pointer;
     }
 </style>
 
 @code {
+    private static readonly string[] DocumentKinds = ["客户PI", "报关PI", "客户CI", "装箱单"];
+
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "hint")] public string? HintQuery { get; set; }
+
     private MudTable<ZyqdCotractPiModel>? _table;
     private bool _ready;
     private bool _busy;
-    private string _filterColumn = "Customer";
+    private string _documentType = "客户PI";
+    private string? _appliedTypeQuery;
+    private string _filterColumn = "客户编号";
     private string? _keyword;
     private DateTime? _dateStart = DateTime.Today.AddDays(-7);
     private DateTime? _dateEnd = DateTime.Today;
@@ -274,12 +384,97 @@
     private int _filteredTotal;
     private bool _infoFailed;
     private bool _infoWarned;
+    private bool _pendingReload;
+    private bool _pendingGenerateHint;
+    private bool _generateHintConsumed;
 
-    protected override void OnAfterRender(bool firstRender)
+    private bool IsCustomerPi => _documentType == "客户PI";
+    private bool IsCustomsPi => _documentType == "报关PI";
+    private bool IsPackingList => _documentType == "装箱单";
+    private string EmptyText => _busy
+        ? "加载中…"
+        : IsPackingList
+            ? "装箱单列表功能开发中"
+            : "暂无可见数据";
+
+    private static string DocKindCss(string? kind) => kind switch
     {
-        if (!firstRender || _ready) return;
-        _ready = true;
-        StateHasChanged();
+        "报关PI" => "bg",
+        "客户CI" => "ci",
+        "装箱单" => "pk",
+        _ => "pi"
+    };
+
+    private static string DocKindIcon(string? kind) => kind switch
+    {
+        "报关PI" => Icons.Material.Filled.LocalShipping,
+        "客户CI" => Icons.Material.Filled.ReceiptLong,
+        "装箱单" => Icons.Material.Filled.Inventory2,
+        _ => Icons.Material.Filled.Description
+    };
+
+    protected override void OnParametersSet()
+    {
+        var q = (TypeQuery ?? "").Trim();
+        if (q.Length == 0)
+            q = "客户PI";
+        if (!DocumentKinds.Contains(q, StringComparer.Ordinal))
+            return;
+
+        var queryChanged = !string.Equals(_appliedTypeQuery, q, StringComparison.Ordinal);
+        _documentType = q;
+        _appliedTypeQuery = q;
+
+        var hasHint = string.Equals(HintQuery, "generate", StringComparison.OrdinalIgnoreCase);
+        if (hasHint && !_generateHintConsumed)
+        {
+            _pendingGenerateHint = true;
+            _generateHintConsumed = true;
+        }
+        else if (!hasHint)
+        {
+            _generateHintConsumed = false;
+        }
+
+        // 类型切换 / 从新建跳回：等渲染完成后再查，避免 NavigateTo 打断 ReloadServerData
+        if (queryChanged || _pendingGenerateHint)
+        {
+            _selected.Clear();
+            if (_ready || _pendingGenerateHint)
+                _pendingReload = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_ready)
+        {
+            _ready = true;
+            StateHasChanged();
+            return;
+        }
+
+        if (!_ready || !_pendingReload)
+            return;
+
+        _pendingReload = false;
+        var showHint = _pendingGenerateHint;
+        _pendingGenerateHint = false;
+
+        if (showHint)
+            Notify.Show("请选择客户PI来生成", Severity.Info);
+
+        await ReloadTableAsync(resetPage: true);
+    }
+
+    private void GoCustomerPiForCreateAsync()
+    {
+        _selected.Clear();
+        _documentType = "客户PI";
+        _pendingGenerateHint = true;
+        _pendingReload = true;
+        // 故意不写 hint 到 URL：同页切换只靠本地标记，避免二次导航打断查询
+        NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("客户PI")}", replace: true);
     }
 
     private int RowNo(ZyqdCotractPiModel row) => _skip + _rows.IndexOf(row) + 1;
@@ -290,8 +485,16 @@
     private static string FormatCreateTime(ZyqdCotractPiModel row)
         => CotractPiTypes.FormatDate(row.CreateTime);
 
-    private static string EditHref(ZyqdCotractPiModel row)
-        => $"/contract-pi/{Uri.EscapeDataString((row.DocumentGuid ?? "").Trim())}";
+    private string EditHref(ZyqdCotractPiModel row)
+    {
+        var guid = Uri.EscapeDataString((row.DocumentGuid ?? "").Trim());
+        return _documentType switch
+        {
+            "报关PI" => $"/contract-bg/{guid}",
+            "客户CI" => $"/contract-ci/{guid}",
+            _ => $"/contract-pi/{guid}"
+        };
+    }
 
     private static string Dash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
@@ -304,7 +507,7 @@
 
     private async Task ClearAsync()
     {
-        _filterColumn = "Customer";
+        _filterColumn = "客户编号";
         _keyword = null;
         _dateStart = DateTime.Today.AddDays(-7);
         _dateEnd = DateTime.Today;
@@ -317,15 +520,79 @@
         await ReloadTableAsync(resetPage: true);
     }
 
+    private void OnDocumentTypeChanged(string value)
+    {
+        var next = string.IsNullOrWhiteSpace(value) ? "客户PI" : value.Trim();
+        if (next == "装箱单")
+        {
+            NavManager.NavigateTo("/contract-pk");
+            return;
+        }
+        if (string.Equals(_documentType, next, StringComparison.Ordinal))
+            return;
+
+        _selected.Clear();
+        _documentType = next;
+        _pendingReload = true;
+        NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString(next)}", replace: true);
+    }
+
     private void OnRowClick(TableRowClickEventArgs<ZyqdCotractPiModel> args)
     {
-        if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
+        if (IsPackingList || args.MouseEventArgs.Detail != 2 || args.Item is null) return;
         var guid = (args.Item.DocumentGuid ?? "").Trim();
         if (guid.Length == 0) return;
-        NavManager.NavigateTo($"/contract-pi/{guid}");
+        NavManager.NavigateTo(EditHref(args.Item));
     }
 
     private void ClearSelection() => _selected.Clear();
+
+    private async Task OpenGenerateAsync(ZyqdCotractPiModel row)
+    {
+        var guid = (row.DocumentGuid ?? "").Trim();
+        if (guid.Length == 0)
+        {
+            Notify.Show("单据缺少编号，无法生成", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<CotractGenerateKindDialog>
+        {
+            { x => x.InvoiceNo, row.INVOICE_NO }
+        };
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+        var dialog = await DialogService.ShowAsync<CotractGenerateKindDialog>("选择生成类型", parameters, options);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not string kind || kind.Length == 0)
+            return;
+
+        if (kind == "报关PI")
+        {
+            var type = Uri.EscapeDataString(CotractPiTypes.ToCustomsPiType(row.var6));
+            NavManager.NavigateTo($"/contract-bg/new?from={Uri.EscapeDataString(guid)}&type={type}");
+            return;
+        }
+
+        if (kind == "客户CI")
+        {
+            var type = Uri.EscapeDataString(CotractPiTypes.ToCustomerCiType(row.var6));
+            NavManager.NavigateTo($"/contract-ci/new?from={Uri.EscapeDataString(guid)}&type={type}");
+            return;
+        }
+
+        if (kind == "装箱单")
+        {
+            NavManager.NavigateTo($"/contract-pk/new?from={Uri.EscapeDataString(guid)}");
+            return;
+        }
+
+        Notify.Show("未知的生成类型", Severity.Warning);
+    }
 
     private async Task ReloadTableAsync(bool resetPage)
     {
@@ -343,6 +610,14 @@
     {
         if (!_ready)
             return new TableData<ZyqdCotractPiModel> { Items = Array.Empty<ZyqdCotractPiModel>(), TotalItems = 0 };
+
+        if (IsPackingList)
+        {
+            _rows = [];
+            _filteredTotal = 0;
+            _skip = 0;
+            return new TableData<ZyqdCotractPiModel> { Items = Array.Empty<ZyqdCotractPiModel>(), TotalItems = 0 };
+        }
 
         _busy = true;
         try
@@ -384,10 +659,10 @@
 
     private async Task DeleteSelectedAsync()
     {
-        if (_selected.Count == 0) return;
+        if (_selected.Count == 0 || IsPackingList) return;
         var ok = await DialogService.ShowMessageBoxAsync(
             "确认删除",
-            $"确定删除选中的 {_selected.Count} 张客户PI吗？",
+            $"确定删除选中的 {_selected.Count} 张{_documentType}吗？",
             yesText: "删除",
             cancelText: "取消");
         if (ok != true) return;
@@ -417,10 +692,11 @@
 
     private async Task DeleteAsync(ZyqdCotractPiModel row)
     {
+        if (IsPackingList) return;
         var who = string.IsNullOrWhiteSpace(row.INVOICE_NO) ? (row.ClientNo ?? "该单据") : row.INVOICE_NO;
         var ok = await DialogService.ShowMessageBoxAsync(
             "确认删除",
-            $"确定删除 {who} 这张客户PI吗？",
+            $"确定删除 {who} 这张{_documentType}吗？",
             yesText: "删除",
             cancelText: "取消");
         if (ok != true) return;
@@ -458,7 +734,7 @@
 
         return new CotractPiQueryDto
         {
-            DocumentType = "客户PI",
+            DocumentType = _documentType,
             FilterColumn = _filterColumn,
             Keyword = _keyword,
             DateStart = _dateStart,

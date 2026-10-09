@@ -2,32 +2,42 @@
 @rendermode InteractiveServer
 @inject QuotationService Quotation
 @inject CentralAuthService Auth
+@inject NavigationManager NavManager
 
 <PageTitle>报价列表</PageTitle>
 
 <div class="qe-list-page">
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="qe-toolbar" Wrap="Wrap.Wrap">
-            <MudSelect T="string" @bind-Value="_filterColumn" Label="条件" Variant="Variant.Outlined" Margin="Margin.Dense" Class="qe-filter-select">
-                @foreach (var field in QuotationFilterFields.All)
-                {
-                    <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
-                }
-            </MudSelect>
-            <MudTextField @bind-Value="_keyword"
-                          Label="内容"
-                          Placeholder="请输入查询内容"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Immediate="true"
-                          Class="qe-filter-input"
-                          OnKeyUp="OnKeyUp"/>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
-            <div class="qe-spacer"></div>
-            <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/quotation/new">新建</MudButton>
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="qe-toolbar">
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qe-toolbar-left">
+                <MudSelect T="string"
+                           @bind-Value="_filterColumn"
+                           Label="条件"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="qe-filter-select">
+                    @foreach (var field in QuotationFilterFields.All)
+                    {
+                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_keyword"
+                              Label="内容"
+                              Placeholder="请输入查询内容"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="qe-filter-input"
+                              OnKeyUp="OnKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+            </MudStack>
+            <div class="qe-toolbar-spacer"></div>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qe-toolbar-right">
+                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/quotation/new">新建</MudButton>
+            </MudStack>
         </MudStack>
     </MudPaper>
 
@@ -49,6 +59,7 @@
                       Breakpoint="Breakpoint.None"
                       FixedHeader="true"
                       SortMode="SortMode.Single"
+                      OnRowClick="OnRowClick"
                       Class="qe-table">
                 <HeaderContent>
                     <MudTh Class="qe-no-cell">序号</MudTh>
@@ -74,15 +85,32 @@
                     <MudTd>@(context.createTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</MudTd>
                     <MudTd Class="qe-ops-cell">
                         <div class="qe-ops-grid">
-                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="@EditHref(context)">编辑</MudButton>
-                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Href="@DetailHref(context)">详情</MudButton>
-                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Href="@CopyHref(context)">复制</MudButton>
-                            <MudButton Class="qe-ops-btn" Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       Class="qe-ops-btn"
+                                       Href="@EditHref(context)">编辑</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text"
+                                       StartIcon="@Icons.Material.Filled.Visibility"
+                                       Class="qe-ops-btn"
+                                       Href="@DetailHref(context)">详情</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text"
+                                       StartIcon="@Icons.Material.Filled.ContentCopy"
+                                       Class="qe-ops-btn"
+                                       Href="@CopyHref(context)">复制</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       Class="qe-ops-btn"
+                                       Disabled="_busy"
+                                       OnClick="@(() => DeleteAsync(context))">删除</MudButton>
                         </div>
                     </MudTd>
                 </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无数据")</MudText>
+                </NoRecordsContent>
                 <PagerContent>
-                    <MudTablePager PageSizeOptions="new[] { 10, 20, 50, 100 }" InfoFormat="{first_item}-{last_item} / {all_items}"/>
+                    <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                                   InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
                 </PagerContent>
             </MudTable>
         }
@@ -98,15 +126,117 @@
         min-height: 0;
         gap: 12px;
     }
+
     .qe-toolbar { width: 100%; }
-    .qe-filter-select { min-width: 140px; max-width: 180px; }
-    .qe-filter-input { min-width: 180px; max-width: 280px; }
-    .qe-spacer { flex: 1 1 auto; }
+    .qe-toolbar-left, .qe-toolbar-right { flex: 0 0 auto; }
+    .qe-toolbar-right { margin-left: auto; }
+    .qe-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .qe-filter-select { width: 140px; min-width: 140px; }
+    .qe-filter-input { width: 200px; min-width: 200px; }
+
     .qe-table-wrap {
         flex: 1 1 0;
         min-height: 0;
-        overflow: auto;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
     }
+
+    .qe-table {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .qe-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+    }
+
+    .qe-table .mud-table-pagination {
+        flex: 0 0 auto !important;
+        margin-top: auto;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .qe-table .mud-table-head .mud-table-cell:not(.qe-ops-cell):not(.qe-no-cell):not(:first-child),
+    .qe-table .mud-table-body .mud-table-cell:not(.qe-ops-cell):not(.qe-no-cell):not(:first-child) {
+        white-space: nowrap;
+        min-width: 88px;
+        vertical-align: middle;
+    }
+
+    .qe-table .mud-table-cell:first-child,
+    .qe-table .mud-table-cell.qe-no-cell {
+        position: sticky;
+        z-index: 4;
+        box-sizing: border-box;
+        background-color: #fff !important;
+        vertical-align: middle !important;
+    }
+
+    .qe-table .mud-table-head .mud-table-cell:first-child,
+    .qe-table .mud-table-head .mud-table-cell.qe-no-cell { z-index: 6; }
+
+    .qe-table .mud-table-cell:first-child {
+        left: 0;
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        padding: 0 !important;
+        text-align: center !important;
+    }
+
+    .qe-table .mud-table-cell.qe-no-cell {
+        left: 42px;
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        padding: 0 2px !important;
+        text-align: center;
+        border-right: 1px solid #e0e0e0;
+    }
+
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qe-no-cell {
+        background-color: #f5f5f5 !important;
+    }
+
+    .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
+    .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell.qe-no-cell {
+        background-color: #eeeeee !important;
+    }
+
+    .qe-table .mud-table-cell.qe-ops-cell {
+        position: sticky;
+        right: 0;
+        z-index: 4;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        box-sizing: border-box;
+        padding: 6px 8px !important;
+        white-space: normal;
+        vertical-align: middle;
+        overflow: hidden;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .qe-table .mud-table-head .mud-table-cell.qe-ops-cell {
+        z-index: 6;
+        background-color: #fff !important;
+    }
+
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qe-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+
+    .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell.qe-ops-cell {
+        background-color: #eeeeee !important;
+    }
+
     .qe-ops-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -114,6 +244,7 @@
         gap: 2px 4px;
         width: 100%;
     }
+
     .qe-ops-grid .qe-ops-btn.mud-button-root {
         min-width: 0 !important;
         width: 100%;
@@ -124,19 +255,18 @@
         line-height: 28px;
         justify-content: center;
     }
-    .qe-table .mud-table-cell.qe-ops-cell {
-        position: sticky;
-        right: 0;
-        z-index: 4;
-        width: 168px;
-        min-width: 168px;
-        max-width: 168px;
-        background-color: #fff !important;
-        border-left: 1px solid #e0e0e0;
+
+    .qe-ops-grid .qe-ops-btn .mud-button-label {
+        font-size: 12px !important;
     }
-    .qe-table .mud-table-head .mud-table-cell.qe-ops-cell { z-index: 6; }
-    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qe-ops-cell {
-        background-color: #f5f5f5 !important;
+
+    .qe-ops-grid .qe-ops-btn .mud-icon-root {
+        font-size: 16px !important;
+        margin-right: 2px !important;
+    }
+
+    .qe-table .mud-table-body .mud-table-row {
+        cursor: pointer;
     }
 </style>
 
@@ -163,6 +293,12 @@
     private static string EditHref(QuotationListItemDto row) => $"/quotation/{row.Guid}";
     private static string DetailHref(QuotationListItemDto row) => $"/quotation/{row.Guid}/detail";
     private static string CopyHref(QuotationListItemDto row) => $"/quotation/{row.Guid}/copy";
+
+    private void OnRowClick(TableRowClickEventArgs<QuotationListItemDto> args)
+    {
+        if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
+        NavManager.NavigateTo(DetailHref(args.Item));
+    }
 
     private Task OnKeyUp(KeyboardEventArgs e)
         => e.Key is "Enter" or "NumpadEnter" ? SearchAsync() : Task.CompletedTask;

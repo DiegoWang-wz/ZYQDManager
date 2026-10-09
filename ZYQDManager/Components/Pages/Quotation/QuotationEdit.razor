@@ -3,10 +3,11 @@
 @page "/quotation/{DocumentGuid}/detail"
 @page "/quotation/{DocumentGuid}/copy"
 @rendermode InteractiveServer
-@using ZYQDManager.Components.Pages.Contract
 @using System.Globalization
 @inject QuotationService Quotation
 @inject QuotationBaseService QuotationBase
+@inject QuotationExcelService QuotationExcel
+@inject LibreOfficePdfService LibreOffice
 @inject CrmCustomerService Crm
 @inject CentralAuthService Auth
 @inject CentralUserInformationService UserInfo
@@ -17,13 +18,25 @@
     <div class="qe-toolbar">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
             <MudText Typo="Typo.h6">@Title</MudText>
-            <MudStack Row="true" Spacing="1">
+            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/quotation">返回列表</MudButton>
                 @if (!IsDetail)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
                         @(IsCopy ? "创建" : "保存")
                     </MudButton>
+                }
+                @if (!IsCreate)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                               StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                               OnClick="@(() => ExportPdfAsync("ZH"))">PDF-中文</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                               StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                               OnClick="@(() => ExportPdfAsync("EN"))">PDF-英文</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Disabled="_busy"
+                               StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                               OnClick="@(() => ExportPdfAsync("DE"))">PDF-JIECANG Europe GmbH</MudButton>
                 }
             </MudStack>
         </MudStack>
@@ -112,14 +125,11 @@
 
                     @if (lines.Count > 0)
                     {
+                        <div class="qe-table-wrap">
                         <MudTable T="QuotationDetailLineDto" Items="lines" Dense="true" Hover="true" Bordered="true"
                                   Breakpoint="Breakpoint.None" Class="qe-table" Elevation="0">
                             <HeaderContent>
-                                @if (!IsDetail)
-                                {
-                                    <MudTh Style="width:72px">操作</MudTh>
-                                }
-                                <MudTh Style="min-width:180px">型号</MudTh>
+                                <MudTh Class="qe-part-col">型号</MudTh>
                                 <MudTh Style="width:80px">图片</MudTh>
                                 @foreach (var col in SpecColumns(itemType))
                                 {
@@ -130,33 +140,30 @@
                                 <MudTh Class="qe-num-col qe-num-col-sm">折扣%</MudTh>
                                 <MudTh Class="qe-num-col qe-num-col-lg">金额</MudTh>
                                 <MudTh Style="min-width:140px">备注</MudTh>
+                                @if (!IsDetail)
+                                {
+                                    <MudTh Class="qe-ops-col">操作</MudTh>
+                                }
                             </HeaderContent>
                             <RowTemplate>
                                 @{
                                     var row = context;
                                 }
-                                @if (!IsDetail)
-                                {
-                                    <MudTd>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Default"
-                                                       OnClick="@(() => RemoveLine(row))"/>
-                                    </MudTd>
-                                }
-                                <MudTd>
-                                    <MudSelect T="int?"
-                                               Value="row.BaseId"
-                                               ValueChanged="v => OnPartChangedAsync(row, v)"
-                                               Dense="true"
-                                               Margin="Margin.Dense"
-                                               Variant="Variant.Outlined"
-                                               Clearable="true"
-                                               Disabled="IsDetail"
-                                               Class="qe-part-select">
-                                        @foreach (var p in PartsOf(itemType))
-                                        {
-                                            <MudSelectItem T="int?" Value="@((int?)p.Id)">@p.Part_No</MudSelectItem>
-                                        }
-                                    </MudSelect>
+                                <MudTd Class="qe-part-col">
+                                    <MudAutocomplete T="QuotationPartOptionDto"
+                                                     Value="@FindPart(itemType, row.BaseId)"
+                                                     ValueChanged="p => OnPartOptionChangedAsync(row, p)"
+                                                     SearchFunc="(text, ct) => SearchPartsAsync(itemType, text, ct)"
+                                                     ToStringFunc="@(p => p?.Part_No ?? "")"
+                                                     Dense="true"
+                                                     Margin="Margin.Dense"
+                                                     Variant="Variant.Outlined"
+                                                     Clearable="true"
+                                                     Disabled="IsDetail"
+                                                     ResetValueOnEmptyText="true"
+                                                     MaxItems="50"
+                                                     Placeholder="输入筛选型号"
+                                                     Class="qe-part-select"/>
                                 </MudTd>
                                 <MudTd>
                                     <LegacyRemoteImg Path="@row.Quotation_logo" CssClass="qe-thumb"/>
@@ -195,13 +202,19 @@
                                                   ValueChanged="v => SetNote(row, v)"
                                                   Margin="Margin.Dense" Variant="Variant.Outlined" Placeholder="可选" Disabled="IsDetail"/>
                                 </MudTd>
+                                @if (!IsDetail)
+                                {
+                                    <MudTd Class="qe-ops-col">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                                       OnClick="@(() => RemoveLine(row))"/>
+                                    </MudTd>
+                                }
                             </RowTemplate>
-                            <FooterContent>
-                                <MudTd ColSpan="@(IsDetail ? SpecColumns(itemType).Length + 5 : SpecColumns(itemType).Length + 6)">
-                                    <strong>小计：@FmtMoney(lines.Sum(x => x.Amount ?? 0m))</strong>
-                                </MudTd>
-                            </FooterContent>
                         </MudTable>
+                        <div class="qe-subtotal-bar">
+                            <strong>小计：@FmtMoney(lines.Sum(x => x.Amount ?? 0m))</strong>
+                        </div>
+                        </div>
                     }
                 </MudPaper>
             }
@@ -210,19 +223,33 @@
                 <MudText Typo="Typo.subtitle2" Class="mb-2">签名 / 汇率</MudText>
                 <div class="qe-sig-row">
                     <div class="qe-sig-col">
-                        <MudTextField Value="@(_main.signature ?? "")"
-                                      Label="签名"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      ReadOnly="true"
-                                      Class="qe-field"/>
+                        <MudSelect T="string"
+                                   Value="_sigKey"
+                                   ValueChanged="OnSignatureChangedAsync"
+                                   Label="签名"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Disabled="IsDetail"
+                                   Class="qe-field">
+                            @if (_sigOptions.Count == 0)
+                            {
+                                <MudSelectItem Value="@("")">未配置签名</MudSelectItem>
+                            }
+                            else
+                            {
+                                @foreach (var opt in _sigOptions)
+                                {
+                                    <MudSelectItem Value="@opt.Key">@opt.Label</MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
                         @if (!string.IsNullOrWhiteSpace(_main.signature_url))
                         {
                             <LegacyRemoteImg Path="@_main.signature_url" CssClass="qe-sig"/>
                         }
                         else
                         {
-                            <MudText Typo="Typo.caption" Class="qe-sig-tip">未配置签名图片（可在个人信息维护）</MudText>
+                            <MudText Typo="Typo.caption" Class="qe-sig-tip">未配置签名图片（可在个人信息维护中/英签名）</MudText>
                         }
                     </div>
                     <div class="qe-sig-col">
@@ -284,7 +311,43 @@
         color: #555;
         white-space: nowrap;
     }
-    .qe-part-select { min-width: 160px; width: 100%; }
+    .qe-part-col {
+        min-width: 260px !important;
+        width: 260px !important;
+        white-space: nowrap !important;
+        position: sticky;
+        left: 0;
+        z-index: 3;
+        background-color: #fff !important;
+        box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.12);
+    }
+    .qe-table .mud-table-head .mud-table-cell.qe-part-col { z-index: 5; }
+    .qe-ops-col {
+        width: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        text-align: center;
+        position: sticky;
+        right: 0;
+        z-index: 3;
+        background-color: #fff !important;
+        border-left: 1px solid #e0e0e0;
+        box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.12);
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+    .qe-table .mud-table-head .mud-table-cell.qe-ops-col { z-index: 5; }
+    .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell.qe-part-col,
+    .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell.qe-ops-col {
+        background-color: #eeeeee !important;
+    }
+    .qe-part-select { min-width: 240px; width: 100%; }
+    .qe-part-select .mud-input-slot,
+    .qe-part-select input {
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+    }
     .qe-num-col {
         min-width: 7em !important;
         width: auto !important;
@@ -335,8 +398,8 @@
         gap: 12px;
     }
     .qe-sig-col {
-        width: 220px;
-        flex: 0 0 220px;
+        width: 260px;
+        flex: 0 0 260px;
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -371,7 +434,24 @@
         font-weight: 600;
         color: var(--mud-palette-text-primary);
     }
+    .qe-table-wrap {
+        position: relative;
+    }
+    .qe-table .mud-table-container { overflow: auto !important; }
     .qe-table .mud-table-cell { vertical-align: middle; }
+    .qe-subtotal-bar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        min-height: 36px;
+        padding: 6px 16px;
+        border-top: 1px solid #e0e0e0;
+        background: #fff;
+        white-space: nowrap;
+        position: sticky;
+        right: 0;
+        z-index: 4;
+    }
     .qe-table .mud-table-head .mud-table-cell,
     .qe-table th {
         white-space: nowrap !important;
@@ -391,6 +471,8 @@
     private QuotationDocumentDto _doc = new();
     private ZyqdQuotationMainModel _main = new();
     private readonly Dictionary<string, List<QuotationPartOptionDto>> _parts = new();
+    private List<QuotationSignatureOptionDto> _sigOptions = [];
+    private string _sigKey = "";
 
     private bool IsCopy => RelPath().Contains("/copy", StringComparison.OrdinalIgnoreCase);
     private bool IsDetail => RelPath().Contains("/detail", StringComparison.OrdinalIgnoreCase);
@@ -416,11 +498,13 @@
             await EnsurePartsAsync();
 
             var empNo = await Auth.GetCurrentEmpNoAsync();
+            await LoadSignatureOptionsAsync();
+
             if (IsCreate && !IsCopy)
             {
                 _doc = Quotation.CreateBlank(empNo);
                 _main = _doc.Main;
-                await ApplyMySignatureAsync(empNo);
+                ApplyDefaultSignature(empNo);
                 return;
             }
 
@@ -451,8 +535,10 @@
 
             _doc = doc;
             _main = doc.Main;
-            if (IsCopy || !IsDetail)
-                await ApplyMySignatureAsync(empNo);
+            if (IsCopy)
+                ApplyDefaultSignature(empNo);
+            else
+                SyncSignatureKeyFromMain();
         }
         catch (Exception ex)
         {
@@ -473,27 +559,76 @@
         }
     }
 
-    private async Task ApplyMySignatureAsync(string? empNo)
+    private async Task LoadSignatureOptionsAsync()
     {
-        empNo = (empNo ?? "").Trim();
-        if (empNo.Length == 0) return;
-
-        var (ok, displayName, info, msg) = await UserInfo.GetAsync(empNo);
-        if (!ok || info is null)
+        var (ok, list, msg) = await UserInfo.ListSignatureOptionsAsync();
+        if (!ok)
         {
+            _sigOptions = [];
             if (!string.IsNullOrWhiteSpace(msg))
                 Notify.Show(msg, Severity.Warning);
             return;
         }
 
-        var name = (info.Signature ?? "").Trim();
-        if (name.Length == 0)
-            name = (displayName ?? "").Trim();
-        if (name.Length == 0)
-            name = empNo;
+        _sigOptions = list;
+    }
 
-        _main.signature = name;
-        _main.signature_url = (info.SignatureUrl ?? "").Trim();
+    private void ApplyDefaultSignature(string? empNo)
+    {
+        empNo = (empNo ?? "").Trim();
+        var mine = _sigOptions
+            .Where(x => string.Equals(x.EmpNo, empNo, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Kind == "cn" ? 0 : 1)
+            .FirstOrDefault()
+            ?? _sigOptions.FirstOrDefault();
+        if (mine is null)
+        {
+            _sigKey = "";
+            _main.signature = null;
+            _main.signature_url = null;
+            return;
+        }
+
+        ApplySignatureOption(mine);
+    }
+
+    private void SyncSignatureKeyFromMain()
+    {
+        var url = (_main.signature_url ?? "").Trim();
+        var name = (_main.signature ?? "").Trim();
+        var hit = _sigOptions.FirstOrDefault(x =>
+                      url.Length > 0 && string.Equals(x.SignatureUrl, url, StringComparison.OrdinalIgnoreCase))
+                  ?? _sigOptions.FirstOrDefault(x =>
+                      name.Length > 0 && string.Equals(x.Signature, name, StringComparison.OrdinalIgnoreCase));
+        if (hit is null)
+        {
+            _sigKey = "";
+            return;
+        }
+
+        _sigKey = hit.Key;
+    }
+
+    private Task OnSignatureChangedAsync(string value)
+    {
+        _sigKey = value ?? "";
+        var hit = _sigOptions.FirstOrDefault(x => x.Key == _sigKey);
+        if (hit is null)
+        {
+            _main.signature = null;
+            _main.signature_url = null;
+            return Task.CompletedTask;
+        }
+
+        ApplySignatureOption(hit);
+        return Task.CompletedTask;
+    }
+
+    private void ApplySignatureOption(QuotationSignatureOptionDto opt)
+    {
+        _sigKey = opt.Key;
+        _main.signature = opt.Signature;
+        _main.signature_url = opt.SignatureUrl;
     }
 
     private List<QuotationDetailLineDto> LinesOf(string itemType)
@@ -501,6 +636,30 @@
 
     private List<QuotationPartOptionDto> PartsOf(string itemType)
         => _parts.TryGetValue(itemType, out var list) ? list : [];
+
+    private QuotationPartOptionDto? FindPart(string itemType, int? baseId)
+    {
+        if (baseId is null or <= 0) return null;
+        return PartsOf(itemType).FirstOrDefault(x => x.Id == baseId.Value);
+    }
+
+    private Task<IEnumerable<QuotationPartOptionDto>> SearchPartsAsync(
+        string itemType, string? text, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var list = PartsOf(itemType);
+        var k = (text ?? "").Trim();
+        IEnumerable<QuotationPartOptionDto> result = list;
+        if (k.Length > 0)
+        {
+            result = list.Where(x =>
+                x.Part_No.Contains(k, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(x.Label)
+                    && x.Label.Contains(k, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return Task.FromResult(result.Take(50));
+    }
 
     private void AddLine(string itemType)
     {
@@ -516,6 +675,9 @@
 
     private void RemoveLine(QuotationDetailLineDto row)
         => _doc.Details.Remove(row);
+
+    private Task OnPartOptionChangedAsync(QuotationDetailLineDto row, QuotationPartOptionDto? part)
+        => OnPartChangedAsync(row, part?.Id);
 
     private async Task OnPartChangedAsync(QuotationDetailLineDto row, int? baseId)
     {
@@ -580,7 +742,6 @@
         try
         {
             var empNo = await Auth.GetCurrentEmpNoAsync();
-            await ApplyMySignatureAsync(empNo);
             _doc.Main = _main;
             var create = IsCreate;
             var (ok, msg, guid) = await Quotation.SaveAsync(_doc, empNo, create);
@@ -712,4 +873,51 @@
         "Noise" => row.Noise ?? "",
         _ => "",
     };
+
+    private async Task ExportPdfAsync(string lang)
+    {
+        if (IsCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        Notify.Show("正在生成 PDF…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+        try
+        {
+            _doc.Main = _main;
+            var mail = "";
+            var tel = "";
+            var emp = (_main.personId ?? "").Trim();
+            if (emp.Length > 0)
+            {
+                var (ok, _, info, _) = await UserInfo.GetAsync(emp);
+                if (ok && info is not null)
+                {
+                    mail = info.Email ?? "";
+                    tel = info.Phone ?? "";
+                }
+            }
+
+            var xlsx = await QuotationExcel.BuildAsync(_main, _doc.Details, lang, mail, tel);
+            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                QuotationExcelService.DownloadPdfName(_main, lang),
+                "application/pdf",
+                Convert.ToBase64String(pdf));
+            Notify.Show("PDF 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 PDF 失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 }

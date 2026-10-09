@@ -95,11 +95,16 @@ public class CentralUserManagementService
         => await SendAsync(HttpMethod.Post, _api.Relative("users/" + Uri.EscapeDataString(empNo.Trim()) + "/update"), request, ct);
 
     public async Task<(bool Ok, string? Message)> SaveAppPermissionsAsync(
-        string empNo, string role, Dictionary<string, ControlPermissionApiDto>? controls, CancellationToken ct = default)
+        string empNo,
+        string role,
+        Dictionary<string, ControlPermissionApiDto>? controls,
+        bool enabled = true,
+        CancellationToken ct = default)
     {
         var entry = new SystemPermissionEntryApiDto
         {
             Role = string.IsNullOrWhiteSpace(role) ? "operator" : role.Trim(),
+            Enabled = enabled,
             Controls = controls
         };
         return await SendAsync(
@@ -113,8 +118,19 @@ public class CentralUserManagementService
     [Obsolete("Use SaveAppPermissionsAsync to preserve Controls")]
     public async Task<(bool Ok, string? Message)> SaveAppRoleAsync(
         string empNo, string role, CancellationToken ct = default)
-        => await SaveAppPermissionsAsync(empNo, role, null, ct);
+        => await SaveAppPermissionsAsync(empNo, role, null, true, ct);
 
+    /// <summary>启停本系统（ZYQDManager）权限，不改全局 IsActive。</summary>
+    public async Task<(bool Ok, string? Message)> SetAppEnabledAsync(
+        string empNo, bool enabled, CancellationToken ct = default)
+        => await SendAsync(
+            HttpMethod.Post,
+            _api.Relative("users/" + Uri.EscapeDataString(empNo.Trim())
+                                   + "/permissions/" + CentralApiOptions.AppSystemKey + "/set-enabled"),
+            new SetSystemEnabledRequestDto { Enabled = enabled },
+            ct);
+
+    [Obsolete("Prefer SetAppEnabledAsync — do not deactivate the global account from ZYQDManager.")]
     public async Task<(bool Ok, string? Message)> DeactivateUserAsync(string empNo, CancellationToken ct = default)
         => await SendAsync(HttpMethod.Post, _api.Relative("users/" + Uri.EscapeDataString(empNo.Trim()) + "/deactivate"), null, ct);
 

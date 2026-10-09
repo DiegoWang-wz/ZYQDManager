@@ -212,9 +212,27 @@ public class SirService
             "产品型号" => q.Where(x => x.Product_partNo != null && x.Product_partNo.Contains(kw)),
             "产品名称" => q.Where(x => x.ProductName != null && x.ProductName.Contains(kw)),
             "业务员" => q.Where(x => x.SalesmanName != null && x.SalesmanName.Contains(kw)),
-            "报告类型" => q.Where(x => x.Report_type != null && x.Report_type.Contains(kw)),
+            "报告类型" => FilterByReportType(q, kw),
             _ => q.Where(x => x.Client != null && x.Client.Contains(kw)),
         };
+    }
+
+    /// <summary>
+    /// 库内存 motor/remote_new 等代码，界面展示中文；按中文名或代码模糊匹配后筛 Value。
+    /// </summary>
+    private static IQueryable<ZyqdSirMainModel> FilterByReportType(IQueryable<ZyqdSirMainModel> q, string kw)
+    {
+        var codes = SirReportTypes.Tests
+            .Where(t =>
+                t.Label.Contains(kw, StringComparison.OrdinalIgnoreCase)
+                || t.Value.Contains(kw, StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.Value)
+            .ToArray();
+
+        if (codes.Length == 0)
+            return q.Where(x => x.Report_type != null && x.Report_type.Contains(kw));
+
+        return q.Where(x => x.Report_type != null && codes.Contains(x.Report_type));
     }
 
     private static IQueryable<ZyqdSirMainModel> ApplySort(IQueryable<ZyqdSirMainModel> q, SirQueryDto query)

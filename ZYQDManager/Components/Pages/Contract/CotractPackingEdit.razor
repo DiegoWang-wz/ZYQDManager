@@ -1,0 +1,283 @@
+@page "/contract-pk/new"
+@page "/contract-pk/{DocumentGuid}"
+@rendermode InteractiveServer
+@inject CustomsAndPackingService Packing
+@inject CentralAuthService Auth
+
+<PageTitle>@Title</PageTitle>
+
+<div class="cpk-edit-page">
+    <MudPaper Class="pa-3 mb-2" Outlined="true">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.h6">@Title</MudText>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Variant="Variant.Outlined" Href="/contract-pk" Disabled="_busy">返回列表</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy">
+                    @(_busy ? "保存中…" : "保存")
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
+    }
+    else
+    {
+        <MudPaper Class="pa-3 mb-2" Outlined="true">
+            <MudText Typo="Typo.subtitle2" Class="mb-2">抬头</MudText>
+            <div class="cpk-form-grid">
+                <MudTextField @bind-Value="_header.ClientNo" Label="客户编号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.ClientName" Label="客户名称" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.Customer_destination_country" Label="目的国" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.PIcotract_code" Label="PI合同号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.Person" Label="需求人" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.Shipping_heads_up" Label="出运抬头" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.delivery_time" Label="货好时间" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.Trade_Term" Label="贸易术语" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.packing_list_type" Label="箱单类型" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.Shipping_method" Label="出货方式" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.encasement_method" Label="装箱方式" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.Box_type_quantity" Label="箱型箱量" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+            </div>
+            <MudStack Row="true" Spacing="3" Class="mt-2" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.caption">总数量：@_header.all_qty.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总箱数：@_header.all_box_qty.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总托数：@_header.all_Pallet_qty.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总净重：@_header.all_Net_weight.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总毛重：@_header.all_gross_weight.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总体积：@_header.all_volume.ToString("0.####")</MudText>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Class="pa-2" Outlined="true">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2 px-1">
+                <MudText Typo="Typo.subtitle2">明细（@_lines.Count）</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine" Disabled="_busy">增行</MudButton>
+            </MudStack>
+            <MudTable T="CustomsAndPackingLineDto" Items="_lines" Dense="true" Hover="true" Bordered="true"
+                      Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table">
+                <HeaderContent>
+                    <MudTh>型号/物料</MudTh>
+                    <MudTh>物料名</MudTh>
+                    <MudTh>数量</MudTh>
+                    <MudTh>箱数</MudTh>
+                    <MudTh>托数</MudTh>
+                    <MudTh>打包方式</MudTh>
+                    <MudTh>纸箱尺寸</MudTh>
+                    <MudTh>托盘尺寸</MudTh>
+                    <MudTh>净重</MudTh>
+                    <MudTh>毛重</MudTh>
+                    <MudTh>体积</MudTh>
+                    <MudTh>SAP订单</MudTh>
+                    <MudTh>行类型</MudTh>
+                    <MudTh Style="width:56px">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    @{
+                        var line = context;
+                    }
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.materialNo ?? "")" ValueChanged="v => line.materialNo = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.materialName ?? "")" ValueChanged="v => line.materialName = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.qty" ValueChanged="v => { line.qty = v; Recalc(); }"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.box_qty" ValueChanged="v => { line.box_qty = v; Recalc(); }"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.Pallet_qty" ValueChanged="v => { line.Pallet_qty = v; Recalc(); }"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.Packing_method ?? "")" ValueChanged="v => line.Packing_method = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.Carton_Size ?? "")" ValueChanged="v => line.Carton_Size = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.Pallet_Size ?? "")" ValueChanged="v => line.Pallet_Size = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.Net_weight" ValueChanged="v => { line.Net_weight = v; Recalc(); }"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.gross_weight" ValueChanged="v => { line.gross_weight = v; Recalc(); }"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.volume" ValueChanged="v => { line.volume = v; Recalc(); }"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.SAP_order_NO ?? "")" ValueChanged="v => line.SAP_order_NO = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>@(line.var7 ?? "原始行")</MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       Disabled="_busy" OnClick="@(() => RemoveLine(line))"/>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+</div>
+
+<style>
+    .cpk-edit-page { flex: 1 1 0; min-height: 0; overflow: auto; }
+    .cpk-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 8px 12px;
+    }
+    .cpk-line-table .mud-table-container { overflow: auto; }
+    .cpk-cell { min-width: 110px; }
+    .cpk-num { min-width: 72px; max-width: 96px; }
+</style>
+
+@code {
+    [Parameter] public string? DocumentGuid { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? FromPiGuid { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private bool _isCreate;
+    private ZyqdCustomsAndPackingModel _header = new();
+    private List<CustomsAndPackingLineDto> _lines = [];
+    private int _tempSeq;
+
+    private string Title => _isCreate ? "新建装箱单" : "编辑装箱单";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            var pathGuid = (DocumentGuid ?? "").Trim();
+            var from = (FromPiGuid ?? "").Trim();
+            if (string.Equals(pathGuid, "new", StringComparison.OrdinalIgnoreCase) || pathGuid.Length == 0)
+            {
+                _isCreate = true;
+                if (from.Length > 0)
+                    await LoadFromPiAsync(from);
+                else
+                {
+                    Notify.Show("请先从客户PI列表选择要生成装箱单的单据", Severity.Warning);
+                    NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("客户PI")}&hint=generate");
+                    return;
+                }
+            }
+            else
+            {
+                _isCreate = false;
+                await LoadExistingAsync(pathGuid);
+            }
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadFromPiAsync(string piGuid)
+    {
+        var rows = await Packing.LoadDraftFromCustomsPiAsync(piGuid);
+        if (rows.Count == 0)
+        {
+            Notify.Show("未找到报关PI或明细为空", Severity.Warning);
+            _header = new ZyqdCustomsAndPackingModel { var6 = "报关PI" };
+            _lines = [];
+            return;
+        }
+        ApplyRows(rows);
+    }
+
+    private async Task LoadExistingAsync(string guid)
+    {
+        var rows = await Packing.GetByGuidAsync(guid);
+        if (rows.Count == 0)
+        {
+            Notify.Show("装箱单不存在", Severity.Warning);
+            NavManager.NavigateTo("/contract-pk");
+            return;
+        }
+        ApplyRows(rows);
+    }
+
+    private void ApplyRows(List<ZyqdCustomsAndPackingModel> rows)
+    {
+        _header = rows[0];
+        _tempSeq = 0;
+        _lines = rows.Select(x => CustomsAndPackingService.ToLineDto(x, ++_tempSeq)).ToList();
+        Recalc();
+    }
+
+    private void AddLine()
+    {
+        _lines.Add(new CustomsAndPackingLineDto
+        {
+            TempId = ++_tempSeq,
+            var7 = "原始行",
+            Customer_destination_country = _header.Customer_destination_country
+        });
+        Recalc();
+    }
+
+    private void RemoveLine(CustomsAndPackingLineDto line)
+    {
+        _lines.Remove(line);
+        Recalc();
+    }
+
+    private void Recalc()
+    {
+        _header.all_qty = _lines.Sum(x => x.qty);
+        _header.all_box_qty = _lines.Sum(x => x.box_qty);
+        _header.all_Pallet_qty = _lines.Sum(x => x.Pallet_qty);
+        _header.all_Net_weight = _lines.Sum(x => x.total_Net_weight != 0 ? x.total_Net_weight : x.Net_weight * x.qty);
+        _header.all_gross_weight = _lines.Sum(x => x.total_gross_weight != 0 ? x.total_gross_weight : x.gross_weight * x.qty);
+        _header.all_volume = _lines.Sum(x => x.volume);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_lines.Count == 0)
+        {
+            Notify.Show("请至少保留一行明细", Severity.Warning);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            var (ok, msg, guid) = await Packing.SaveAsync(_header, _lines, auth?.EmpNo, _isCreate);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+            Notify.Show("保存成功", Severity.Success);
+            if (_isCreate && !string.IsNullOrWhiteSpace(guid))
+                NavManager.NavigateTo($"/contract-pk/{guid}", replace: true);
+            else
+                await LoadExistingAsync(guid ?? _header.DocumentGuid ?? "");
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

@@ -2,13 +2,13 @@
 @page "/sir/{DocumentGuid}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Rendering
+@using ZYQDManager.Components.Pages.Contract
 @inject SirService Sir
 @inject SirExcelService SirExcel
 @inject LibreOfficePdfService LibreOffice
 @inject CrmCustomerService Crm
 @inject CotractBaseService CotractBase
 @inject NavigationManager Nav
-@inject IConfiguration Config
 @inject IJSRuntime JS
 
 <PageTitle>遮阳产品测试报告</PageTitle>
@@ -317,11 +317,8 @@
                                 @for (var i = 0; i < _images.Count; i++)
                                 {
                                     var idx = i;
-                                    var url = ImageDisplayUrl(_images[idx]);
                                     <div class="sir-preview-item">
-                                        <a href="@url" target="_blank" rel="noopener">
-                                            <img src="@url" alt="附图"/>
-                                        </a>
+                                        <LegacyRemoteImg Path="@_images[idx]" CssClass="sir-preview-fill"/>
                                         <MudIconButton Icon="@Icons.Material.Filled.Close"
                                                        Size="Size.Small"
                                                        Color="Color.Error"
@@ -341,13 +338,13 @@
                         <table class="sir-form-table sir-sample-table">
                             <thead>
                             <tr class="sir-detail-head">
-                                <th style="width:48px">序号</th>
-                                <th style="width:120px">物料编号</th>
-                                <th style="width:140px">物料名称</th>
-                                <th>图片留底（最多5张）</th>
-                                <th style="width:160px">样品部件</th>
-                                <th style="width:200px">备注/要求</th>
-                                <th style="width:72px">操作</th>
+                                <th class="sir-sample-idx-col">序号</th>
+                                <th class="sir-sample-mat-col">物料编号</th>
+                                <th class="sir-sample-mat-col">物料名称</th>
+                                <th class="sir-sample-img-col">图片留底（最多5张，JPG/PNG，单张≤5MB）</th>
+                                <th class="sir-sample-eq-col">样品部件</th>
+                                <th class="sir-sample-eq-col">备注/要求</th>
+                                <th class="sir-sample-op-col">操作</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -360,29 +357,14 @@
                                     <td class="center">@(si + 1)</td>
                                     <td><MudTextField @bind-Value="s.materialNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
                                     <td><MudTextField @bind-Value="s.materialName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
-                                    <td>
+                                    <td class="sir-sample-img-col">
                                         <div class="sir-sample-imgs">
-                                            <label class="sir-upload-label">
-                                                <InputFile OnChange="@(e => OnSampleImagesSelected(e, sIndex))"
-                                                           accept=".jpg,.jpeg,.png,.gif,.bmp,image/*"
-                                                           multiple
-                                                           disabled="@(_busy || _imgUploading || imgs.Count >= 5)"/>
-                                                <MudButton Variant="Variant.Outlined"
-                                                           Color="Color.Primary"
-                                                           Size="Size.Small"
-                                                           StartIcon="@Icons.Material.Filled.AddPhotoAlternate"
-                                                           Disabled="@(_busy || _imgUploading || imgs.Count >= 5)"
-                                                           HtmlTag="span">
-                                                    @(imgs.Count >= 5 ? "已满5张" : "添加图片")
-                                                </MudButton>
-                                            </label>
                                             <div class="sir-image-preview sir-sample-preview">
                                                 @for (var ii = 0; ii < imgs.Count; ii++)
                                                 {
                                                     var imgIdx = ii;
-                                                    var url = ImageDisplayUrl(imgs[imgIdx]);
                                                     <div class="sir-preview-item sir-preview-item-sm">
-                                                        <a href="@url" target="_blank" rel="noopener"><img src="@url" alt="样品"/></a>
+                                                        <LegacyRemoteImg Path="@imgs[imgIdx]" CssClass="sir-preview-fill"/>
                                                         <MudIconButton Icon="@Icons.Material.Filled.Close"
                                                                        Size="Size.Small"
                                                                        Color="Color.Error"
@@ -391,14 +373,26 @@
                                                                        OnClick="@(() => RemoveSampleImage(sIndex, imgIdx))"/>
                                                     </div>
                                                 }
+                                                @if (imgs.Count < 5)
+                                                {
+                                                    <label class="sir-upload-label sir-add-slot @(_busy || _imgUploading ? "sir-add-slot-disabled" : null)">
+                                                        <InputFile OnChange="@(e => OnSampleImagesSelected(e, sIndex))"
+                                                                   accept=".jpg,.jpeg,.png,.gif,.bmp,image/*"
+                                                                   multiple
+                                                                   disabled="@(_busy || _imgUploading)"/>
+                                                        <span class="sir-add-slot-inner">
+                                                            <MudIcon Icon="@Icons.Material.Filled.Add" Class="sir-add-slot-icon"/>
+                                                            <span>添加</span>
+                                                        </span>
+                                                    </label>
+                                                }
                                             </div>
-                                            <div class="sir-upload-hint">JPG/PNG，单张≤5MB</div>
                                         </div>
                                     </td>
                                     <td>
                                         <MudTextField @bind-Value="s.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="样品部件"/>
                                     </td>
-                                    <td><MudTextField @bind-Value="s.Note1" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Lines="2" Placeholder="留底要求"/></td>
+                                    <td><MudTextField @bind-Value="s.Note1" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="留底要求"/></td>
                                     <td class="center">
                                         <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                        Color="Color.Error"
@@ -410,16 +404,13 @@
                             }
                             </tbody>
                         </table>
-                        <div class="sir-sample-actions">
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       Size="Size.Small"
-                                       StartIcon="@Icons.Material.Filled.Add"
-                                       Disabled="_busy"
-                                       OnClick="AddSampleRow">
-                                添加样品记录
-                            </MudButton>
-                        </div>
+                        <button type="button"
+                                class="sir-sample-add-row @(_busy ? "sir-sample-add-row-disabled" : null)"
+                                disabled="@_busy"
+                                @onclick="AddSampleRow">
+                            <MudIcon Icon="@Icons.Material.Filled.Add" Class="sir-sample-add-row-icon"/>
+                            <span>添加样品记录</span>
+                        </button>
                     </div>
                 }
 
@@ -437,8 +428,8 @@
         min-height: 0;
         display: flex;
         flex-direction: column;
-        /* 抵消 MainLayout .zyqd-main 的 16px 内边距，避免顶栏左右出现灰缝 */
-        margin: 0 -16px -16px;
+        /* 抵消 MainLayout .zyqd-main 的 16px 内边距（含顶栏下额外 16px），避免灰缝、保持贴顶栏 */
+        margin: -16px -16px -16px;
         overflow: hidden;
         background: #fff;
     }
@@ -798,7 +789,8 @@
         overflow: hidden;
         background: #fff;
     }
-    .sir-preview-item img {
+    .sir-preview-item img,
+    .sir-preview-item .sir-preview-fill {
         width: 100%;
         height: 100%;
         object-fit: cover;
@@ -810,10 +802,102 @@
         right: 0;
         background: rgba(255,255,255,.85) !important;
     }
-    .sir-sample-actions { margin-top: 10px; }
-    .sir-sample-imgs { display: flex; flex-direction: column; gap: 6px; }
-    .sir-sample-preview { margin-top: 4px; }
+    .sir-sample-add-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        margin-top: 10px;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px dashed #c4c4c4;
+        border-radius: 6px;
+        background: #f3f4f6;
+        color: #6b7280;
+        font-size: 13px;
+        cursor: pointer;
+        user-select: none;
+        transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .sir-sample-add-row:hover {
+        background: #eaecef;
+        border-color: #9ca3af;
+        color: #374151;
+    }
+    .sir-sample-add-row-disabled,
+    .sir-sample-add-row:disabled {
+        opacity: .55;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+    .sir-sample-add-row-icon {
+        width: 18px !important;
+        height: 18px !important;
+        font-size: 18px !important;
+    }
+    .sir-sample-table { table-layout: fixed; width: 100%; }
+    .sir-sample-idx-col { width: 48px; }
+    .sir-sample-op-col { width: 72px; }
+    .sir-sample-mat-col { width: 200px; min-width: 200px; max-width: 200px; }
+    /* 72px × 5 + gap 10px × 4 ≈ 400；样品部件/备注平分剩余宽度 */
+    .sir-sample-img-col {
+        width: 420px;
+        max-width: 420px;
+        min-width: 420px;
+    }
+    .sir-sample-eq-col { width: auto; }
+    .sir-sample-imgs { display: flex; flex-direction: column; gap: 6px; width: 400px; max-width: 100%; }
+    .sir-sample-preview {
+        margin-top: 0;
+        align-items: center;
+        flex-wrap: nowrap;
+        width: 400px;
+        min-height: 72px;
+    }
+    .sir-sample-table .mud-input > input.mud-input-slot,
+    .sir-sample-table .mud-input > input,
+    .sir-sample-table .mud-input > textarea.mud-input-slot,
+    .sir-sample-table .mud-input > textarea {
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+    }
     .sir-preview-item-sm { width: 72px; height: 72px; }
+    .sir-add-slot {
+        width: 72px;
+        height: 72px;
+        border: 1px dashed #c4c4c4;
+        border-radius: 6px;
+        background: #f3f4f6;
+        color: #6b7280;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        margin: 0;
+        user-select: none;
+        flex: 0 0 auto;
+    }
+    .sir-add-slot:hover { background: #eaecef; border-color: #9ca3af; color: #4b5563; }
+    .sir-add-slot-disabled {
+        opacity: .55;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+    .sir-add-slot-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 11px;
+        line-height: 1.1;
+    }
+    .sir-add-slot-icon {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 22px !important;
+    }
     .sir-note-block { margin-top: 12px; }
 
     .sir-form-table .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
@@ -838,8 +922,6 @@
     private bool _loaded;
     private bool _imgUploading;
     private string _guid = "";
-    private string ImageBase => Config["LegacyFile:ImageBaseUrl"] ?? LegacyFileUrl.DefaultBase;
-
     private bool ShowRemoteImages => SirService.IsRemoteWithoutSample(_reportType);
     private bool ShowSampleFiling => SirService.NeedsSampleFiling(_reportType);
 
@@ -1022,11 +1104,13 @@
     {
         if (!_loaded) return;
         _busy = true;
+        Notify.Show("正在导出 Excel…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
         try
         {
             SyncMainForExport();
-            Notify.Show("正在导出 Excel…", Severity.Info);
-            var xlsx = SirExcel.Build(_main, _details);
+            var xlsx = await Task.Run(() => SirExcel.Build(_main, _details));
             await JS.InvokeVoidAsync(
                 "downloadFileFromBase64",
                 SirExcelService.DownloadExcelName(_main),
@@ -1048,11 +1132,13 @@
     {
         if (!_loaded) return;
         _busy = true;
+        Notify.Show(preview ? "正在生成预览…" : "正在导出 PDF…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
         try
         {
             SyncMainForExport();
-            Notify.Show(preview ? "正在生成预览…" : "正在导出 PDF…", Severity.Info);
-            var xlsx = SirExcel.Build(_main, _details);
+            var xlsx = await Task.Run(() => SirExcel.Build(_main, _details));
             var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
             var b64 = Convert.ToBase64String(pdf);
             if (preview)
@@ -1074,8 +1160,6 @@
             _busy = false;
         }
     }
-
-    private string ImageDisplayUrl(string? path) => LegacyFileUrl.Resolve(path, ImageBase);
 
     private static List<string> ParseImageUrls(string? raw)
         => (raw ?? "")

@@ -39,6 +39,7 @@ public sealed class QuotationDetailLineDto
     public string ItemType { get; set; } = QuotationBaseTypes.Motor;
     public int? BaseId { get; set; }
     public string? Part_No { get; set; }
+    /// <summary>仅界面展示，从基础数据带出，不落库。</summary>
     public string? Quotation_logo { get; set; }
     public decimal? Qty { get; set; }
     public decimal? Price { get; set; }

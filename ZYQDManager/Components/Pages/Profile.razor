@@ -7,103 +7,604 @@
 
 <PageTitle>个人信息</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small">
-    <MudStack Spacing="3">
-        <MudText Typo="Typo.h5">个人信息</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">
-            可修改姓名、部门、邮箱、电话与报价签名。工号与角色不可更改。
-        </MudText>
+<div class="profile-page">
+    <div class="profile-scroll">
+        <MudPaper Outlined="true" Class="profile-shell">
+            <div class="profile-shell-body">
+                <div class="profile-main">
+                    <div class="profile-hero">
+                        <div class="profile-media">
+                            <div class="profile-avatar">
+                                <span>@AvatarText</span>
+                            </div>
+                            <div class="profile-media-name">
+                                @(string.IsNullOrWhiteSpace(_englishName) ? "—" : _englishName.Trim())
+                            </div>
+                        </div>
+                        <div class="profile-hero-body">
+                            <div class="profile-hero-top">
+                                <div class="profile-chips">
+                                    <MudChip T="string"
+                                             Size="Size.Medium"
+                                             Color="Color.Primary"
+                                             Variant="Variant.Filled"
+                                             Icon="@Icons.Material.Filled.Badge">
+                                        @_empNo
+                                    </MudChip>
+                                    <MudChip T="string"
+                                             Size="Size.Medium"
+                                             Color="@RoleColor"
+                                             Variant="Variant.Outlined"
+                                             Icon="@Icons.Material.Filled.VerifiedUser">
+                                        @_roleText
+                                    </MudChip>
+                                </div>
+                                <div class="profile-actions">
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Save"
+                                               Disabled="@(_busy || _readOnly || _sigUploading || !_loaded)"
+                                               OnClick="SaveAsync">
+                                        @(_busy ? "保存中…" : "保存")
+                                    </MudButton>
+                                </div>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(_department))
+                            {
+                                <div class="profile-meta">
+                                    <span>
+                                        <MudIcon Icon="@Icons.Material.Outlined.Apartment"/>
+                                        @_department
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    </div>
 
-        <MudTextField @bind-Value="_empNo"
-                      Label="工号"
-                      Variant="Variant.Outlined"
-                      Disabled="true"/>
-        <MudTextField @bind-Value="_displayName"
-                      Label="姓名"
-                      Variant="Variant.Outlined"
-                      Disabled="@(_busy || _readOnly)"
-                      Immediate="true"/>
-        <MudTextField @bind-Value="_roleText"
-                      Label="角色"
-                      Variant="Variant.Outlined"
-                      Disabled="true"/>
-        <MudTextField @bind-Value="_department"
-                      Label="部门"
-                      Variant="Variant.Outlined"
-                      Disabled="@(_busy || _readOnly)"
-                      Immediate="true"/>
-        <MudTextField @bind-Value="_email"
-                      Label="邮箱"
-                      Variant="Variant.Outlined"
-                      Disabled="@(_busy || _readOnly)"
-                      Immediate="true"/>
-        <MudTextField @bind-Value="_phone"
-                      Label="电话"
-                      Variant="Variant.Outlined"
-                      Disabled="@(_busy || _readOnly)"
-                      Immediate="true"/>
+                    <div class="profile-panel">
+                        <div class="profile-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Person"/>
+                            <span>基本信息</span>
+                        </div>
+                        <div class="profile-field-grid">
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_empNo"
+                                              Label="工号"
+                                              Variant="Variant.Outlined"
+                                              Disabled="true"/>
+                            </div>
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_roleText"
+                                              Label="角色"
+                                              Variant="Variant.Outlined"
+                                              Disabled="true"/>
+                            </div>
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_displayName"
+                                              Label="姓名"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@(_busy || _readOnly)"
+                                              Immediate="true"/>
+                            </div>
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_englishName"
+                                              Label="英文名"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@(_busy || _readOnly)"
+                                              Immediate="true"/>
+                            </div>
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_department"
+                                              Label="部门"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@(_busy || _readOnly)"
+                                              Immediate="true"/>
+                            </div>
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_email"
+                                              Label="邮箱"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@(_busy || _readOnly)"
+                                              Immediate="true"/>
+                            </div>
+                            <div class="profile-field">
+                                <MudTextField @bind-Value="_phone"
+                                              Label="电话"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@(_busy || _readOnly)"
+                                              Immediate="true"/>
+                            </div>
+                        </div>
+                    </div>
 
-        <MudDivider Class="my-1"/>
-        <MudText Typo="Typo.subtitle1">报价签名</MudText>
-        <MudText Typo="Typo.caption" Color="Color.Secondary">
-            替代旧表 T_ZYQD_Quotation_signature；有签名图的人员会出现在报价签名下拉中。
-        </MudText>
-        <MudTextField @bind-Value="_signature"
-                      Label="签名名称"
-                      Placeholder="默认可用姓名"
-                      Variant="Variant.Outlined"
-                      Disabled="@(_busy || _readOnly || _sigUploading)"
-                      Immediate="true"/>
-        <MudTextField @bind-Value="_signatureUrl"
-                      Label="签名图片路径"
-                      Placeholder="/Img/..."
-                      Variant="Variant.Outlined"
-                      Disabled="@(_busy || _readOnly || _sigUploading)"
-                      Immediate="true"
-                      HelperText="可手工填写路径，或下方上传"/>
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-            <label class="profile-sig-upload">
-                <InputFile OnChange="OnSignatureFile" accept=".png,.jpg,.jpeg,.gif,.bmp,image/*" disabled="@(_busy || _readOnly || _sigUploading)"/>
-                <MudButton Variant="Variant.Outlined"
-                           StartIcon="@Icons.Material.Filled.Upload"
-                           Disabled="@(_busy || _readOnly || _sigUploading)"
-                           HtmlTag="span">
-                    @(_sigUploading ? "上传中…" : "上传签名图")
-                </MudButton>
-            </label>
-            @if (!string.IsNullOrWhiteSpace(_signatureUrl))
-            {
-                <MudButton Variant="Variant.Text"
-                           Color="Color.Error"
-                           Disabled="@(_busy || _readOnly || _sigUploading)"
-                           OnClick="ClearSignature">
-                    清除
-                </MudButton>
-            }
-        </MudStack>
-        @if (!string.IsNullOrWhiteSpace(_signatureUrl))
-        {
-            <LegacyRemoteImg Path="@_signatureUrl" CssClass="profile-sig-preview"/>
-        }
+                    <div class="profile-panel profile-panel-last">
+                        <div class="profile-panel-title">
+                            <MudIcon Icon="@Icons.Material.Outlined.Draw"/>
+                            <span>报价签名</span>
+                        </div>
+                        <div class="profile-sig-pair">
+                            <div class="profile-sig-slot">
+                                <div class="profile-sig-slot-label">中文签名</div>
+                                @if (HasSignatureImage)
+                                {
+                                    <div class="profile-sig-thumb">
+                                        <LegacyRemoteImg Path="@_signatureUrl" CssClass="profile-sig-thumb-img"/>
+                                        @if (!_busy && !_readOnly && !_sigUploading)
+                                        {
+                                            <button type="button"
+                                                    class="profile-sig-thumb-x"
+                                                    title="删除中文签名"
+                                                    @onclick="ClearSignature"
+                                                    @onclick:stopPropagation="true">×</button>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <label class="profile-sig-add @(_busy || _readOnly || _sigUploading ? "profile-sig-add-disabled" : null)">
+                                        <InputFile OnChange="OnSignatureFile"
+                                                   accept=".png,.jpg,.jpeg,.gif,.bmp,image/*"
+                                                   disabled="@(_busy || _readOnly || _sigUploading)"/>
+                                        <span class="profile-sig-add-inner">
+                                            @if (_sigUploading)
+                                            {
+                                                <MudProgressCircular Size="Size.Small" Indeterminate="true"/>
+                                                <span>上传中…</span>
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Add" Class="profile-sig-add-icon"/>
+                                                <span>上传中文签名</span>
+                                            }
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+                            <div class="profile-sig-slot">
+                                <div class="profile-sig-slot-label">英文签名</div>
+                                @if (HasSignatureEnImage)
+                                {
+                                    <div class="profile-sig-thumb">
+                                        <LegacyRemoteImg Path="@_signatureUrlEn" CssClass="profile-sig-thumb-img"/>
+                                        @if (!_busy && !_readOnly && !_sigUploadingEn)
+                                        {
+                                            <button type="button"
+                                                    class="profile-sig-thumb-x"
+                                                    title="删除英文签名"
+                                                    @onclick="ClearSignatureEn"
+                                                    @onclick:stopPropagation="true">×</button>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <label class="profile-sig-add @(_busy || _readOnly || _sigUploadingEn ? "profile-sig-add-disabled" : null)">
+                                        <InputFile OnChange="OnSignatureEnFile"
+                                                   accept=".png,.jpg,.jpeg,.gif,.bmp,image/*"
+                                                   disabled="@(_busy || _readOnly || _sigUploadingEn)"/>
+                                        <span class="profile-sig-add-inner">
+                                            @if (_sigUploadingEn)
+                                            {
+                                                <MudProgressCircular Size="Size.Small" Indeterminate="true"/>
+                                                <span>上传中…</span>
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Add" Class="profile-sig-add-icon"/>
+                                                <span>上传英文签名</span>
+                                            }
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   Disabled="@(_busy || _readOnly || _sigUploading)"
-                   OnClick="SaveAsync">
-            @(_busy ? "保存中…" : "保存")
-        </MudButton>
-    </MudStack>
-</MudContainer>
+                <aside class="profile-customers-side">
+                    <div class="profile-customers-side-head">
+                        <MudIcon Icon="@Icons.Material.Outlined.Groups"/>
+                        <span>被分配的客户</span>
+                        @if (!_viewAllCustomers && _customers.Count > 0)
+                        {
+                            <span class="profile-customers-count">@_customers.Count</span>
+                        }
+                    </div>
+                    <div class="profile-customers-side-body">
+                        @if (_viewAllCustomers)
+                        {
+                            <MudChip T="string" Size="Size.Medium" Color="Color.Info" Variant="Variant.Filled"
+                                     Icon="@Icons.Material.Filled.Public">
+                                全部客户
+                            </MudChip>
+                        }
+                        else if (_customers.Count == 0)
+                        {
+                            <div class="profile-customers-empty">暂无分配</div>
+                        }
+                        else
+                        {
+                            <div class="profile-customers-list">
+                                @foreach (var c in _customers)
+                                {
+                                    <div class="profile-customer-item" title="@c.Label">
+                                        <span class="profile-customer-code">@c.Code</span>
+                                        <span class="profile-customer-name">
+                                            @(string.IsNullOrWhiteSpace(c.Name) ? "—" : c.Name)
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </aside>
+            </div>
+        </MudPaper>
+    </div>
+</div>
 
 <style>
-    .profile-sig-upload {
-        position: relative;
-        display: inline-flex;
-        margin: 0;
-        cursor: pointer;
+    .profile-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
     }
 
-    .profile-sig-upload input[type=file] {
+    .profile-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+        padding-bottom: 16px;
+    }
+
+    .profile-shell {
+        width: 100%;
+        max-width: 1180px;
+        align-self: flex-start;
+        overflow: hidden;
+        font-size: 16px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .profile-shell-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        align-items: stretch;
+        min-height: 0;
+    }
+
+    .profile-main {
+        min-width: 0;
+        border-right: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .profile-customers-side {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        background: rgba(0, 0, 0, 0.015);
+        position: sticky;
+        top: 0;
+        align-self: start;
+        max-height: calc(100dvh - 96px);
+        width: 100%;
+    }
+
+    .profile-customers-side-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        padding: 18px 16px 14px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        background: var(--mud-palette-surface);
+    }
+
+    .profile-customers-side-head .mud-icon-root {
+        font-size: 1.3rem !important;
+        width: 1.3rem;
+        height: 1.3rem;
+    }
+
+    .profile-customers-side-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: 12px;
+        overflow: auto;
+    }
+
+    .profile-customers-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .profile-hero {
+        display: grid;
+        grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+        gap: 0;
+        background:
+            linear-gradient(135deg, rgba(var(--mud-palette-primary-rgb), 0.06), transparent 55%),
+            var(--mud-palette-surface);
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .profile-media {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        min-height: 200px;
+        padding: 24px 18px;
+        background: rgba(0, 0, 0, 0.03);
+        border-right: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .profile-avatar {
+        width: 112px;
+        height: 112px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(var(--mud-palette-primary-rgb), 0.12);
+        color: var(--mud-palette-primary);
+        font-size: 1.35rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-align: center;
+        line-height: 1.25;
+        padding: 10px;
+        box-sizing: border-box;
+        word-break: break-word;
+    }
+
+    .profile-media-name {
+        font-size: 1.35rem;
+        font-weight: 600;
+        text-align: center;
+        word-break: break-word;
+        line-height: 1.35;
+        max-width: 100%;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .profile-hero-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 14px;
+        padding: 28px 30px;
+        min-width: 0;
+    }
+
+    .profile-hero-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .profile-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .profile-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+    }
+
+    .profile-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        color: var(--mud-palette-text-secondary);
+        font-size: 1rem;
+    }
+
+    .profile-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .profile-panel {
+        padding: 22px 28px 24px;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .profile-panel-last {
+        border-bottom: 0;
+    }
+
+    .profile-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-primary);
+        margin-bottom: 18px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+        width: 100%;
+    }
+
+    .profile-panel-title .mud-icon-root {
+        font-size: 1.35rem !important;
+        width: 1.35rem;
+        height: 1.35rem;
+    }
+
+    .profile-field-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 18px;
+        min-width: 0;
+    }
+
+    .profile-field .mud-input-control {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    .profile-customers-count {
+        margin-left: auto;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--mud-palette-text-secondary);
+        background: rgba(0, 0, 0, 0.06);
+        border-radius: 999px;
+        padding: 2px 8px;
+        line-height: 1.4;
+    }
+
+    .profile-customer-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-lines-default);
+        min-width: 0;
+    }
+
+    .profile-customer-code {
+        font-weight: 600;
+        font-size: 0.95rem;
+        word-break: break-all;
+    }
+
+    .profile-customer-name {
+        font-size: 0.85rem;
+        color: var(--mud-palette-text-secondary);
+        word-break: break-word;
+    }
+
+    .profile-customers-empty {
+        color: var(--mud-palette-text-disabled);
+        font-size: 0.95rem;
+        padding: 4px 0;
+    }
+
+    .profile-shell .mud-input > input.mud-input-slot,
+    .profile-shell .mud-input > input,
+    .profile-shell .mud-input-label {
+        font-size: 1rem !important;
+    }
+
+    .profile-shell .mud-button-label {
+        font-size: 0.95rem;
+    }
+
+    .profile-sig-pair {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 20px;
+    }
+
+    .profile-sig-slot {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 0 0 auto;
+        width: 280px;
+    }
+
+    .profile-sig-slot-label {
+        font-size: 13px;
+        color: var(--mud-palette-text-primary);
+        font-weight: 600;
+    }
+
+    .profile-sig-thumb {
+        position: relative;
+        width: 280px;
+        height: 100px;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 8px;
+        background: #fff;
+        overflow: hidden;
+        flex: 0 0 auto;
+    }
+
+    .profile-sig-thumb-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        padding: 6px;
+        box-sizing: border-box;
+    }
+
+    .profile-sig-thumb-x {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        width: 22px;
+        height: 22px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        font-size: 16px;
+        line-height: 22px;
+        text-align: center;
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .profile-sig-thumb-x:hover {
+        background: rgba(211, 47, 47, 0.9);
+    }
+
+    .profile-sig-add {
+        width: 280px;
+        height: 100px;
+        border: 1px dashed #c4c4c4;
+        border-radius: 8px;
+        background: #f3f4f6;
+        color: #6b7280;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        margin: 0;
+        user-select: none;
+        flex: 0 0 auto;
+        position: relative;
+    }
+
+    .profile-sig-add:hover {
+        background: #eaecef;
+        border-color: #9ca3af;
+        color: #4b5563;
+    }
+
+    .profile-sig-add-disabled {
+        opacity: 0.55;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+
+    .profile-sig-add input[type=file] {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -112,14 +613,50 @@
         z-index: -1;
     }
 
-    .profile-sig-preview {
-        max-width: 220px;
-        max-height: 100px;
-        object-fit: contain;
-        border: 1px solid var(--mud-palette-lines-default);
-        border-radius: 4px;
-        background: #fff;
-        padding: 4px;
+    .profile-sig-add-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 0.9rem;
+        line-height: 1.1;
+    }
+
+    .profile-sig-add-icon {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 28px !important;
+    }
+
+    @@media (max-width: 900px) {
+        .profile-shell-body {
+            grid-template-columns: 1fr;
+        }
+
+        .profile-main {
+            border-right: 0;
+            border-bottom: 1px solid var(--mud-palette-lines-default);
+        }
+
+        .profile-customers-side {
+            position: static;
+            max-height: 420px;
+        }
+
+        .profile-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .profile-media {
+            border-right: 0;
+            border-bottom: 1px solid var(--mud-palette-lines-default);
+            min-height: 160px;
+        }
+
+        .profile-field-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
@@ -129,15 +666,40 @@
     private bool _readOnly;
     private bool _loaded;
     private bool _sigUploading;
+    private bool _sigUploadingEn;
     private string _empNo = "";
     private string _displayName = "";
+    private string _englishName = "";
     private string _roleText = "";
     private string _department = "";
     private string _email = "";
     private string _phone = "";
     private string _signature = "";
     private string _signatureUrl = "";
+    private string _signatureEn = "";
+    private string _signatureUrlEn = "";
     private bool _viewAllCustomers;
+    private List<CustomerOptionDto> _customers = [];
+
+    private bool HasSignatureImage => !LegacyFileUrl.IsBlankOrPlaceholder(_signatureUrl);
+    private bool HasSignatureEnImage => !LegacyFileUrl.IsBlankOrPlaceholder(_signatureUrlEn);
+
+    private string AvatarText
+    {
+        get
+        {
+            var name = (_displayName ?? "").Trim();
+            return name.Length == 0 ? "?" : name;
+        }
+    }
+
+    private Color RoleColor => _roleText switch
+    {
+        "超级管理员" => Color.Error,
+        "管理员" => Color.Warning,
+        "业务员" => Color.Info,
+        _ => Color.Default,
+    };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -172,12 +734,18 @@
             }
 
             _displayName = displayName;
+            _englishName = info?.EnglishName ?? "";
             _department = info?.Department ?? "";
             _email = info?.Email ?? "";
             _phone = info?.Phone ?? "";
             _signature = info?.Signature ?? "";
             _signatureUrl = info?.SignatureUrl ?? "";
-            _viewAllCustomers = info?.ViewAllCustomers == true;
+            _signatureEn = info?.SignatureEn ?? "";
+            _signatureUrlEn = info?.SignatureUrlEn ?? "";
+            _viewAllCustomers = Auth.CanViewAllCustomers(auth, info);
+            _customers = _viewAllCustomers
+                ? []
+                : await CustomerAssign.GetByEmpNoAsync(_empNo);
         }
         finally
         {
@@ -186,9 +754,23 @@
         }
     }
 
-    private void ClearSignature() => _signatureUrl = "";
+    private void ClearSignature()
+    {
+        _signatureUrl = "";
+        _signature = "";
+    }
 
-    private async Task OnSignatureFile(InputFileChangeEventArgs e)
+    private void ClearSignatureEn()
+    {
+        _signatureUrlEn = "";
+        _signatureEn = "";
+    }
+
+    private Task OnSignatureFile(InputFileChangeEventArgs e) => UploadSignatureAsync(e, chinese: true);
+
+    private Task OnSignatureEnFile(InputFileChangeEventArgs e) => UploadSignatureAsync(e, chinese: false);
+
+    private async Task UploadSignatureAsync(InputFileChangeEventArgs e, bool chinese)
     {
         var file = e.File;
         if (file is null || _readOnly) return;
@@ -198,15 +780,27 @@
             return;
         }
 
-        _sigUploading = true;
+        if (chinese) _sigUploading = true;
+        else _sigUploadingEn = true;
         try
         {
             await using var stream = file.OpenReadStream(MaxSigBytes);
             var path = await CotractBase.UploadImageAsync(stream, file.Name);
-            _signatureUrl = path;
-            if (string.IsNullOrWhiteSpace(_signature) && !string.IsNullOrWhiteSpace(_displayName))
-                _signature = _displayName.Trim();
-            Notify.Show("签名图片已上传（请点保存写入档案）", Severity.Success);
+            if (chinese)
+            {
+                _signatureUrl = path;
+                if (!string.IsNullOrWhiteSpace(_displayName))
+                    _signature = _displayName.Trim();
+            }
+            else
+            {
+                _signatureUrlEn = path;
+                if (!string.IsNullOrWhiteSpace(_englishName))
+                    _signatureEn = _englishName.Trim();
+                else if (!string.IsNullOrWhiteSpace(_displayName))
+                    _signatureEn = _displayName.Trim();
+            }
+            Notify.Show((chinese ? "中文" : "英文") + "签名已上传（请点保存写入档案）", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -214,7 +808,8 @@
         }
         finally
         {
-            _sigUploading = false;
+            if (chinese) _sigUploading = false;
+            else _sigUploadingEn = false;
         }
     }
 
@@ -239,6 +834,16 @@
         _busy = true;
         try
         {
+            var sigUrl = string.IsNullOrWhiteSpace(_signatureUrl) ? null : _signatureUrl.Trim();
+            var sigName = sigUrl is null
+                ? null
+                : (string.IsNullOrWhiteSpace(_signature) ? _displayName.Trim() : _signature.Trim());
+            var sigUrlEn = string.IsNullOrWhiteSpace(_signatureUrlEn) ? null : _signatureUrlEn.Trim();
+            var sigNameEn = sigUrlEn is null
+                ? null
+                : (string.IsNullOrWhiteSpace(_signatureEn)
+                    ? (string.IsNullOrWhiteSpace(_englishName) ? _displayName.Trim() : _englishName.Trim())
+                    : _signatureEn.Trim());
             var (ok, msg) = await UserInfo.SaveAsync(
                 _empNo,
                 new ZyqdUserInformationDto
@@ -246,9 +851,12 @@
                     Department = (_department ?? "").Trim(),
                     Email = email,
                     Phone = (_phone ?? "").Trim(),
+                    EnglishName = string.IsNullOrWhiteSpace(_englishName) ? null : _englishName.Trim(),
                     ViewAllCustomers = _viewAllCustomers,
-                    Signature = string.IsNullOrWhiteSpace(_signature) ? null : _signature.Trim(),
-                    SignatureUrl = string.IsNullOrWhiteSpace(_signatureUrl) ? null : _signatureUrl.Trim()
+                    Signature = sigName,
+                    SignatureUrl = sigUrl,
+                    SignatureEn = sigNameEn,
+                    SignatureUrlEn = sigUrlEn
                 },
                 _displayName.Trim());
             if (!ok)
@@ -271,6 +879,6 @@
             return "超级管理员";
         if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
             return "管理员";
-        return "操作员";
+        return "业务员";
     }
 }

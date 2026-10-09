@@ -33,7 +33,6 @@ public sealed class ZyqdQuotationDetailModel
     public string ItemType { get; set; } = QuotationBaseTypes.Motor;
     public int? BaseId { get; set; }
     public string? Part_No { get; set; }
-    public string? Quotation_logo { get; set; }
     public decimal? Qty { get; set; }
     public decimal? Price { get; set; }
     public decimal? Discount { get; set; }
