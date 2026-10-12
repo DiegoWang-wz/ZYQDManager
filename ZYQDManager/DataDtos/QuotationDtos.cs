@@ -34,6 +34,8 @@ public sealed class QuotationDocumentDto
 
 public sealed class QuotationDetailLineDto
 {
+    public const int MaxTiers = 4;
+
     public string Uid { get; set; } = System.Guid.NewGuid().ToString("N");
     public int Id { get; set; }
     public string ItemType { get; set; } = QuotationBaseTypes.Motor;
@@ -41,10 +43,29 @@ public sealed class QuotationDetailLineDto
     public string? Part_No { get; set; }
     /// <summary>仅界面展示，从基础数据带出，不落库。</summary>
     public string? Quotation_logo { get; set; }
+
+    /// <summary>界面展示的阶梯档数（1–4），默认 1。</summary>
+    public int TierCount { get; set; } = 1;
+
+    // 阶梯 1（兼容原单档字段）
     public decimal? Qty { get; set; }
     public decimal? Price { get; set; }
     public decimal? Discount { get; set; }
     public decimal? Amount { get; set; }
+    // 阶梯 2–4
+    public decimal? Qty2 { get; set; }
+    public decimal? Price2 { get; set; }
+    public decimal? Discount2 { get; set; }
+    public decimal? Amount2 { get; set; }
+    public decimal? Qty3 { get; set; }
+    public decimal? Price3 { get; set; }
+    public decimal? Discount3 { get; set; }
+    public decimal? Amount3 { get; set; }
+    public decimal? Qty4 { get; set; }
+    public decimal? Price4 { get; set; }
+    public decimal? Discount4 { get; set; }
+    public decimal? Amount4 { get; set; }
+
     public string? Note { get; set; }
     public int SortOrder { get; set; }
 
@@ -76,19 +97,132 @@ public sealed class QuotationDetailLineDto
     public string? Protection_Degree2 { get; set; }
     public string? Noise { get; set; }
 
+    /// <summary>各档金额合计（用于小计 / 明细总额）。</summary>
+    public decimal TotalAmount =>
+        (Amount ?? 0m) + (Amount2 ?? 0m) + (Amount3 ?? 0m) + (Amount4 ?? 0m);
+
     /// <summary>金额 = 数量 × 单价 × (100 − 折扣%) / 100；折扣 0 表示无折扣。</summary>
-    public void RecalcAmount()
+    public void RecalcAmount() => RecalcAllAmounts();
+
+    public void RecalcAllAmounts()
     {
-        var qty = Qty ?? 0m;
-        var price = Price ?? 0m;
-        var discount = Discount ?? 0m;
-        if (qty == 0m || price == 0m)
+        for (var t = 1; t <= MaxTiers; t++)
+            SetAmount(t, CalcAmount(GetQty(t), GetPrice(t), GetDiscount(t)));
+    }
+
+    public void RecalcTier(int tier)
+        => SetAmount(tier, CalcAmount(GetQty(tier), GetPrice(tier), GetDiscount(tier)));
+
+    public static decimal CalcAmount(decimal? qty, decimal? price, decimal? discount)
+    {
+        var q = qty ?? 0m;
+        var p = price ?? 0m;
+        var d = discount ?? 0m;
+        if (q == 0m || p == 0m) return 0m;
+        return Math.Round(q * p * (100m - d) / 100m, 2);
+    }
+
+    public decimal? GetQty(int tier) => tier switch
+    {
+        1 => Qty, 2 => Qty2, 3 => Qty3, 4 => Qty4, _ => null
+    };
+
+    public decimal? GetPrice(int tier) => tier switch
+    {
+        1 => Price, 2 => Price2, 3 => Price3, 4 => Price4, _ => null
+    };
+
+    public decimal? GetDiscount(int tier) => tier switch
+    {
+        1 => Discount, 2 => Discount2, 3 => Discount3, 4 => Discount4, _ => null
+    };
+
+    public decimal? GetAmount(int tier) => tier switch
+    {
+        1 => Amount, 2 => Amount2, 3 => Amount3, 4 => Amount4, _ => null
+    };
+
+    public void SetQty(int tier, decimal? v)
+    {
+        switch (tier)
         {
-            Amount = 0m;
-            return;
+            case 1: Qty = v; break;
+            case 2: Qty2 = v; break;
+            case 3: Qty3 = v; break;
+            case 4: Qty4 = v; break;
+        }
+    }
+
+    public void SetPrice(int tier, decimal? v)
+    {
+        switch (tier)
+        {
+            case 1: Price = v; break;
+            case 2: Price2 = v; break;
+            case 3: Price3 = v; break;
+            case 4: Price4 = v; break;
+        }
+    }
+
+    public void SetDiscount(int tier, decimal? v)
+    {
+        switch (tier)
+        {
+            case 1: Discount = v; break;
+            case 2: Discount2 = v; break;
+            case 3: Discount3 = v; break;
+            case 4: Discount4 = v; break;
+        }
+    }
+
+    public void SetAmount(int tier, decimal? v)
+    {
+        switch (tier)
+        {
+            case 1: Amount = v; break;
+            case 2: Amount2 = v; break;
+            case 3: Amount3 = v; break;
+            case 4: Amount4 = v; break;
+        }
+    }
+
+    public void AddTier()
+    {
+        if (TierCount >= MaxTiers) return;
+        TierCount++;
+        SetDiscount(TierCount, 0m);
+        SetQty(TierCount, 0m);
+        SetPrice(TierCount, 0m);
+        SetAmount(TierCount, 0m);
+    }
+
+    public void RemoveLastTier()
+    {
+        if (TierCount <= 1) return;
+        SetQty(TierCount, null);
+        SetPrice(TierCount, null);
+        SetDiscount(TierCount, null);
+        SetAmount(TierCount, null);
+        TierCount--;
+    }
+
+    /// <summary>按已填档位推断展示档数（至少 1）。</summary>
+    public void SyncTierCountFromData()
+    {
+        var n = 1;
+        for (var t = MaxTiers; t >= 2; t--)
+        {
+            if ((GetQty(t) ?? 0m) != 0m
+                || (GetPrice(t) ?? 0m) != 0m
+                || (GetDiscount(t) ?? 0m) != 0m
+                || (GetAmount(t) ?? 0m) != 0m)
+            {
+                n = t;
+                break;
+            }
         }
 
-        Amount = Math.Round(qty * price * (100m - discount) / 100m, 2);
+        TierCount = n;
     }
 
     public void ApplyBase(QuotationBaseListItemDto? b)

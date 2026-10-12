@@ -3,64 +3,19 @@
 @rendermode InteractiveServer
 @inject CustomsAndPackingService Packing
 @inject CustomsAndPackingExcelService PackingExcel
-@inject LibreOfficePdfService LibreOffice
 @inject CentralAuthService Auth
 @inject IJSRuntime JS
 
 <PageTitle>@Title</PageTitle>
 
 <div class="cpk-edit-page">
-    <MudPaper Class="pa-3 mb-2" Outlined="true">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
-            <MudText Typo="Typo.h6">@Title</MudText>
-            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
-                <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                    <ActivatorContent>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || _isCreate"
-                                   StartIcon="@Icons.Material.Filled.TableView"
-                                   EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                                   OnClick="context.ToggleAsync">
-                            导出Excel
-                        </MudButton>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem OnClick="@(() => ExportExcelAsync("报关"))">报关</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => ExportExcelAsync("生产"))">生产</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => ExportExcelAsync("客户"))">客户</MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
-                <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                    <ActivatorContent>
-                        <MudButton Variant="Variant.Filled" Color="Color.Info" Disabled="_busy || _isCreate"
-                                   StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                                   EndIcon="@Icons.Material.Filled.ArrowDropDown"
-                                   OnClick="context.ToggleAsync">
-                            导出PDF
-                        </MudButton>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem OnClick="@(() => ExportPdfAsync("报关"))">报关</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => ExportPdfAsync("生产"))">生产</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => ExportPdfAsync("客户"))">客户</MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="zyqd-btn-save"
-                           StartIcon="@Icons.Material.Filled.Save"
-                           OnClick="SaveAsync" Disabled="_busy">
-                    @(_busy ? "保存中…" : "保存")
-                </MudButton>
-            </MudStack>
-        </MudStack>
-    </MudPaper>
-
     @if (_loading)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Primary"/>
     }
     else
     {
-        <MudPaper Class="pa-3 mb-2" Outlined="true">
-            <MudText Typo="Typo.subtitle2" Class="mb-2">抬头</MudText>
+        <MudPaper Class="pa-3 cpk-header-panel" Outlined="true">
             <div class="cpk-form-grid">
                 <MudTextField @bind-Value="_header.ClientNo" Label="客户编号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
                 <MudTextField @bind-Value="_header.ClientName" Label="客户名称" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
@@ -74,28 +29,42 @@
                 <MudTextField @bind-Value="_header.Shipping_method" Label="出货方式" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
                 <MudTextField @bind-Value="_header.encasement_method" Label="装箱方式" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
                 <MudTextField @bind-Value="_header.Box_type_quantity" Label="箱型箱量" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <div class="cpk-form-actions">
+                    <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || _isCreate"
+                                       StartIcon="@Icons.Material.Filled.TableView"
+                                       EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                                       OnClick="context.ToggleAsync">
+                                导出Excel
+                            </MudButton>
+                        </ActivatorContent>
+                        <ChildContent>
+                            <MudMenuItem OnClick="@(() => ExportExcelAsync("报关"))">报关</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => ExportExcelAsync("生产"))">生产</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => ExportExcelAsync("客户"))">客户</MudMenuItem>
+                        </ChildContent>
+                    </MudMenu>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="zyqd-btn-save"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveAsync" Disabled="_busy">
+                        @(_busy ? "保存中…" : "保存")
+                    </MudButton>
+                </div>
             </div>
-            <MudStack Row="true" Spacing="3" Class="mt-2" Wrap="Wrap.Wrap">
-                <MudText Typo="Typo.caption">总数量：@_header.all_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总箱数：@_header.all_box_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总托数：@_header.all_Pallet_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">不足托箱：@(_header.var5 ?? "0")</MudText>
-                <MudText Typo="Typo.caption">总净重：@_header.all_total_Net_weight.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总毛重：@_header.all_total_gross_weight.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总体积：@_header.all_volume.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">散发合计：@(_header.all_emit ?? "0")</MudText>
-            </MudStack>
         </MudPaper>
 
-        <MudPaper Class="pa-2" Outlined="true">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2 px-1">
-                <MudText Typo="Typo.subtitle2">明细（@_lines.Count）——改数量/打包/打托/尺寸会自动重算箱托与重量体积</MudText>
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine" Disabled="_busy">增行</MudButton>
-            </MudStack>
+        <MudPaper Class="pa-1 cpk-lines-panel" Outlined="true">
             <MudTable T="CustomsAndPackingLineDto" Items="_lines" Dense="true" Hover="true" Bordered="true"
-                      Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table">
+                      Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table"
+                      Height="100%">
                 <HeaderContent>
+                    <MudTh>客户外箱标识</MudTh>
+                    <MudTh>客户PO号</MudTh>
+                    <MudTh>客户型号</MudTh>
+                    <MudTh>SAP订单</MudTh>
+                    <MudTh>铭牌1</MudTh>
+                    <MudTh>铭牌2</MudTh>
                     <MudTh>物料号</MudTh>
                     <MudTh>物料名</MudTh>
                     <MudTh>数量</MudTh>
@@ -118,7 +87,6 @@
                     <MudTh>托重</MudTh>
                     <MudTh>体积</MudTh>
                     <MudTh>散发</MudTh>
-                    <MudTh>SAP订单</MudTh>
                     <MudTh>行类型</MudTh>
                     <MudTh Style="width:120px">操作</MudTh>
                 </HeaderContent>
@@ -126,106 +94,114 @@
                     @{
                         var line = context;
                     }
-                    <MudTd>
-                        <MudTextField T="string" Value="@(line.materialNo ?? "")" ValueChanged="v => line.materialNo = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                    <MudTd Class="cpk-img-cell">
+                        <CpkLineImg Label="客户外箱标识"
+                                    Value="@line.Customer_outer_box_logo"
+                                    ValueChanged="v => line.Customer_outer_box_logo = v"
+                                    ReadOnly="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.materialName ?? "")" ValueChanged="v => line.materialName = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell-wide"/>
+                        <CpkFitText Value="@line.Client_poNo" ValueChanged="v => line.Client_poNo = v" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.qty" ValueChanged="v => OnLineChanged(line, () => line.qty = v)"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.materialModel" ValueChanged="v => line.materialModel = v" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.Packing_method ?? "")"
-                                      ValueChanged="v => OnLineChanged(line, () => line.Packing_method = v)"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.SAP_order_NO" ValueChanged="v => line.SAP_order_NO = v" Disabled="_busy" MinChars="8"/>
+                    </MudTd>
+                    <MudTd Class="cpk-img-cell">
+                        <CpkLineImg Label="铭牌1"
+                                    Value="@line.nameplate_url"
+                                    ValueChanged="v => line.nameplate_url = v"
+                                    ReadOnly="_busy"/>
+                    </MudTd>
+                    <MudTd Class="cpk-img-cell">
+                        <CpkLineImg Label="铭牌2"
+                                    Value="@line.nameplate_url2"
+                                    ValueChanged="v => line.nameplate_url2 = v"
+                                    ReadOnly="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.Packing_method_unit ?? "")"
-                                      ValueChanged="v => line.Packing_method_unit = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.materialNo" ValueChanged="v => line.materialNo = v" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.box_qty" ReadOnly="true"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                        <CpkFitText Value="@line.materialName" ValueChanged="v => line.materialName = v" Disabled="_busy" MinChars="8"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.var1 ?? "0")" ReadOnly="true"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Class="cpk-num"/>
+                        <CpkFitNum Value="line.qty" ValueChanged="v => OnLineChanged(line, () => line.qty = v)" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.palletizing_method ?? "")"
-                                      ValueChanged="v => OnLineChanged(line, () => line.palletizing_method = v)"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.Packing_method"
+                                    ValueChanged="v => OnLineChanged(line, () => line.Packing_method = v)"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.palletizing_method_unit ?? "")"
-                                      ValueChanged="v => line.palletizing_method_unit = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.Packing_method_unit"
+                                    ValueChanged="v => line.Packing_method_unit = v"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.Pallet_qty" ReadOnly="true"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                        <CpkFitNum Value="line.box_qty" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.var3 ?? "0")" ReadOnly="true"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Class="cpk-num"/>
+                        <CpkFitText Value="@(line.var1 ?? "0")" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.var2 ?? "")"
-                                      ValueChanged="v => OnLineChanged(line, () => line.var2 = v)"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy"
-                                      Placeholder="长*宽*高" Class="cpk-cell"/>
+                        <CpkFitText Value="@line.palletizing_method"
+                                    ValueChanged="v => OnLineChanged(line, () => line.palletizing_method = v)"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.var4 ?? "")" ValueChanged="v => line.var4 = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.palletizing_method_unit"
+                                    ValueChanged="v => line.palletizing_method_unit = v"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.Carton_Size ?? "")"
-                                      ValueChanged="v => OnLineChanged(line, () => line.Carton_Size = v)"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                        <CpkFitNum Value="line.Pallet_qty" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.Pallet_Size ?? "")"
-                                      ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                        <CpkFitText Value="@(line.var3 ?? "0")" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.Net_weight" ValueChanged="v => OnLineChanged(line, () => line.Net_weight = v)"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.var2"
+                                    ValueChanged="v => OnLineChanged(line, () => line.var2 = v)"
+                                    Disabled="_busy" Placeholder="长*宽*高"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.gross_weight" ValueChanged="v => OnLineChanged(line, () => line.gross_weight = v)"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitText Value="@line.var4" ValueChanged="v => line.var4 = v" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.total_Net_weight" ReadOnly="true"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                        <CpkFitText Value="@line.Carton_Size"
+                                    ValueChanged="v => OnLineChanged(line, () => line.Carton_Size = v)"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.total_gross_weight" ReadOnly="true"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                        <CpkFitText Value="@line.Pallet_Size"
+                                    ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.Pallet_weight" ReadOnly="true"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                        <CpkFitNum Value="line.Net_weight" ValueChanged="v => OnLineChanged(line, () => line.Net_weight = v)" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.volume" ReadOnly="true"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                        <CpkFitNum Value="line.gross_weight" ValueChanged="v => OnLineChanged(line, () => line.gross_weight = v)" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.emit ?? "")"
-                                      ValueChanged="v => OnLineChanged(line, () => line.emit = v)"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                        <CpkFitNum Value="line.total_Net_weight" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.SAP_order_NO ?? "")" ValueChanged="v => line.SAP_order_NO = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
+                        <CpkFitNum Value="line.total_gross_weight" ReadOnly="true"/>
+                    </MudTd>
+                    <MudTd>
+                        <CpkFitNum Value="line.Pallet_weight" ReadOnly="true"/>
+                    </MudTd>
+                    <MudTd>
+                        <CpkFitNum Value="line.volume" ReadOnly="true"/>
+                    </MudTd>
+                    <MudTd>
+                        <CpkFitText Value="@line.emit"
+                                    ValueChanged="v => OnLineChanged(line, () => line.emit = v)"
+                                    Disabled="_busy"/>
                     </MudTd>
                     <MudTd>@(line.var7 ?? "原始行")</MudTd>
                     <MudTd>
@@ -242,6 +218,19 @@
                     </MudTd>
                 </RowTemplate>
             </MudTable>
+        </MudPaper>
+
+        <MudPaper Class="pa-3 cpk-summary-panel" Outlined="true">
+            <MudStack Row="true" Spacing="3" Class="cpk-summary" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.body2">总数量：@_header.all_qty.ToString("0.##")</MudText>
+                <MudText Typo="Typo.body2">总箱数：@_header.all_box_qty.ToString("0.##")</MudText>
+                <MudText Typo="Typo.body2">总托数：@_header.all_Pallet_qty.ToString("0.##")</MudText>
+                <MudText Typo="Typo.body2">不足托箱：@(_header.var5 ?? "0")</MudText>
+                <MudText Typo="Typo.body2">总净重：@_header.all_total_Net_weight.ToString("0.##")</MudText>
+                <MudText Typo="Typo.body2">总毛重：@_header.all_total_gross_weight.ToString("0.##")</MudText>
+                <MudText Typo="Typo.body2">总体积：@_header.all_volume.ToString("0.##")</MudText>
+                <MudText Typo="Typo.body2">散发合计：@(_header.all_emit ?? "0")</MudText>
+            </MudStack>
         </MudPaper>
     }
 </div>
@@ -263,16 +252,97 @@
 }
 
 <style>
-    .cpk-edit-page { flex: 1 1 0; min-height: 0; overflow: auto; }
+    .cpk-edit-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        gap: 8px;
+    }
+    .cpk-header-panel,
+    .cpk-summary-panel {
+        flex: 0 0 auto;
+    }
+    .cpk-lines-panel {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
     .cpk-form-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 8px 12px;
+        align-items: end;
     }
-    .cpk-line-table .mud-table-container { overflow: auto; max-height: min(62vh, 720px); }
-    .cpk-cell { min-width: 100px; }
-    .cpk-cell-wide { min-width: 140px; }
-    .cpk-num { min-width: 72px; max-width: 96px; }
+    .cpk-form-actions {
+        grid-column: auto / -1;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        min-height: 40px;
+        width: 100%;
+    }
+    .cpk-form-actions > * {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        display: inline-flex !important;
+    }
+    .cpk-form-actions .mud-button-root {
+        width: auto !important;
+    }
+    .cpk-line-table {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+    .cpk-line-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: auto !important;
+    }
+    .cpk-line-table .mud-table-head .mud-table-cell {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background-color: var(--mud-palette-surface, #fff) !important;
+        box-shadow: 0 1px 0 var(--mud-palette-lines-default, #e0e0e0);
+        white-space: nowrap;
+        text-align: center !important;
+    }
+    .cpk-line-table table {
+        table-layout: auto !important;
+        width: max-content !important;
+        min-width: 100%;
+    }
+    .cpk-line-table .mud-table-body .mud-table-cell {
+        white-space: nowrap;
+        vertical-align: middle;
+        text-align: center !important;
+        width: 1%;
+        padding: 4px 6px !important;
+    }
+    .cpk-line-table .mud-table-body .mud-table-cell > * {
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .cpk-img-cell {
+        min-width: 104px;
+        width: auto !important;
+        vertical-align: middle !important;
+        white-space: normal !important;
+        text-align: center !important;
+    }
     .cpk-split-mask {
         position: fixed;
         inset: 0;
@@ -486,34 +556,6 @@
         catch (Exception ex)
         {
             Notify.Show("导出 Excel 失败：" + ex.Message, Severity.Error);
-        }
-        finally { _busy = false; }
-    }
-
-    private async Task ExportPdfAsync(string type)
-    {
-        if (_isCreate)
-        {
-            Notify.Show("请先保存再导出", Severity.Warning);
-            return;
-        }
-        _busy = true;
-        Notify.Show($"正在生成 PDF（{type}）…", Severity.Info);
-        await InvokeAsync(StateHasChanged);
-        try
-        {
-            var xlsx = await PackingExcel.BuildAsync(_header.DocumentGuid, type);
-            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
-            await JS.InvokeVoidAsync(
-                "downloadFileFromBase64",
-                CustomsAndPackingExcelService.DownloadPdfName(_header, type),
-                "application/pdf",
-                Convert.ToBase64String(pdf));
-            Notify.Show("PDF 已导出", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            Notify.Show("导出 PDF 失败：" + ex.Message, Severity.Error);
         }
         finally { _busy = false; }
     }

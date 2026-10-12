@@ -1,0 +1,88 @@
+<input class="cpk-fit-input cpk-fit-num @CssClass"
+       type="text"
+       inputmode="decimal"
+       value="@Display"
+       size="@FitSize"
+       disabled="@Disabled"
+       readonly="@ReadOnly"
+       @oninput="OnInput"
+       @onblur="OnBlur"/>
+
+<style>
+    .cpk-fit-input {
+        box-sizing: content-box;
+        height: 28px;
+        margin: 0;
+        padding: 2px 8px;
+        border: 1px solid var(--mud-palette-lines-default, #e0e0e0);
+        border-radius: 4px;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+        line-height: 1.2;
+        white-space: nowrap;
+        min-width: 3ch;
+        max-width: none;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .cpk-fit-num {
+        text-align: center;
+    }
+
+    .cpk-fit-input:focus {
+        outline: 2px solid var(--mud-palette-primary, #594ae2);
+        outline-offset: 0;
+        border-color: transparent;
+    }
+
+    .cpk-fit-input:disabled,
+    .cpk-fit-input[readonly] {
+        background: #f5f5f5;
+        color: var(--mud-palette-text-secondary, #666);
+    }
+</style>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public EventCallback<double> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public int MinChars { get; set; } = 5;
+
+    private string _edit = "";
+    private bool _editing;
+
+    private string Display => _editing ? _edit : Format(Value);
+
+    private int FitSize
+    {
+        get
+        {
+            var n = Display.Length + 2;
+            return Math.Clamp(n, MinChars, 40);
+        }
+    }
+
+    private static string Format(double v) => v.ToString("0.##");
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _editing = true;
+        _edit = e.Value?.ToString() ?? "";
+    }
+
+    private async Task OnBlur()
+    {
+        if (!_editing) return;
+        _editing = false;
+        if (double.TryParse(_edit.Trim(), out var n))
+        {
+            Value = n;
+            await ValueChanged.InvokeAsync(n);
+        }
+        _edit = Format(Value);
+    }
+}

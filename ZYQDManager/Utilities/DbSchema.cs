@@ -72,11 +72,41 @@ public static class DbSchema
                         Price DECIMAL(18,4) NULL,
                         Discount DECIMAL(18,4) NULL,
                         Amount DECIMAL(18,4) NULL,
+                        Qty2 DECIMAL(18,4) NULL,
+                        Price2 DECIMAL(18,4) NULL,
+                        Discount2 DECIMAL(18,4) NULL,
+                        Amount2 DECIMAL(18,4) NULL,
+                        Qty3 DECIMAL(18,4) NULL,
+                        Price3 DECIMAL(18,4) NULL,
+                        Discount3 DECIMAL(18,4) NULL,
+                        Amount3 DECIMAL(18,4) NULL,
+                        Qty4 DECIMAL(18,4) NULL,
+                        Price4 DECIMAL(18,4) NULL,
+                        Discount4 DECIMAL(18,4) NULL,
+                        Amount4 DECIMAL(18,4) NULL,
                         Note NVARCHAR(MAX) NULL,
                         SortOrder INT NOT NULL CONSTRAINT DF_T_ZYQD_Quotation_detail_Sort DEFAULT 0,
                         createTime DATETIME2 NULL
                     );
                     CREATE INDEX IX_T_ZYQD_Quotation_detail_main ON dbo.T_ZYQD_Quotation_detail(main_guid);
+                END
+
+                IF OBJECT_ID(N'dbo.T_ZYQD_Quotation_detail', N'U') IS NOT NULL
+                   AND COL_LENGTH(N'dbo.T_ZYQD_Quotation_detail', N'Qty2') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.T_ZYQD_Quotation_detail ADD
+                        Qty2 DECIMAL(18,4) NULL,
+                        Price2 DECIMAL(18,4) NULL,
+                        Discount2 DECIMAL(18,4) NULL,
+                        Amount2 DECIMAL(18,4) NULL,
+                        Qty3 DECIMAL(18,4) NULL,
+                        Price3 DECIMAL(18,4) NULL,
+                        Discount3 DECIMAL(18,4) NULL,
+                        Amount3 DECIMAL(18,4) NULL,
+                        Qty4 DECIMAL(18,4) NULL,
+                        Price4 DECIMAL(18,4) NULL,
+                        Discount4 DECIMAL(18,4) NULL,
+                        Amount4 DECIMAL(18,4) NULL;
                 END
                 """, ct);
         }

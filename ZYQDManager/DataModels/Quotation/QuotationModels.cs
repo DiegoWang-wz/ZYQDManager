@@ -25,7 +25,7 @@ public sealed class ZyqdQuotationMainModel
     public string? currencyUnit { get; set; }
 }
 
-/// <summary>统一报价明细：物料 + 数量/单价/折扣/金额（单档）+ 可选备注。</summary>
+/// <summary>统一报价明细：物料 + 最多 4 档阶梯数量/单价/折扣/金额 + 可选备注。</summary>
 public sealed class ZyqdQuotationDetailModel
 {
     public int Id { get; set; }
@@ -37,6 +37,18 @@ public sealed class ZyqdQuotationDetailModel
     public decimal? Price { get; set; }
     public decimal? Discount { get; set; }
     public decimal? Amount { get; set; }
+    public decimal? Qty2 { get; set; }
+    public decimal? Price2 { get; set; }
+    public decimal? Discount2 { get; set; }
+    public decimal? Amount2 { get; set; }
+    public decimal? Qty3 { get; set; }
+    public decimal? Price3 { get; set; }
+    public decimal? Discount3 { get; set; }
+    public decimal? Amount3 { get; set; }
+    public decimal? Qty4 { get; set; }
+    public decimal? Price4 { get; set; }
+    public decimal? Discount4 { get; set; }
+    public decimal? Amount4 { get; set; }
     public string? Note { get; set; }
     public int SortOrder { get; set; }
     public DateTime? createTime { get; set; }

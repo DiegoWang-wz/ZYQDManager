@@ -196,6 +196,8 @@ public class QuotationService
             foreach (var line in validLines)
             {
                 order++;
+                ClearUnusedTiers(line);
+                line.RecalcAllAmounts();
                 _db.QuotationDetails.Add(new ZyqdQuotationDetailModel
                 {
                     main_guid = guid,
@@ -206,6 +208,18 @@ public class QuotationService
                     Price = line.Price,
                     Discount = line.Discount ?? 0m,
                     Amount = line.Amount,
+                    Qty2 = line.TierCount >= 2 ? line.Qty2 : null,
+                    Price2 = line.TierCount >= 2 ? line.Price2 : null,
+                    Discount2 = line.TierCount >= 2 ? (line.Discount2 ?? 0m) : null,
+                    Amount2 = line.TierCount >= 2 ? line.Amount2 : null,
+                    Qty3 = line.TierCount >= 3 ? line.Qty3 : null,
+                    Price3 = line.TierCount >= 3 ? line.Price3 : null,
+                    Discount3 = line.TierCount >= 3 ? (line.Discount3 ?? 0m) : null,
+                    Amount3 = line.TierCount >= 3 ? line.Amount3 : null,
+                    Qty4 = line.TierCount >= 4 ? line.Qty4 : null,
+                    Price4 = line.TierCount >= 4 ? line.Price4 : null,
+                    Discount4 = line.TierCount >= 4 ? (line.Discount4 ?? 0m) : null,
+                    Amount4 = line.TierCount >= 4 ? line.Amount4 : null,
                     Note = line.Note,
                     SortOrder = order,
                     createTime = DateTime.Now,
@@ -278,17 +292,47 @@ public class QuotationService
         dst.currencyUnit = src.currencyUnit;
     }
 
-    private static QuotationDetailLineDto MapDetail(ZyqdQuotationDetailModel d) => new()
+    private static void ClearUnusedTiers(QuotationDetailLineDto line)
     {
-        Id = d.Id,
-        ItemType = QuotationBaseTypes.Normalize(d.ItemType),
-        BaseId = d.BaseId,
-        Part_No = d.Part_No,
-        Qty = d.Qty,
-        Price = d.Price,
-        Discount = d.Discount,
-        Amount = d.Amount,
-        Note = d.Note,
-        SortOrder = d.SortOrder,
-    };
+        var n = Math.Clamp(line.TierCount, 1, QuotationDetailLineDto.MaxTiers);
+        line.TierCount = n;
+        for (var t = n + 1; t <= QuotationDetailLineDto.MaxTiers; t++)
+        {
+            line.SetQty(t, null);
+            line.SetPrice(t, null);
+            line.SetDiscount(t, null);
+            line.SetAmount(t, null);
+        }
+    }
+
+    private static QuotationDetailLineDto MapDetail(ZyqdQuotationDetailModel d)
+    {
+        var line = new QuotationDetailLineDto
+        {
+            Id = d.Id,
+            ItemType = QuotationBaseTypes.Normalize(d.ItemType),
+            BaseId = d.BaseId,
+            Part_No = d.Part_No,
+            Qty = d.Qty,
+            Price = d.Price,
+            Discount = d.Discount,
+            Amount = d.Amount,
+            Qty2 = d.Qty2,
+            Price2 = d.Price2,
+            Discount2 = d.Discount2,
+            Amount2 = d.Amount2,
+            Qty3 = d.Qty3,
+            Price3 = d.Price3,
+            Discount3 = d.Discount3,
+            Amount3 = d.Amount3,
+            Qty4 = d.Qty4,
+            Price4 = d.Price4,
+            Discount4 = d.Discount4,
+            Amount4 = d.Amount4,
+            Note = d.Note,
+            SortOrder = d.SortOrder,
+        };
+        line.SyncTierCountFromData();
+        return line;
+    }
 }

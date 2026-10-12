@@ -1,0 +1,206 @@
+@inject CotractBaseService CotractBase
+
+@if (HasImage)
+{
+    <div class="cpk-line-img cpk-line-img-filled">
+        <LegacyRemoteImg Path="@Value" CssClass="cpk-line-img-pic"/>
+        @if (!ReadOnly && !_uploading)
+        {
+            <button type="button"
+                    class="cpk-line-img-x"
+                    title="删除图片"
+                    @onclick="DeleteAsync"
+                    @onclick:stopPropagation="true">×</button>
+        }
+    </div>
+}
+else if (IsNa)
+{
+    <div class="cpk-line-img cpk-line-img-na">
+        <span>N/A</span>
+        @if (!ReadOnly && !_uploading)
+        {
+            <button type="button"
+                    class="cpk-line-img-x"
+                    title="清除"
+                    @onclick="ClearAsync"
+                    @onclick:stopPropagation="true">×</button>
+        }
+    </div>
+}
+else if (ReadOnly)
+{
+    <div class="cpk-line-img cpk-line-img-empty">—</div>
+}
+else
+{
+    <label class="cpk-line-img cpk-line-img-add @(_uploading ? "cpk-line-img-busy" : null)">
+        <InputFile OnChange="OnFile"
+                   accept=".png,.jpg,.jpeg,.gif,.bmp,image/*"
+                   disabled="@_uploading"/>
+        @if (_uploading)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true"/>
+        }
+        else
+        {
+            <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Class="cpk-line-img-icon"/>
+            <span>上传</span>
+        }
+    </label>
+}
+
+<style>
+    .cpk-line-img {
+        width: 96px;
+        height: 72px;
+        border-radius: 6px;
+        box-sizing: border-box;
+        position: relative;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cpk-line-img-filled {
+        border: 1px solid var(--mud-palette-lines-default);
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .cpk-line-img-pic {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        padding: 4px;
+        box-sizing: border-box;
+    }
+
+    .cpk-line-img-na,
+    .cpk-line-img-empty {
+        border: 1px solid var(--mud-palette-lines-default);
+        background: #f9fafb;
+        color: var(--mud-palette-text-secondary);
+        font-size: 12px;
+    }
+
+    .cpk-line-img-add {
+        border: 1px dashed #c4c4c4;
+        background: #f3f4f6;
+        color: #6b7280;
+        cursor: pointer;
+        margin: 0;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 11px;
+        user-select: none;
+    }
+
+    .cpk-line-img-add:hover {
+        background: #eaecef;
+        border-color: #9ca3af;
+    }
+
+    .cpk-line-img-busy {
+        opacity: 0.55;
+        pointer-events: none;
+    }
+
+    .cpk-line-img-add input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+
+    .cpk-line-img-icon {
+        width: 22px !important;
+        height: 22px !important;
+        font-size: 22px !important;
+    }
+
+    .cpk-line-img-x {
+        position: absolute;
+        top: 1px;
+        right: 1px;
+        width: 18px;
+        height: 18px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        font-size: 14px;
+        line-height: 18px;
+        text-align: center;
+        cursor: pointer;
+        padding: 0;
+        z-index: 2;
+    }
+
+    .cpk-line-img-x:hover {
+        background: rgba(211, 47, 47, 0.9);
+    }
+</style>
+
+@code {
+    private const long MaxBytes = 8L * 1024 * 1024;
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public string Label { get; set; } = "图片";
+
+    private bool _uploading;
+    private bool IsNa => string.Equals(Value?.Trim(), "N/A", StringComparison.OrdinalIgnoreCase);
+    private bool HasImage => !LegacyFileUrl.IsBlankOrPlaceholder(Value) && !IsNa;
+
+    private async Task ClearAsync()
+    {
+        Value = null;
+        await ValueChanged.InvokeAsync(null);
+    }
+
+    private async Task DeleteAsync()
+    {
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "删除图片",
+            $"确定删除「{Label}」吗？",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+        await ClearAsync();
+    }
+
+    private async Task OnFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+        if (file.Size > MaxBytes)
+        {
+            Notify.Show("图片不能超过 8MB", Severity.Warning);
+            return;
+        }
+
+        _uploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxBytes);
+            var path = await CotractBase.UploadImageAsync(stream, file.Name);
+            Value = path;
+            await ValueChanged.InvokeAsync(path);
+            Notify.Show("图片已上传", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+}

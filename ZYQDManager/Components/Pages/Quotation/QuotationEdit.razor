@@ -15,7 +15,7 @@
 <PageTitle>@Title</PageTitle>
 
 <div class="qe-page">
-    <div class="qe-toolbar">
+    <MudPaper Outlined="true" Class="pa-3 qe-toolbar">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
             <MudText Typo="Typo.h6">@Title</MudText>
             <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
@@ -40,7 +40,7 @@
                 }
             </MudStack>
         </MudStack>
-    </div>
+    </MudPaper>
 
     <div class="qe-scroll">
         <fieldset class="qe-form" disabled="@IsDetail">
@@ -102,29 +102,59 @@
                 </MudGrid>
             </MudPaper>
 
-            @foreach (var type in QuotationBaseTypes.All)
+            @{
+                var hasAnyLines = _doc.Details.Count > 0;
+                var emptyTypes = QuotationBaseTypes.All
+                    .Where(t => LinesOf(t.Key).Count == 0)
+                    .ToArray();
+            }
+            @if (!hasAnyLines)
             {
-                var itemType = type.Key;
-                var lines = LinesOf(itemType);
-                <MudPaper Outlined="true" Class="pa-2 mb-3 qe-section">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="@($"px-1{(lines.Count > 0 ? " mb-2" : "")}")">
-                        <MudChipSet T="string" ReadOnly="true" Class="qe-type-chips">
+                <MudPaper Outlined="true" Class="pa-3 mb-3 qe-empty-picker">
+                    <MudText Typo="Typo.body2" Class="qe-empty-picker-tip">点击新增部件到报价单</MudText>
+                    <div class="qe-empty-picker-chips">
+                        @foreach (var type in QuotationBaseTypes.All)
+                        {
+                            var itemType = type.Key;
                             <MudChip T="string"
                                      Text="@type.Label"
                                      Icon="@ChipIconOf(itemType)"
                                      Color="@ChipColorOf(itemType)"
                                      Variant="Variant.Filled"
-                                     Size="Size.Medium"/>
-                        </MudChipSet>
-                        @if (!IsDetail)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddLine(itemType))">新增</MudButton>
+                                     Size="Size.Medium"
+                                     Disabled="IsDetail"
+                                     OnClick="@(() => AddLine(itemType))"
+                                     Class="qe-picker-chip"/>
                         }
-                    </MudStack>
+                    </div>
+                </MudPaper>
+            }
+            else
+            {
+                @foreach (var type in QuotationBaseTypes.All)
+                {
+                    var itemType = type.Key;
+                    var lines = LinesOf(itemType);
+                    if (lines.Count == 0) continue;
 
-                    @if (lines.Count > 0)
-                    {
+                    var maxTier = Math.Clamp(lines.Max(x => x.TierCount), 1, QuotationDetailLineDto.MaxTiers);
+                    <MudPaper Outlined="true" Class="pa-2 mb-3 qe-section">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="px-1 mb-2">
+                            <MudChipSet T="string" ReadOnly="true" Class="qe-type-chips">
+                                <MudChip T="string"
+                                         Text="@type.Label"
+                                         Icon="@ChipIconOf(itemType)"
+                                         Color="@ChipColorOf(itemType)"
+                                         Variant="Variant.Filled"
+                                         Size="Size.Medium"/>
+                            </MudChipSet>
+                            @if (!IsDetail)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddLine(itemType))">新增</MudButton>
+                            }
+                        </MudStack>
+
                         <div class="qe-table-wrap">
                         <MudTable T="QuotationDetailLineDto" Items="lines" Dense="true" Hover="true" Bordered="true"
                                   Breakpoint="Breakpoint.None" Class="qe-table" Elevation="0">
@@ -135,10 +165,18 @@
                                 {
                                     <MudTh Style="white-space:nowrap;min-width:5.5em">@col.Label</MudTh>
                                 }
-                                <MudTh Class="qe-num-col">数量</MudTh>
-                                <MudTh Class="qe-num-col">单价</MudTh>
-                                <MudTh Class="qe-num-col qe-num-col-sm">折扣%</MudTh>
-                                <MudTh Class="qe-num-col qe-num-col-lg">金额</MudTh>
+                                @for (var t = 1; t <= maxTier; t++)
+                                {
+                                    var suffix = maxTier > 1 ? t.ToString(CultureInfo.InvariantCulture) : "";
+                                    <MudTh Class="qe-num-col">数量@(suffix)</MudTh>
+                                    <MudTh Class="qe-num-col">单价@(suffix)</MudTh>
+                                    <MudTh Class="qe-num-col qe-num-col-sm">折扣%@(suffix)</MudTh>
+                                    <MudTh Class="qe-num-col qe-num-col-lg">金额@(suffix)</MudTh>
+                                }
+                                @if (!IsDetail)
+                                {
+                                    <MudTh Class="qe-tier-ops-col">阶梯折扣</MudTh>
+                                }
                                 <MudTh Style="min-width:140px">备注</MudTh>
                                 @if (!IsDetail)
                                 {
@@ -172,30 +210,68 @@
                                 {
                                     <MudTd><span class="qe-spec">@SpecValue(row, col.Key)</span></MudTd>
                                 }
-                                <MudTd Class="qe-num-col">
-                                    <MudNumericField T="decimal?" Value="row.Qty" ValueChanged="v => OnMoneyChanged(row, qty: v)"
-                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
-                                                     Disabled="IsDetail" Class="qe-num"
-                                                     Culture="@NumCulture" Format="N0"/>
-                                </MudTd>
-                                <MudTd Class="qe-num-col">
-                                    <MudNumericField T="decimal?" Value="row.Price" ValueChanged="v => OnMoneyChanged(row, price: v)"
-                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
-                                                     Disabled="IsDetail" Class="qe-num"
-                                                     Culture="@NumCulture" Format="N2"/>
-                                </MudTd>
-                                <MudTd Class="qe-num-col qe-num-col-sm">
-                                    <MudNumericField T="decimal?" Value="row.Discount" ValueChanged="v => OnMoneyChanged(row, discount: v)"
-                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
-                                                     Disabled="IsDetail" Class="qe-num"
-                                                     Culture="@NumCulture" Format="N0"/>
-                                </MudTd>
-                                <MudTd Class="qe-num-col qe-num-col-lg">
-                                    <MudNumericField T="decimal?" Value="row.Amount" ReadOnly="true"
-                                                     Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
-                                                     Class="qe-num"
-                                                     Culture="@NumCulture" Format="N2"/>
-                                </MudTd>
+                                @for (var t = 1; t <= maxTier; t++)
+                                {
+                                    var tier = t;
+                                    if (tier <= row.TierCount)
+                                    {
+                                        <MudTd Class="qe-num-col">
+                                            <MudNumericField T="decimal?" Value="row.GetQty(tier)"
+                                                             ValueChanged="v => OnTierMoneyChanged(row, tier, qty: v)"
+                                                             Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                             Disabled="IsDetail" Class="qe-num"
+                                                             Culture="@NumCulture" Format="N0"/>
+                                        </MudTd>
+                                        <MudTd Class="qe-num-col">
+                                            <MudNumericField T="decimal?" Value="row.GetPrice(tier)"
+                                                             ValueChanged="v => OnTierMoneyChanged(row, tier, price: v)"
+                                                             Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                             Disabled="IsDetail" Class="qe-num"
+                                                             Culture="@NumCulture" Format="N2"/>
+                                        </MudTd>
+                                        <MudTd Class="qe-num-col qe-num-col-sm">
+                                            <MudNumericField T="decimal?" Value="row.GetDiscount(tier)"
+                                                             ValueChanged="v => OnTierMoneyChanged(row, tier, discount: v)"
+                                                             Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                             Disabled="IsDetail" Class="qe-num"
+                                                             Culture="@NumCulture" Format="N0"/>
+                                        </MudTd>
+                                        <MudTd Class="qe-num-col qe-num-col-lg">
+                                            <MudNumericField T="decimal?" Value="row.GetAmount(tier)" ReadOnly="true"
+                                                             Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"
+                                                             Class="qe-num"
+                                                             Culture="@NumCulture" Format="N2"/>
+                                        </MudTd>
+                                    }
+                                    else
+                                    {
+                                        <MudTd Class="qe-num-col"></MudTd>
+                                        <MudTd Class="qe-num-col"></MudTd>
+                                        <MudTd Class="qe-num-col qe-num-col-sm"></MudTd>
+                                        <MudTd Class="qe-num-col qe-num-col-lg"></MudTd>
+                                    }
+                                }
+                                @if (!IsDetail)
+                                {
+                                    <MudTd Class="qe-tier-ops-col">
+                                        <div class="qe-tier-ops">
+                                            @if (row.TierCount > 1)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                                               Color="Color.Default"
+                                                               aria-label="减少一档阶梯"
+                                                               OnClick="@(() => RemoveTier(row))"/>
+                                            }
+                                            @if (row.TierCount < QuotationDetailLineDto.MaxTiers)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                               Color="Color.Primary"
+                                                               aria-label="增加一档阶梯（最多4档）"
+                                                               OnClick="@(() => AddTier(row))"/>
+                                            }
+                                        </div>
+                                    </MudTd>
+                                }
                                 <MudTd>
                                     <MudTextField T="string"
                                                   Value="@(row.Note ?? "")"
@@ -212,11 +288,32 @@
                             </RowTemplate>
                         </MudTable>
                         <div class="qe-subtotal-bar">
-                            <strong>小计：@FmtMoney(lines.Sum(x => x.Amount ?? 0m))</strong>
+                            <strong>小计：@FmtMoney(lines.Sum(x => x.TotalAmount))</strong>
                         </div>
                         </div>
-                    }
-                </MudPaper>
+                    </MudPaper>
+                }
+
+                @if (!IsDetail && emptyTypes.Length > 0)
+                {
+                    <MudPaper Outlined="true" Class="pa-2 mb-3 qe-empty-picker qe-empty-picker-more">
+                        <MudText Typo="Typo.caption" Class="qe-empty-picker-tip">继续添加其它部件</MudText>
+                        <div class="qe-empty-picker-chips">
+                            @foreach (var type in emptyTypes)
+                            {
+                                var itemType = type.Key;
+                                <MudChip T="string"
+                                         Text="@type.Label"
+                                         Icon="@ChipIconOf(itemType)"
+                                         Color="@ChipColorOf(itemType)"
+                                         Variant="Variant.Filled"
+                                         Size="Size.Medium"
+                                         OnClick="@(() => AddLine(itemType))"
+                                         Class="qe-picker-chip"/>
+                            }
+                        </div>
+                    </MudPaper>
+                }
             }
 
             <MudPaper Outlined="true" Class="pa-3 mb-3">
@@ -265,7 +362,7 @@
                     </div>
                     <div class="qe-total-box">
                         <span class="qe-total-label">明细总额</span>
-                        <span class="qe-total-amount">@FmtMoney(_doc.Details.Sum(x => x.Amount ?? 0m))</span>
+                        <span class="qe-total-amount">@FmtMoney(_doc.Details.Sum(x => x.TotalAmount))</span>
                         <span class="qe-total-unit">@(_main.currencyUnit)</span>
                     </div>
                 </div>
@@ -336,6 +433,25 @@
         padding-left: 4px !important;
         padding-right: 4px !important;
     }
+    .qe-tier-ops-col {
+        width: 5.5em !important;
+        min-width: 5.5em !important;
+        max-width: 6.5em !important;
+        text-align: center;
+        white-space: nowrap !important;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+    }
+    .qe-tier-ops {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        white-space: nowrap;
+    }
+    .qe-tier-ops .mud-icon-button {
+        padding: 2px !important;
+    }
     .qe-table .mud-table-head .mud-table-cell.qe-ops-col { z-index: 5; }
     .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell.qe-part-col,
     .qe-table .mud-table-body .mud-table-row:hover .mud-table-cell.qe-ops-col {
@@ -386,6 +502,33 @@
         overflow: visible !important;
     }
     .qe-type-chips { gap: 0; }
+    .qe-empty-picker {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .qe-empty-picker-tip {
+        color: var(--mud-palette-text-secondary);
+        margin: 0;
+    }
+    .qe-empty-picker-chips {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+    }
+    .qe-picker-chip {
+        cursor: pointer;
+        user-select: none;
+    }
+    .qe-picker-chip.mud-disabled {
+        cursor: default;
+        opacity: 0.65;
+    }
+    .qe-empty-picker-more {
+        gap: 6px;
+    }
     .qe-field { width: 100%; }
     .qe-field .mud-input-control,
     .qe-field.mud-input-control { width: 100%; }
@@ -666,6 +809,7 @@
         _doc.Details.Add(new QuotationDetailLineDto
         {
             ItemType = QuotationBaseTypes.Normalize(itemType),
+            TierCount = 1,
             Discount = 0m,
             Qty = 0m,
             Price = 0m,
@@ -675,6 +819,18 @@
 
     private void RemoveLine(QuotationDetailLineDto row)
         => _doc.Details.Remove(row);
+
+    private void AddTier(QuotationDetailLineDto row)
+    {
+        row.AddTier();
+        StateHasChanged();
+    }
+
+    private void RemoveTier(QuotationDetailLineDto row)
+    {
+        row.RemoveLastTier();
+        StateHasChanged();
+    }
 
     private Task OnPartOptionChangedAsync(QuotationDetailLineDto row, QuotationPartOptionDto? part)
         => OnPartChangedAsync(row, part?.Id);
@@ -691,12 +847,14 @@
         row.ApplyBase(b);
     }
 
-    private void OnMoneyChanged(QuotationDetailLineDto row, decimal? qty = null, decimal? price = null, decimal? discount = null)
+    private void OnTierMoneyChanged(
+        QuotationDetailLineDto row, int tier,
+        decimal? qty = null, decimal? price = null, decimal? discount = null)
     {
-        if (qty.HasValue) row.Qty = qty;
-        if (price.HasValue) row.Price = price;
-        if (discount.HasValue) row.Discount = discount;
-        row.RecalcAmount();
+        if (qty.HasValue) row.SetQty(tier, qty);
+        if (price.HasValue) row.SetPrice(tier, price);
+        if (discount.HasValue) row.SetDiscount(tier, discount);
+        row.RecalcTier(tier);
     }
 
     private static void SetNote(QuotationDetailLineDto row, string? note) => row.Note = note;

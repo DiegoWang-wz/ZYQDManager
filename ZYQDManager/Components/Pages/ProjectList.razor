@@ -144,7 +144,9 @@
                 <MudText Class="pa-4">暂无项目，可点击「新增电机」创建草稿</MudText>
             </NoRecordsContent>
             <PagerContent>
-                <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }" InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+                <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                               RowsPerPageString="每页行数："
+                               InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
             </PagerContent>
         </MudTable>
     </MudPaper>

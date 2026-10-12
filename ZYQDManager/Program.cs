@@ -52,6 +52,7 @@ builder.Services.AddMudServices(config =>
     config.SnackbarConfiguration.PreventDuplicates = true;
     config.SnackbarConfiguration.NewestOnTop = false;
 });
+builder.Services.AddTransient<MudLocalizer, ChineseMudLocalizer>();
 
 builder.Services.AddControllers(options => { options.Filters.Add(new IgnoreAntiforgeryTokenAttribute()); });
 builder.Services.AddEndpointsApiExplorer();

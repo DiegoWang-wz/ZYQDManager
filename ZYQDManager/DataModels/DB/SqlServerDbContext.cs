@@ -158,6 +158,18 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.Price).HasPrecision(18, 4);
             entity.Property(e => e.Discount).HasPrecision(18, 4);
             entity.Property(e => e.Amount).HasPrecision(18, 4);
+            entity.Property(e => e.Qty2).HasPrecision(18, 4);
+            entity.Property(e => e.Price2).HasPrecision(18, 4);
+            entity.Property(e => e.Discount2).HasPrecision(18, 4);
+            entity.Property(e => e.Amount2).HasPrecision(18, 4);
+            entity.Property(e => e.Qty3).HasPrecision(18, 4);
+            entity.Property(e => e.Price3).HasPrecision(18, 4);
+            entity.Property(e => e.Discount3).HasPrecision(18, 4);
+            entity.Property(e => e.Amount3).HasPrecision(18, 4);
+            entity.Property(e => e.Qty4).HasPrecision(18, 4);
+            entity.Property(e => e.Price4).HasPrecision(18, 4);
+            entity.Property(e => e.Discount4).HasPrecision(18, 4);
+            entity.Property(e => e.Amount4).HasPrecision(18, 4);
             entity.HasIndex(e => e.main_guid);
         });
     }

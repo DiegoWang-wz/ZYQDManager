@@ -586,8 +586,50 @@ public class CustomsAndPackingExcelService
             var pic = format == XLPictureFormat.Unknown
                 ? ws.AddPicture(ms, name)
                 : ws.AddPicture(ms, format, name);
-            pic.MoveTo(ws.Cell(npoiRow + 1, npoiCol + 1));
-            pic.WithSize(72, 72);
+
+            // 对齐老系统：原图优先（上限 500×400），必要时撑开列/行，再居中放入单元格
+            const double pxPerColChar = 7.0;
+            const double pad = 6;
+            const double maxPxW = 500;
+            const double maxPxH = 400;
+            const double maxColChars = 255;
+            const double maxRowPts = 409;
+
+            var xlRow = npoiRow + 1;
+            var xlCol = npoiCol + 1;
+            var cell = ws.Cell(xlRow, xlCol);
+
+            var imgW = Math.Max(1.0, pic.OriginalWidth);
+            var imgH = Math.Max(1.0, pic.OriginalHeight);
+            var scale = Math.Min(1.0, Math.Min(maxPxW / imgW, maxPxH / imgH));
+            imgW *= scale;
+            imgH *= scale;
+
+            var needCol = (imgW + 2 * pad) / pxPerColChar;
+            var needRow = (imgH + 2 * pad) * 72.0 / 96.0;
+            if (needCol > maxColChars || needRow > maxRowPts)
+            {
+                var lim = Math.Min(
+                    maxColChars * pxPerColChar / (imgW + 2 * pad),
+                    maxRowPts * 96.0 / 72.0 / (imgH + 2 * pad));
+                imgW *= lim;
+                imgH *= lim;
+                needCol = (imgW + 2 * pad) / pxPerColChar;
+                needRow = (imgH + 2 * pad) * 72.0 / 96.0;
+            }
+
+            if (ws.Column(xlCol).Width < needCol)
+                ws.Column(xlCol).Width = needCol;
+            if (ws.Row(xlRow).Height < needRow)
+                ws.Row(xlRow).Height = needRow;
+
+            var cellW = ws.Column(xlCol).Width * pxPerColChar;
+            var cellH = ws.Row(xlRow).Height * 96.0 / 72.0;
+            var finalW = Math.Max(1, (int)Math.Round(imgW));
+            var finalH = Math.Max(1, (int)Math.Round(imgH));
+            var ox = Math.Max(0, (int)Math.Round((cellW - finalW) / 2.0));
+            var oy = Math.Max(0, (int)Math.Round((cellH - finalH) / 2.0));
+            pic.MoveTo(cell, ox, oy, cell, ox + finalW, oy + finalH);
             return true;
         }
         catch { return false; }

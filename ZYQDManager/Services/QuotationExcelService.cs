@@ -10,7 +10,7 @@ namespace ZYQDManager.Services;
 
 /// <summary>
 /// 报价单 Excel 填充（对齐老系统 SetQuotationPDF），再交给 LibreOffice 转 PDF。
-/// 新系统明细为单档数量/单价；版式仍按旧模板多行规格写入。
+/// 明细最多 4 档阶梯价，分别写在连续规格行右侧（与旧系统一致）。
 /// </summary>
 public class QuotationExcelService
 {
@@ -192,23 +192,23 @@ public class QuotationExcelService
         var pictureStart = ctx.Row + 1;
         BeginProduct(ctx, item, EstimateMotorRows(item, L), out var seq);
 
-        WriteSpecRow(ctx, seq, item.Part_No, L.RatedTorque + item.Rated_torque, item, currencyUnit, priceOnThisRow: true);
+        WriteSpecRow(ctx, seq, item.Part_No, L.RatedTorque + item.Rated_torque, item, currencyUnit, priceTier: 1);
         TryAddPicture(ctx, pictureStart, item.Quotation_logo);
-        WriteSpecRow(ctx, null, null, L.RatedSpeed + item.Rated_speed);
+        WriteSpecRow(ctx, null, null, L.RatedSpeed + item.Rated_speed, item, currencyUnit, priceTier: 2);
 
         var power = L.PowerSupply + item.Power_supply;
         var powerLines = SplitDisplay(power, 50);
         if (powerLines.Length >= 2)
         {
-            WriteSpecRow(ctx, null, null, powerLines[0]);
+            WriteSpecRow(ctx, null, null, powerLines[0], item, currencyUnit, priceTier: 3);
             WriteSpecRow(ctx, null, null, powerLines[1]);
         }
         else
         {
-            WriteSpecRow(ctx, null, null, power);
+            WriteSpecRow(ctx, null, null, power, item, currencyUnit, priceTier: 3);
         }
 
-        WriteSpecRow(ctx, null, null, L.RatedPower + item.Rated_Power);
+        WriteSpecRow(ctx, null, null, L.RatedPower + item.Rated_Power, item, currencyUnit, priceTier: 4);
         WriteSpecRow(ctx, null, null, L.RatedCurrent + item.Rated_Current);
         WriteSpecRow(ctx, null, null, L.NoiseDba + item.Noise_dBA);
         WriteSpecRow(ctx, null, null, L.MotorLength + item.Motor_Length);
@@ -235,18 +235,26 @@ public class QuotationExcelService
         var remoteLines = SplitDisplay(remote, 50);
         if (remoteLines.Length >= 2)
         {
-            WriteSpecRow(ctx, seq, item.Part_No, remoteLines[0], item, currencyUnit, priceOnThisRow: true);
+            WriteSpecRow(ctx, seq, item.Part_No, remoteLines[0], item, currencyUnit, priceTier: 1);
             TryAddPicture(ctx, pictureStart, item.Quotation_logo);
-            WriteSpecRow(ctx, null, null, remoteLines[1]);
+            WriteSpecRow(ctx, null, null, remoteLines[1], item, currencyUnit, priceTier: 2);
+            WriteSpecRow(ctx, null, null, L.BatteryType + item.Battery_Type, item, currencyUnit, priceTier: 3);
+            WriteSpecRow(ctx, null, null, L.RadioFrequency + item.Radio_Frequency, item, currencyUnit, priceTier: 4);
         }
         else
         {
-            WriteSpecRow(ctx, seq, item.Part_No, remote, item, currencyUnit, priceOnThisRow: true);
+            WriteSpecRow(ctx, seq, item.Part_No, remote, item, currencyUnit, priceTier: 1);
             TryAddPicture(ctx, pictureStart, item.Quotation_logo);
+            WriteSpecRow(ctx, null, null, L.BatteryType + item.Battery_Type, item, currencyUnit, priceTier: 2);
+            WriteSpecRow(ctx, null, null, L.RadioFrequency + item.Radio_Frequency, item, currencyUnit, priceTier: 3);
+            WriteSpecRow(ctx, null, null, L.WorkingTemperature + item.Working_Temperature, item, currencyUnit, priceTier: 4);
+            WriteSpecRow(ctx, null, null, L.NoOfChannels + item.NoOfChannels);
+            if (!string.IsNullOrWhiteSpace(item.Note))
+                WriteSpecRow(ctx, null, null, L.Note + item.Note);
+            EnsurePictureSpace(ctx, pictureStart, item.Quotation_logo);
+            WriteBlank(ctx);
+            return;
         }
-
-        WriteSpecRow(ctx, null, null, L.BatteryType + item.Battery_Type);
-        WriteSpecRow(ctx, null, null, L.RadioFrequency + item.Radio_Frequency);
         WriteSpecRow(ctx, null, null, L.WorkingTemperature + item.Working_Temperature);
         WriteSpecRow(ctx, null, null, L.NoOfChannels + item.NoOfChannels);
         if (!string.IsNullOrWhiteSpace(item.Note))
@@ -262,11 +270,11 @@ public class QuotationExcelService
         var pictureStart = ctx.Row + 1;
         BeginProduct(ctx, item, EstimateCbRows(item), out var seq);
 
-        WriteSpecRow(ctx, seq, item.Part_No, L.RatedVoltage + item.Rated_Voltage, item, currencyUnit, priceOnThisRow: true);
+        WriteSpecRow(ctx, seq, item.Part_No, L.RatedVoltage + item.Rated_Voltage, item, currencyUnit, priceTier: 1);
         TryAddPicture(ctx, pictureStart, item.Quotation_logo);
-        WriteSpecRow(ctx, null, null, L.Size + item.Size);
-        WriteSpecRow(ctx, null, null, L.RatedPowerStr + item.Rated_Power);
-        WriteSpecRow(ctx, null, null, L.NoOfActuator + item.No_Of_Actuator);
+        WriteSpecRow(ctx, null, null, L.Size + item.Size, item, currencyUnit, priceTier: 2);
+        WriteSpecRow(ctx, null, null, L.RatedPowerStr + item.Rated_Power, item, currencyUnit, priceTier: 3);
+        WriteSpecRow(ctx, null, null, L.NoOfActuator + item.No_Of_Actuator, item, currencyUnit, priceTier: 4);
         WriteSpecRow(ctx, null, null, L.OutputControl + item.Output_Control);
         WriteSpecRow(ctx, null, null, L.Sensor + item.Sensor);
         WriteSpecRow(ctx, null, null, L.ProtectionDegree + item.Protection_Degree);
@@ -283,10 +291,10 @@ public class QuotationExcelService
         var pictureStart = ctx.Row + 1;
         BeginProduct(ctx, item, EstimatePrRows(item), out var seq);
 
-        WriteSpecRow(ctx, seq, item.Part_No, L.MaxLoading + item.Max_Loading, item, currencyUnit, priceOnThisRow: true);
-        WriteSpecRow(ctx, null, null, L.MaxStroke + item.Max_Stroke);
-        WriteSpecRow(ctx, null, null, L.ProtectionDegree2 + item.Protection_Degree2);
-        WriteSpecRow(ctx, null, null, L.Noise + item.Noise);
+        WriteSpecRow(ctx, seq, item.Part_No, L.MaxLoading + item.Max_Loading, item, currencyUnit, priceTier: 1);
+        WriteSpecRow(ctx, null, null, L.MaxStroke + item.Max_Stroke, item, currencyUnit, priceTier: 2);
+        WriteSpecRow(ctx, null, null, L.ProtectionDegree2 + item.Protection_Degree2, item, currencyUnit, priceTier: 3);
+        WriteSpecRow(ctx, null, null, L.Noise + item.Noise, item, currencyUnit, priceTier: 4);
         if (!string.IsNullOrWhiteSpace(item.Note))
             WriteSpecRow(ctx, null, null, L.Note + item.Note);
 
@@ -301,14 +309,24 @@ public class QuotationExcelService
         var pictureStart = ctx.Row + 1;
         BeginProduct(ctx, item, EstimateAccessoryRows(item, L), out var seq);
 
-        WriteSpecRow(ctx, seq, item.Part_No, L.Adaptor + item.adaptor, item, currencyUnit, priceOnThisRow: true);
+        WriteSpecRow(ctx, seq, item.Part_No, L.Adaptor + item.adaptor, item, currencyUnit, priceTier: 1);
 
+        var nextTier = 2;
         if (!string.IsNullOrWhiteSpace(item.Note))
         {
             var note = L.Note + item.Note;
-            var lines = SplitDisplay(note, 50);
-            foreach (var line in lines)
-                WriteSpecRow(ctx, null, null, line);
+            foreach (var line in SplitDisplay(note, 50))
+            {
+                var tier = nextTier <= 4 ? nextTier : 0;
+                WriteSpecRow(ctx, null, null, line, item, currencyUnit, priceTier: tier);
+                if (nextTier <= 4) nextTier++;
+            }
+        }
+
+        for (; nextTier <= 4; nextTier++)
+        {
+            if ((item.GetQty(nextTier) ?? 0) > 0)
+                WriteSpecRow(ctx, null, null, "", item, currencyUnit, priceTier: nextTier);
         }
 
         WriteBlank(ctx);
@@ -330,7 +348,7 @@ public class QuotationExcelService
         string? spec,
         QuotationDetailLineDto? item = null,
         string? currencyUnit = null,
-        bool priceOnThisRow = false)
+        int priceTier = 0)
     {
         ctx.InsertBlankAfter();
         if (!string.IsNullOrWhiteSpace(seq))
@@ -340,8 +358,8 @@ public class QuotationExcelService
         if (!string.IsNullOrWhiteSpace(spec))
             Set(ctx.Ws, ctx.Row, 7, spec);
 
-        if (priceOnThisRow && item is not null && (item.Qty ?? 0) > 0)
-            WritePrice(ctx.Ws, ctx.Row, item, currencyUnit);
+        if (priceTier is >= 1 and <= 4 && item is not null && (item.GetQty(priceTier) ?? 0) > 0)
+            WritePrice(ctx.Ws, ctx.Row, item, currencyUnit, priceTier);
 
         ctx.Advance();
     }
@@ -352,13 +370,14 @@ public class QuotationExcelService
         ctx.Advance();
     }
 
-    private static void WritePrice(IXLWorksheet ws, int npoiRow, QuotationDetailLineDto item, string? currencyUnit)
+    private static void WritePrice(
+        IXLWorksheet ws, int npoiRow, QuotationDetailLineDto item, string? currencyUnit, int tier = 1)
     {
         var unit = (currencyUnit ?? "").Trim();
-        Set(ws, npoiRow, 14, FmtQty(item.Qty) + " PCS");
-        Set(ws, npoiRow, 16, unit + FormatMoney(item.Price));
-        Set(ws, npoiRow, 18, FormatDiscount(item.Discount) + "%");
-        Set(ws, npoiRow, 20, unit + FormatMoney(item.Amount));
+        Set(ws, npoiRow, 14, FmtQty(item.GetQty(tier)) + " PCS");
+        Set(ws, npoiRow, 16, unit + FormatMoney(item.GetPrice(tier)));
+        Set(ws, npoiRow, 18, FormatDiscount(item.GetDiscount(tier)) + "%");
+        Set(ws, npoiRow, 20, unit + FormatMoney(item.GetAmount(tier)));
     }
 
     private void PlaceSignature(WriteContext ctx, string? signatureUrl)

@@ -1,0 +1,67 @@
+<input class="cpk-fit-input @CssClass"
+       type="text"
+       value="@Value"
+       size="@FitSize"
+       disabled="@Disabled"
+       readonly="@ReadOnly"
+       placeholder="@Placeholder"
+       @oninput="OnInput"/>
+
+<style>
+    .cpk-fit-input {
+        box-sizing: content-box;
+        height: 28px;
+        margin: 0;
+        padding: 2px 8px;
+        border: 1px solid var(--mud-palette-lines-default, #e0e0e0);
+        border-radius: 4px;
+        background: #fff;
+        color: inherit;
+        font: inherit;
+        line-height: 1.2;
+        white-space: nowrap;
+        min-width: 3ch;
+        max-width: none;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .cpk-fit-input:focus {
+        outline: 2px solid var(--mud-palette-primary, #594ae2);
+        outline-offset: 0;
+        border-color: transparent;
+    }
+
+    .cpk-fit-input:disabled,
+    .cpk-fit-input[readonly] {
+        background: #f5f5f5;
+        color: var(--mud-palette-text-secondary, #666);
+    }
+</style>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string CssClass { get; set; } = "";
+    [Parameter] public int MinChars { get; set; } = 4;
+
+    private int FitSize
+    {
+        get
+        {
+            var n = (Value ?? "").Length + 2;
+            if (!string.IsNullOrEmpty(Placeholder) && Placeholder.Length + 2 > n)
+                n = Placeholder.Length + 2;
+            return Math.Clamp(n, MinChars, 120);
+        }
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

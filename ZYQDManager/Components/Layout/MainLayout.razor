@@ -46,7 +46,10 @@ else
                         </button>
                     </ActivatorContent>
                     <ChildContent>
-                        <MudMenuItem OnClick="@(() => GoTo("/contract"))">合同列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("客户PI")))">客户PI列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("客户CI")))">客户CI列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("报关PI")))">报关PI列表</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => GoTo("/contract-pk"))">装箱单列表</MudMenuItem>
                         <MudMenuItem OnClick="@(() => GoTo("/contract-base"))">合同基础数据</MudMenuItem>
                     </ChildContent>
                 </MudMenu>
@@ -385,10 +388,25 @@ else
             if (Starts(path, "quotation-base")) return path is "quotation-base" ? "报价基础数据" : "报价基础数据详情";
             if (Starts(path, "quotation")) return path is "quotation" ? "报价列表" : "报价详情";
             if (Starts(path, "contract-base")) return path is "contract-base" ? "合同基础数据" : "合同基础数据详情";
-            if (Starts(path, "contract-pi") || path is "contract") return path is "contract" or "contract-pi" ? "合同列表" : "合同详情";
             if (Starts(path, "contract-pk")) return path is "contract-pk" ? "装箱单列表" : "装箱单编辑";
-            if (Starts(path, "contract-ci")) return "客户CI";
-            if (Starts(path, "contract-bg")) return "报关PI";
+            if (Starts(path, "contract-ci")) return path is "contract-ci" ? "客户CI列表" : "客户CI详情";
+            if (Starts(path, "contract-bg")) return path is "contract-bg" ? "报关PI列表" : "报关PI详情";
+            if (Starts(path, "contract-pi") || path is "contract")
+            {
+                if (path is "contract" or "contract-pi")
+                {
+                    var type = GetQueryType();
+                    return type switch
+                    {
+                        "客户CI" => "客户CI列表",
+                        "报关PI" => "报关PI列表",
+                        "装箱单" => "装箱单列表",
+                        _ => "客户PI列表",
+                    };
+                }
+
+                return "合同详情";
+            }
             if (Starts(path, "invoice-kp")) return "开票管理";
             if (Starts(path, "sir")) return path is "sir" ? "检测报告管理" : "检测报告详情";
             if (Starts(path, "project-list")) return "项目列表";
@@ -405,6 +423,22 @@ else
     private static bool Starts(string path, string prefix)
         => path.Equals(prefix, StringComparison.OrdinalIgnoreCase)
            || path.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase);
+
+    private string GetQueryType()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var qi = relative.IndexOf('?');
+        if (qi < 0) return "";
+        foreach (var part in relative[(qi + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = part.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!part[..eq].Equals("type", StringComparison.OrdinalIgnoreCase)) continue;
+            return Uri.UnescapeDataString(part[(eq + 1)..]).Trim();
+        }
+
+        return "";
+    }
 
     private void GoTo(string url) => Nav.NavigateTo(url, forceLoad: false);
 
