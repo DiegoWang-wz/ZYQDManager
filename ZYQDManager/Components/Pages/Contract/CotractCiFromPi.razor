@@ -53,8 +53,8 @@
             </MudStack>
             <div class="cpi-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpi-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="SelectAll" Disabled="_rows.Count == 0">选择全部</MudButton>
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">释放</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.SelectAll" OnClick="SelectAll" Disabled="_rows.Count == 0">选择全部</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">释放</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy"
                            OnClick="GenerateAsync" Disabled="_selected.Count == 0 || _busy">生成客户CI</MudButton>
             </MudStack>
@@ -202,6 +202,7 @@
         max-width: 42px !important;
         padding: 0 !important;
         text-align: center !important;
+        white-space: nowrap !important;
     }
 
     .cotract-pi-table .mud-table-cell.cpi-no-cell {
@@ -234,8 +235,8 @@
     private bool _searched;
     private string? _clientNo;
     private string _orderType = CotractPiTypes.CustomerPi[0];
-    private DateTime? _dateStart = DateTime.Today.AddDays(-7);
-    private DateTime? _dateEnd = DateTime.Today;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
     private List<ZyqdCotractPiModel> _rows = new();
     private HashSet<ZyqdCotractPiModel> _selected = new();
     private int _skip;
@@ -279,8 +280,8 @@
     {
         _clientNo = null;
         _orderType = CotractPiTypes.CustomerPi[0];
-        _dateStart = DateTime.Today.AddDays(-7);
-        _dateEnd = DateTime.Today;
+        _dateStart = null;
+        _dateEnd = null;
         _searched = false;
         _selected.Clear();
         _rows = [];

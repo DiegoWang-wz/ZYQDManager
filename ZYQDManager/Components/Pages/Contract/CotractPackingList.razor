@@ -3,6 +3,7 @@
 @inject CustomsAndPackingService Packing
 @inject CentralAuthService Auth
 @inject CentralUserInformationService UserInfo
+@inject LastListReturnService LastListReturn
 
 <PageTitle>装箱单列表</PageTitle>
 
@@ -10,6 +11,23 @@
     <MudPaper Class="pa-3" Outlined="true">
         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="cpk-toolbar">
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-left">
+                <MudSelect T="string"
+                           Value="_documentType"
+                           ValueChanged="OnDocumentTypeChanged"
+                           Label="单据类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="cpi-doc-type-select cpi-doc-type-pk">
+                    @foreach (var kind in DocumentKinds)
+                    {
+                        <MudSelectItem Value="@kind">
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="@($"cpi-doc-type-item cpi-doc-type-{DocKindCss(kind)}")">
+                                <MudIcon Icon="@DocKindIcon(kind)" Size="Size.Small"/>
+                                <span>@kind</span>
+                            </MudStack>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
                 <MudDatePicker @bind-Date="_dateStart"
                                Label="开始"
                                DateFormat="yyyy-MM-dd"
@@ -52,8 +70,8 @@
             </MudStack>
             <div class="cpk-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                            OnClick="GoCustomerPiForCreate">新建</MudButton>
             </MudStack>
@@ -66,7 +84,8 @@
             <MudTable @ref="_table"
                       T="ZyqdCustomsAndPackingModel"
                       ServerData="LoadServerData"
-                      RowsPerPage="20"
+                      @bind-CurrentPage="_currentPage"
+                      RowsPerPage="@_rowsPerPage"
                       Dense="true"
                       Hover="true"
                       Striped="true"
@@ -128,6 +147,30 @@
     .cpk-toolbar-left, .cpk-toolbar-right { flex: 0 0 auto; }
     .cpk-toolbar-right { margin-left: auto; }
     .cpk-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .cpi-doc-type-select { width: 180px; min-width: 180px; }
+    .cpi-doc-type-select .mud-input-slot,
+    .cpi-doc-type-select input.mud-select-input { font-weight: 600; }
+    .cpi-doc-type-pi .mud-input-outlined-border { border-color: #1976d2 !important; }
+    .cpi-doc-type-pi .mud-input-slot,
+    .cpi-doc-type-pi input.mud-select-input,
+    .cpi-doc-type-pi .mud-input-label { color: #1976d2 !important; }
+    .cpi-doc-type-bg .mud-input-outlined-border { border-color: #ed6c02 !important; }
+    .cpi-doc-type-bg .mud-input-slot,
+    .cpi-doc-type-bg input.mud-select-input,
+    .cpi-doc-type-bg .mud-input-label { color: #ed6c02 !important; }
+    .cpi-doc-type-ci .mud-input-outlined-border { border-color: #7b1fa2 !important; }
+    .cpi-doc-type-ci .mud-input-slot,
+    .cpi-doc-type-ci input.mud-select-input,
+    .cpi-doc-type-ci .mud-input-label { color: #7b1fa2 !important; }
+    .cpi-doc-type-pk .mud-input-outlined-border { border-color: #2e7d32 !important; }
+    .cpi-doc-type-pk .mud-input-slot,
+    .cpi-doc-type-pk input.mud-select-input,
+    .cpi-doc-type-pk .mud-input-label { color: #2e7d32 !important; }
+    .cpi-doc-type-item { font-weight: 600; min-width: 140px; }
+    .cpi-doc-type-item.cpi-doc-type-pi { color: #1976d2; }
+    .cpi-doc-type-item.cpi-doc-type-bg { color: #ed6c02; }
+    .cpi-doc-type-item.cpi-doc-type-ci { color: #7b1fa2; }
+    .cpi-doc-type-item.cpi-doc-type-pk { color: #2e7d32; }
     .cpk-filter-select { width: 140px; min-width: 140px; }
     .cpk-filter-input { width: 200px; min-width: 200px; }
     .cpk-filter-date { width: 180px; min-width: 180px; flex: 0 0 180px; }
@@ -146,7 +189,15 @@
     .cpk-table .mud-table-head .mud-table-cell:first-child,
     .cpk-table .mud-table-head .mud-table-cell.cpk-no-cell { z-index: 6; }
     .cpk-table .mud-table-cell:first-child {
-        left: 0; width: 42px !important; min-width: 42px !important; max-width: 42px !important; padding: 0 !important; text-align: center !important;
+        left: 0; width: 42px !important; min-width: 42px !important; max-width: 42px !important; padding: 0 !important; text-align: center !important; white-space: nowrap !important;
+    }
+    .cpk-table .mud-table-cell:first-child .mud-input-control,
+    .cpk-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     .cpk-table .mud-table-cell.cpk-no-cell {
         left: 42px; width: 48px !important; min-width: 48px !important; max-width: 48px !important; padding: 0 2px !important; text-align: center; border-right: 1px solid #e0e0e0;
@@ -176,22 +227,80 @@
 </style>
 
 @code {
+    private static readonly string[] DocumentKinds = ["客户PI", "报关PI", "客户CI", "装箱单"];
+
     private MudTable<ZyqdCustomsAndPackingModel>? _table;
     private bool _ready;
     private bool _busy;
+    private string _documentType = "装箱单";
     private string _filterColumn = "客户编码";
     private string? _keyword;
-    private DateTime? _dateStart = DateTime.Today.AddDays(-30);
-    private DateTime? _dateEnd = DateTime.Today;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
     private List<ZyqdCustomsAndPackingModel> _rows = [];
     private HashSet<ZyqdCustomsAndPackingModel> _selected = new();
     private int _skip;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
 
-    protected override void OnAfterRender(bool firstRender)
+    private static string DocKindCss(string? kind) => kind switch
+    {
+        "报关PI" => "bg",
+        "客户CI" => "ci",
+        "装箱单" => "pk",
+        _ => "pi"
+    };
+
+    private static string DocKindIcon(string? kind) => kind switch
+    {
+        "报关PI" => Icons.Material.Filled.LocalShipping,
+        "客户CI" => Icons.Material.Filled.ReceiptLong,
+        "装箱单" => Icons.Material.Filled.Inventory2,
+        _ => Icons.Material.Filled.Description
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _ready) return;
+        RestoreFromReturn();
         _ready = true;
         StateHasChanged();
+    }
+
+    private void RestoreFromReturn()
+    {
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.CotractPacking);
+        if (snap is null) return;
+        if (!string.IsNullOrWhiteSpace(snap.FilterColumn))
+            _filterColumn = snap.FilterColumn!;
+        _keyword = snap.Keyword;
+        _dateStart = snap.DateStart;
+        _dateEnd = snap.DateEnd;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private void PersistAsync(int page, int pageSize)
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.CotractPacking, new PagedListUiState
+        {
+            Page = page < 0 ? 0 : page,
+            PageSize = pageSize > 0 ? pageSize : 20,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            DateStart = _dateStart,
+            DateEnd = _dateEnd,
+        });
+
+    private void OnDocumentTypeChanged(string value)
+    {
+        var next = string.IsNullOrWhiteSpace(value) ? "装箱单" : value.Trim();
+        if (next == "装箱单")
+        {
+            _documentType = next;
+            return;
+        }
+
+        NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString(next)}");
     }
 
     private int RowNo(ZyqdCustomsAndPackingModel row)
@@ -224,8 +333,8 @@
     {
         _keyword = null;
         _filterColumn = "客户编码";
-        _dateStart = DateTime.Today.AddDays(-30);
-        _dateEnd = DateTime.Today;
+        _dateStart = null;
+        _dateEnd = null;
         await SearchAsync();
     }
 
@@ -300,6 +409,9 @@
             _skip = state.Page * take;
             var (rows, total) = await Packing.QueryPageAsync(query, _skip, take, ct);
             _rows = rows;
+            _currentPage = state.Page;
+            _rowsPerPage = take;
+            PersistAsync(state.Page, take);
             return new TableData<ZyqdCustomsAndPackingModel> { Items = rows, TotalItems = total };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

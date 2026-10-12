@@ -1,7 +1,7 @@
 @page "/sir"
 @rendermode InteractiveServer
 @inject SirService Sir
-@inject LocalStorageHelper LocalStorage
+@inject LastListReturnService LastListReturn
 
 <PageTitle>检测报告管理列表</PageTitle>
 
@@ -9,51 +9,72 @@
     <MudPaper Class="pa-3" Outlined="true">
         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="sir-toolbar">
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-left">
-                <MudText Typo="Typo.body2" Class="sir-date-label">签发日期</MudText>
-                <MudDatePicker @bind-Date="_dateStart"
-                               Label="开始"
-                               DateFormat="yyyy-MM-dd"
-                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Editable="true"
-                               Clearable="true"
-                               Class="sir-filter-date"/>
-                <MudDatePicker @bind-Date="_dateEnd"
-                               Label="结束"
-                               DateFormat="yyyy-MM-dd"
-                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Editable="true"
-                               Clearable="true"
-                               Class="sir-filter-date"/>
                 <MudSelect T="string"
-                           @bind-Value="_filterColumn"
+                           Value="_reportType"
+                           ValueChanged="OnReportTypeChanged"
+                           Label="报告类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="sir-filter-report-type">
+                    <MudSelectItem Value="@SirReportTypeAll">全部</MudSelectItem>
+                    @foreach (var t in SirReportTypes.Tests)
+                    {
+                        <MudSelectItem Value="@t.Value">@t.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string"
+                           Value="_filterColumn"
+                           ValueChanged="OnFilterColumnChanged"
                            Label="条件"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
+                           Strict="true"
                            Class="sir-filter-select">
-                    @foreach (var field in SirFilterFields.All)
-                    {
-                        <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
-                    }
+                    <MudSelectItem Value="@("客户")">客户</MudSelectItem>
+                    <MudSelectItem Value="@("产品型号")">产品型号</MudSelectItem>
+                    <MudSelectItem Value="@("产品名称")">产品名称</MudSelectItem>
+                    <MudSelectItem Value="@("业务员")">业务员</MudSelectItem>
+                    <MudSelectItem Value="@("日期")">日期</MudSelectItem>
                 </MudSelect>
-                <MudTextField @bind-Value="_keyword"
-                              Label="内容"
-                              Placeholder="输入查询内容"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Immediate="true"
-                              Class="sir-filter-input"
-                              OnKeyUp="OnKeyUp"/>
+                @if (IsDateFilter)
+                {
+                    <MudDatePicker @bind-Date="_dateStart"
+                                   Label="开始"
+                                   DateFormat="yyyy-MM-dd"
+                                   Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="sir-filter-date"/>
+                    <MudDatePicker @bind-Date="_dateEnd"
+                                   Label="结束"
+                                   DateFormat="yyyy-MM-dd"
+                                   Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="sir-filter-date"/>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_keyword"
+                                  Label="内容"
+                                  Placeholder="输入查询内容"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  Class="sir-filter-input"
+                                  OnKeyUp="OnKeyUp"/>
+                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
             </MudStack>
             <div class="sir-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
             </MudStack>
         </MudStack>
@@ -141,14 +162,9 @@
     .sir-toolbar-left, .sir-toolbar-right { flex: 0 0 auto; }
     .sir-toolbar-right { margin-left: auto; }
     .sir-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .sir-filter-report-type { width: 170px; min-width: 170px; }
     .sir-filter-select { width: 140px; min-width: 140px; }
     .sir-filter-input { width: 200px; min-width: 200px; }
-    .sir-date-label {
-        flex: 0 0 auto;
-        white-space: nowrap;
-        color: var(--mud-palette-text-secondary);
-        padding: 0 4px 0 0;
-    }
     .sir-filter-date { width: 180px; min-width: 180px; flex: 0 0 180px; }
     .sir-table-wrap {
         flex: 1 1 0;
@@ -191,6 +207,15 @@
         max-width: 42px !important;
         padding: 0 !important;
         text-align: center !important;
+        white-space: nowrap !important;
+    }
+    .sir-table .mud-table-cell:first-child .mud-input-control,
+    .sir-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     .sir-table .mud-table-cell.sir-no-cell {
         left: 42px;
@@ -230,11 +255,14 @@
 </style>
 
 @code {
+    private const string SirReportTypeAll = "全部";
+
     private MudTable<ZyqdSirMainModel>? _table;
     private bool _ready;
     private bool _busy;
     private int _currentPage;
     private int _rowsPerPage = 20;
+    private string _reportType = SirReportTypeAll;
     private string _filterColumn = "客户";
     private string? _keyword;
     private DateTime? _dateStart;
@@ -247,52 +275,67 @@
     {
         if (!firstRender || _ready) return;
 
-        // localStorage 需在首次渲染后读；先恢复分页再挂表，避免先落第 0 页
-        await RestoreFromStorageAsync();
+        // 仅顶栏「返回」时恢复上一次筛选/分页
+        RestoreFromReturn();
         _ready = true;
         StateHasChanged();
     }
 
-    private async Task RestoreFromStorageAsync()
+    private void RestoreFromReturn()
     {
-        try
-        {
-            var snap = await LocalStorage.GetAsync<SirListUiState>(StorageKeys.SirListUi);
-            if (snap is null) return;
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.Sir);
+        if (snap is null) return;
 
-            _filterColumn = string.IsNullOrWhiteSpace(snap.FilterColumn) ? "客户" : snap.FilterColumn;
-            _keyword = snap.Keyword;
-            _dateStart = snap.DateStart;
-            _dateEnd = snap.DateEnd;
-            _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
-            _currentPage = snap.Page < 0 ? 0 : snap.Page;
-        }
-        catch
+        _reportType = NormalizeReportType(snap.Extra);
+        _filterColumn = NormalizeFilterColumn(snap.FilterColumn);
+        _keyword = snap.Keyword;
+        _dateStart = snap.DateStart;
+        _dateEnd = snap.DateEnd;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private static string NormalizeReportType(string? value)
+    {
+        var v = (value ?? "").Trim();
+        if (v.Length == 0 || v == SirReportTypeAll)
+            return SirReportTypeAll;
+        return SirReportTypes.Tests.Any(t => t.Value == v) ? v : SirReportTypeAll;
+    }
+
+    private static readonly string[] FilterColumns = ["客户", "产品型号", "产品名称", "业务员", "日期"];
+
+    private bool IsDateFilter => string.Equals(_filterColumn, "日期", StringComparison.Ordinal);
+
+    private static string NormalizeFilterColumn(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return FilterColumns.Contains(v) ? v : "客户";
+    }
+
+    private void OnFilterColumnChanged(string value)
+    {
+        _filterColumn = NormalizeFilterColumn(value);
+        if (IsDateFilter)
+            _keyword = null;
+        else
         {
-            // 忽略损坏的本地缓存
+            _dateStart = null;
+            _dateEnd = null;
         }
     }
 
-    private async Task PersistAsync(int page, int pageSize)
-    {
-        var snap = new SirListUiState
+    private void PersistAsync(int page, int pageSize)
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.Sir, new PagedListUiState
         {
             Page = page < 0 ? 0 : page,
             PageSize = pageSize > 0 ? pageSize : 20,
+            Extra = _reportType,
             FilterColumn = _filterColumn,
-            Keyword = _keyword,
-            DateStart = _dateStart,
-            DateEnd = _dateEnd,
-        };
-        try
-        {
-            await LocalStorage.SetAsync(StorageKeys.SirListUi, snap);
-        }
-        catch
-        {
-            // 忽略存储失败
-        }
-    }
+            Keyword = IsDateFilter ? null : _keyword,
+            DateStart = IsDateFilter ? _dateStart : null,
+            DateEnd = IsDateFilter ? _dateEnd : null,
+        });
 
     private int RowNo(ZyqdSirMainModel row) => _skip + _rows.IndexOf(row) + 1;
 
@@ -318,10 +361,17 @@
 
     private async Task ClearAsync()
     {
+        _reportType = SirReportTypeAll;
         _filterColumn = "客户";
         _keyword = null;
         _dateStart = null;
         _dateEnd = null;
+        await SearchAsync();
+    }
+
+    private async Task OnReportTypeChanged(string value)
+    {
+        _reportType = NormalizeReportType(value);
         await SearchAsync();
     }
 
@@ -341,7 +391,7 @@
     {
         var page = _table?.CurrentPage ?? _currentPage;
         var size = _table?.RowsPerPage > 0 ? _table.RowsPerPage : _rowsPerPage;
-        await PersistAsync(page, size);
+        PersistAsync(page, size);
         NavManager.NavigateTo(EditHref(row));
     }
 
@@ -366,10 +416,11 @@
         {
             var query = new SirQueryDto
             {
-                DateStart = _dateStart,
-                DateEnd = _dateEnd,
-                FilterColumn = _filterColumn,
-                Keyword = _keyword,
+                DateStart = IsDateFilter ? _dateStart : null,
+                DateEnd = IsDateFilter ? _dateEnd : null,
+                ReportType = _reportType == SirReportTypeAll ? null : _reportType,
+                FilterColumn = IsDateFilter ? null : _filterColumn,
+                Keyword = IsDateFilter ? null : _keyword,
                 SortLabel = state.SortLabel,
                 SortDesc = state.SortDirection != SortDirection.Ascending,
             };
@@ -379,7 +430,7 @@
             _skip = skip;
             _currentPage = state.Page;
             _rowsPerPage = state.PageSize;
-            await PersistAsync(state.Page, state.PageSize);
+            PersistAsync(state.Page, state.PageSize);
             return new TableData<ZyqdSirMainModel> { Items = rows, TotalItems = total };
         }
         finally

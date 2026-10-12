@@ -129,6 +129,8 @@ builder.Services.AddHttpClient(CentralApiOptions.HttpClientName, (sp, client) =>
     });
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<LocalStorageHelper>();
+builder.Services.AddScoped<LastListReturnService>();
+builder.Services.AddScoped<NavigationHistoryService>();
 builder.Services.Configure<SelectOptions>(builder.Configuration.GetSection(SelectOptions.SectionName));
 builder.Services.Configure<LegacyFilesOptions>(builder.Configuration.GetSection(LegacyFilesOptions.SectionName));
 builder.Services.Configure<AdminNotifyOptions>(builder.Configuration.GetSection(AdminNotifyOptions.SectionName));
@@ -166,6 +168,7 @@ builder.Services.AddScoped<CotractPiExcelService>();
 builder.Services.AddScoped<LibreOfficePdfService>();
 builder.Services.AddScoped<CotractPiService>();
 builder.Services.AddScoped<CustomsAndPackingService>();
+builder.Services.AddScoped<CustomsAndPackingExcelService>();
 builder.Services.AddScoped<SirExcelService>();
 builder.Services.AddScoped<SirService>();
 builder.Services.AddScoped<QuotationBaseService>();

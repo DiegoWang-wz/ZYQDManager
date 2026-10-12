@@ -29,20 +29,35 @@ public sealed class CustomsAndPackingLineDto
     public string? currency_unit { get; set; }
     public string? Packing_method { get; set; }
     public string? Packing_method_unit { get; set; }
+    /// <summary>尾箱装箱量（qty % 打包方式）</summary>
+    public string? var1 { get; set; }
     public double box_qty { get; set; }
+    /// <summary>整托数（不含尾托）</summary>
     public double Pallet_qty { get; set; }
+    /// <summary>不足托箱数（box_qty % 打托方式）</summary>
+    public string? var3 { get; set; }
+    /// <summary>尾托尺寸，如 1200*800*100</summary>
+    public string? var2 { get; set; }
+    /// <summary>尾托打托方式</summary>
+    public string? var4 { get; set; }
     public string? Carton_Size { get; set; }
     public string? Pallet_Size { get; set; }
     public string? palletizing_method { get; set; }
     public string? palletizing_method_unit { get; set; }
+    public double Pallet_weight { get; set; }
     public double Net_weight { get; set; }
     public double gross_weight { get; set; }
     public double total_Net_weight { get; set; }
     public double total_gross_weight { get; set; }
     public double volume { get; set; }
+    public string? Pallet_code { get; set; }
+    public string? emit { get; set; }
+    public string? packing_unit { get; set; }
+    public string? sample_type { get; set; }
     public string? SAP_order_NO { get; set; }
     public string? Client_poNo { get; set; }
     public string? PI_Material_Name { get; set; }
+    /// <summary>原始行 / 拆分行</summary>
     public string? var7 { get; set; }
     public string? Customer_outer_box_logo { get; set; }
     public string? Tuo_Mark { get; set; }
@@ -54,7 +69,6 @@ public sealed class CustomsAndPackingLineDto
     public string? nameplate_url { get; set; }
     public string? nameplate_url2 { get; set; }
     public string? Customer_destination_country { get; set; }
-    public string? var4 { get; set; }
 }
 
 public static class CustomsAndPackingFilterFields

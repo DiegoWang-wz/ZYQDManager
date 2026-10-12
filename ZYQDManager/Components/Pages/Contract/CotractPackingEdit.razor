@@ -2,17 +2,51 @@
 @page "/contract-pk/{DocumentGuid}"
 @rendermode InteractiveServer
 @inject CustomsAndPackingService Packing
+@inject CustomsAndPackingExcelService PackingExcel
+@inject LibreOfficePdfService LibreOffice
 @inject CentralAuthService Auth
+@inject IJSRuntime JS
 
 <PageTitle>@Title</PageTitle>
 
 <div class="cpk-edit-page">
     <MudPaper Class="pa-3 mb-2" Outlined="true">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
             <MudText Typo="Typo.h6">@Title</MudText>
-            <MudStack Row="true" Spacing="1">
-                <MudButton Variant="Variant.Outlined" Href="/contract-pk" Disabled="_busy">返回列表</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy">
+            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || _isCreate"
+                                   StartIcon="@Icons.Material.Filled.TableView"
+                                   EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                                   OnClick="context.ToggleAsync">
+                            导出Excel
+                        </MudButton>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem OnClick="@(() => ExportExcelAsync("报关"))">报关</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportExcelAsync("生产"))">生产</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportExcelAsync("客户"))">客户</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+                <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Filled" Color="Color.Info" Disabled="_busy || _isCreate"
+                                   StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                                   EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                                   OnClick="context.ToggleAsync">
+                            导出PDF
+                        </MudButton>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem OnClick="@(() => ExportPdfAsync("报关"))">报关</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportPdfAsync("生产"))">生产</MudMenuItem>
+                        <MudMenuItem OnClick="@(() => ExportPdfAsync("客户"))">客户</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="zyqd-btn-save"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="SaveAsync" Disabled="_busy">
                     @(_busy ? "保存中…" : "保存")
                 </MudButton>
             </MudStack>
@@ -45,35 +79,48 @@
                 <MudText Typo="Typo.caption">总数量：@_header.all_qty.ToString("0.##")</MudText>
                 <MudText Typo="Typo.caption">总箱数：@_header.all_box_qty.ToString("0.##")</MudText>
                 <MudText Typo="Typo.caption">总托数：@_header.all_Pallet_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总净重：@_header.all_Net_weight.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总毛重：@_header.all_gross_weight.ToString("0.##")</MudText>
-                <MudText Typo="Typo.caption">总体积：@_header.all_volume.ToString("0.####")</MudText>
+                <MudText Typo="Typo.caption">不足托箱：@(_header.var5 ?? "0")</MudText>
+                <MudText Typo="Typo.caption">总净重：@_header.all_total_Net_weight.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总毛重：@_header.all_total_gross_weight.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">总体积：@_header.all_volume.ToString("0.##")</MudText>
+                <MudText Typo="Typo.caption">散发合计：@(_header.all_emit ?? "0")</MudText>
             </MudStack>
         </MudPaper>
 
         <MudPaper Class="pa-2" Outlined="true">
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2 px-1">
-                <MudText Typo="Typo.subtitle2">明细（@_lines.Count）</MudText>
+                <MudText Typo="Typo.subtitle2">明细（@_lines.Count）——改数量/打包/打托/尺寸会自动重算箱托与重量体积</MudText>
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.Add" OnClick="AddLine" Disabled="_busy">增行</MudButton>
             </MudStack>
             <MudTable T="CustomsAndPackingLineDto" Items="_lines" Dense="true" Hover="true" Bordered="true"
                       Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table">
                 <HeaderContent>
-                    <MudTh>型号/物料</MudTh>
+                    <MudTh>物料号</MudTh>
                     <MudTh>物料名</MudTh>
                     <MudTh>数量</MudTh>
-                    <MudTh>箱数</MudTh>
-                    <MudTh>托数</MudTh>
                     <MudTh>打包方式</MudTh>
+                    <MudTh>打包单位</MudTh>
+                    <MudTh>箱数</MudTh>
+                    <MudTh>尾箱量</MudTh>
+                    <MudTh>打托方式</MudTh>
+                    <MudTh>打托单位</MudTh>
+                    <MudTh>整托数</MudTh>
+                    <MudTh>不足托箱</MudTh>
+                    <MudTh>尾托尺寸</MudTh>
+                    <MudTh>尾托打托</MudTh>
                     <MudTh>纸箱尺寸</MudTh>
                     <MudTh>托盘尺寸</MudTh>
                     <MudTh>净重</MudTh>
                     <MudTh>毛重</MudTh>
+                    <MudTh>总净重</MudTh>
+                    <MudTh>总毛重</MudTh>
+                    <MudTh>托重</MudTh>
                     <MudTh>体积</MudTh>
+                    <MudTh>散发</MudTh>
                     <MudTh>SAP订单</MudTh>
                     <MudTh>行类型</MudTh>
-                    <MudTh Style="width:56px">操作</MudTh>
+                    <MudTh Style="width:120px">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     @{
@@ -85,43 +132,96 @@
                     </MudTd>
                     <MudTd>
                         <MudTextField T="string" Value="@(line.materialName ?? "")" ValueChanged="v => line.materialName = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell-wide"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.qty" ValueChanged="v => OnLineChanged(line, () => line.qty = v)"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.Packing_method ?? "")"
+                                      ValueChanged="v => OnLineChanged(line, () => line.Packing_method = v)"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.Packing_method_unit ?? "")"
+                                      ValueChanged="v => line.Packing_method_unit = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.box_qty" ReadOnly="true"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.var1 ?? "0")" ReadOnly="true"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.palletizing_method ?? "")"
+                                      ValueChanged="v => OnLineChanged(line, () => line.palletizing_method = v)"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.palletizing_method_unit ?? "")"
+                                      ValueChanged="v => line.palletizing_method_unit = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.Pallet_qty" ReadOnly="true"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.var3 ?? "0")" ReadOnly="true"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.var2 ?? "")"
+                                      ValueChanged="v => OnLineChanged(line, () => line.var2 = v)"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy"
+                                      Placeholder="长*宽*高" Class="cpk-cell"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.var4 ?? "")" ValueChanged="v => line.var4 = v"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.Carton_Size ?? "")"
+                                      ValueChanged="v => OnLineChanged(line, () => line.Carton_Size = v)"
                                       Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.qty" ValueChanged="v => { line.qty = v; Recalc(); }"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
-                    </MudTd>
-                    <MudTd>
-                        <MudNumericField T="double" Value="line.box_qty" ValueChanged="v => { line.box_qty = v; Recalc(); }"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
-                    </MudTd>
-                    <MudTd>
-                        <MudNumericField T="double" Value="line.Pallet_qty" ValueChanged="v => { line.Pallet_qty = v; Recalc(); }"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
-                    </MudTd>
-                    <MudTd>
-                        <MudTextField T="string" Value="@(line.Packing_method ?? "")" ValueChanged="v => line.Packing_method = v"
+                        <MudTextField T="string" Value="@(line.Pallet_Size ?? "")"
+                                      ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
                                       Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
                     </MudTd>
                     <MudTd>
-                        <MudTextField T="string" Value="@(line.Carton_Size ?? "")" ValueChanged="v => line.Carton_Size = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
-                    </MudTd>
-                    <MudTd>
-                        <MudTextField T="string" Value="@(line.Pallet_Size ?? "")" ValueChanged="v => line.Pallet_Size = v"
-                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-cell"/>
-                    </MudTd>
-                    <MudTd>
-                        <MudNumericField T="double" Value="line.Net_weight" ValueChanged="v => { line.Net_weight = v; Recalc(); }"
+                        <MudNumericField T="double" Value="line.Net_weight" ValueChanged="v => OnLineChanged(line, () => line.Net_weight = v)"
                                          Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.gross_weight" ValueChanged="v => { line.gross_weight = v; Recalc(); }"
+                        <MudNumericField T="double" Value="line.gross_weight" ValueChanged="v => OnLineChanged(line, () => line.gross_weight = v)"
                                          Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
                     </MudTd>
                     <MudTd>
-                        <MudNumericField T="double" Value="line.volume" ValueChanged="v => { line.volume = v; Recalc(); }"
-                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Disabled="_busy" Class="cpk-num"/>
+                        <MudNumericField T="double" Value="line.total_Net_weight" ReadOnly="true"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.total_gross_weight" ReadOnly="true"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.Pallet_weight" ReadOnly="true"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudNumericField T="double" Value="line.volume" ReadOnly="true"
+                                         Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true" Class="cpk-num"/>
+                    </MudTd>
+                    <MudTd>
+                        <MudTextField T="string" Value="@(line.emit ?? "")"
+                                      ValueChanged="v => OnLineChanged(line, () => line.emit = v)"
+                                      Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="_busy" Class="cpk-num"/>
                     </MudTd>
                     <MudTd>
                         <MudTextField T="string" Value="@(line.SAP_order_NO ?? "")" ValueChanged="v => line.SAP_order_NO = v"
@@ -129,14 +229,38 @@
                     </MudTd>
                     <MudTd>@(line.var7 ?? "原始行")</MudTd>
                     <MudTd>
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                                       Disabled="_busy" OnClick="@(() => RemoveLine(line))"/>
+                        <MudStack Row="true" Spacing="0">
+                            @if (string.Equals(line.var7, "原始行", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line.var7))
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" Color="Color.Primary"
+                                               Title="拆分此行" Disabled="_busy || line.qty <= 1"
+                                               OnClick="@(() => OpenSplit(line))"/>
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           Disabled="_busy" OnClick="@(() => RemoveLine(line))"/>
+                        </MudStack>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
         </MudPaper>
     }
 </div>
+
+@if (_splitLine is not null)
+{
+    <div class="cpk-split-mask">
+        <MudPaper Class="pa-4 cpk-split-card" Elevation="8">
+            <MudText Typo="Typo.h6" Class="mb-2">拆分此行</MudText>
+            <MudText Class="mb-3">原数量：@_splitLine.qty.ToString("0.##")</MudText>
+            <MudNumericField T="double" @bind-Value="_splitQty" Label="拆出数量（须小于原数量）"
+                             Margin="Margin.Dense" Variant="Variant.Outlined" Min="1" HideSpinButtons="true"/>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1" Class="mt-3">
+                <MudButton OnClick="CloseSplit" Disabled="_busy">取消</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmSplit" Disabled="_busy">确认拆分</MudButton>
+            </MudStack>
+        </MudPaper>
+    </div>
+}
 
 <style>
     .cpk-edit-page { flex: 1 1 0; min-height: 0; overflow: auto; }
@@ -145,9 +269,20 @@
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
         gap: 8px 12px;
     }
-    .cpk-line-table .mud-table-container { overflow: auto; }
-    .cpk-cell { min-width: 110px; }
+    .cpk-line-table .mud-table-container { overflow: auto; max-height: min(62vh, 720px); }
+    .cpk-cell { min-width: 100px; }
+    .cpk-cell-wide { min-width: 140px; }
     .cpk-num { min-width: 72px; max-width: 96px; }
+    .cpk-split-mask {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1300;
+    }
+    .cpk-split-card { width: min(420px, 92vw); }
 </style>
 
 @code {
@@ -160,6 +295,8 @@
     private ZyqdCustomsAndPackingModel _header = new();
     private List<CustomsAndPackingLineDto> _lines = [];
     private int _tempSeq;
+    private CustomsAndPackingLineDto? _splitLine;
+    private double _splitQty;
 
     private string Title => _isCreate ? "新建装箱单" : "编辑装箱单";
 
@@ -196,8 +333,8 @@
         var rows = await Packing.LoadDraftFromCustomsPiAsync(piGuid);
         if (rows.Count == 0)
         {
-            Notify.Show("未找到报关PI或明细为空", Severity.Warning);
-            _header = new ZyqdCustomsAndPackingModel { var6 = "报关PI" };
+            Notify.Show("未找到 PI 或明细为空", Severity.Warning);
+            _header = new ZyqdCustomsAndPackingModel { var6 = "报关PI", packing_list_type = "总箱单" };
             _lines = [];
             return;
         }
@@ -219,9 +356,12 @@
     private void ApplyRows(List<ZyqdCustomsAndPackingModel> rows)
     {
         _header = rows[0];
+        if (string.IsNullOrWhiteSpace(_header.packing_list_type))
+            _header.packing_list_type = "总箱单";
         _tempSeq = 0;
         _lines = rows.Select(x => CustomsAndPackingService.ToLineDto(x, ++_tempSeq)).ToList();
-        Recalc();
+        CustomsAndPackingCalc.RecalcAllLines(_lines);
+        RefreshSummary();
     }
 
     private void AddLine()
@@ -232,23 +372,63 @@
             var7 = "原始行",
             Customer_destination_country = _header.Customer_destination_country
         });
-        Recalc();
+        RefreshSummary();
     }
 
     private void RemoveLine(CustomsAndPackingLineDto line)
     {
         _lines.Remove(line);
-        Recalc();
+        RefreshSummary();
     }
 
-    private void Recalc()
+    private void OnLineChanged(CustomsAndPackingLineDto line, Action apply)
     {
-        _header.all_qty = _lines.Sum(x => x.qty);
-        _header.all_box_qty = _lines.Sum(x => x.box_qty);
-        _header.all_Pallet_qty = _lines.Sum(x => x.Pallet_qty);
-        _header.all_Net_weight = _lines.Sum(x => x.total_Net_weight != 0 ? x.total_Net_weight : x.Net_weight * x.qty);
-        _header.all_gross_weight = _lines.Sum(x => x.total_gross_weight != 0 ? x.total_gross_weight : x.gross_weight * x.qty);
-        _header.all_volume = _lines.Sum(x => x.volume);
+        apply();
+        CustomsAndPackingCalc.RecalcLine(line);
+        RefreshSummary();
+    }
+
+    private void RefreshSummary()
+        => CustomsAndPackingCalc.ApplySummary(_header, _lines);
+
+    private void OpenSplit(CustomsAndPackingLineDto line)
+    {
+        _splitLine = line;
+        _splitQty = Math.Floor(line.qty / 2);
+        if (_splitQty < 1) _splitQty = 1;
+    }
+
+    private void CloseSplit()
+    {
+        _splitLine = null;
+        _splitQty = 0;
+    }
+
+    private void ConfirmSplit()
+    {
+        if (_splitLine is null) return;
+        var original = _splitLine.qty;
+        if (_splitQty <= 0)
+        {
+            Notify.Show("拆分数量必须大于0", Severity.Warning);
+            return;
+        }
+        if (_splitQty >= original)
+        {
+            Notify.Show("拆分数量必须小于原数量", Severity.Warning);
+            return;
+        }
+
+        var idx = _lines.IndexOf(_splitLine);
+        _splitLine.qty = original - _splitQty;
+        CustomsAndPackingCalc.RecalcLine(_splitLine);
+        var neu = CustomsAndPackingCalc.CloneForSplit(_splitLine, ++_tempSeq, _splitQty);
+        if (idx >= 0 && idx < _lines.Count - 1)
+            _lines.Insert(idx + 1, neu);
+        else
+            _lines.Add(neu);
+        RefreshSummary();
+        CloseSplit();
     }
 
     private async Task SaveAsync()
@@ -258,6 +438,8 @@
             Notify.Show("请至少保留一行明细", Severity.Warning);
             return;
         }
+        CustomsAndPackingCalc.RecalcAllLines(_lines);
+        RefreshSummary();
         _busy = true;
         try
         {
@@ -277,6 +459,61 @@
         catch (Exception ex)
         {
             Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ExportExcelAsync(string type)
+    {
+        if (_isCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return;
+        }
+        _busy = true;
+        Notify.Show($"正在生成 Excel（{type}）…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var xlsx = await PackingExcel.BuildAsync(_header.DocumentGuid, type);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                CustomsAndPackingExcelService.DownloadExcelName(_header, type),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(xlsx));
+            Notify.Show("Excel 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 Excel 失败：" + ex.Message, Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ExportPdfAsync(string type)
+    {
+        if (_isCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return;
+        }
+        _busy = true;
+        Notify.Show($"正在生成 PDF（{type}）…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var xlsx = await PackingExcel.BuildAsync(_header.DocumentGuid, type);
+            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                CustomsAndPackingExcelService.DownloadPdfName(_header, type),
+                "application/pdf",
+                Convert.ToBase64String(pdf));
+            Notify.Show("PDF 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 PDF 失败：" + ex.Message, Severity.Error);
         }
         finally { _busy = false; }
     }

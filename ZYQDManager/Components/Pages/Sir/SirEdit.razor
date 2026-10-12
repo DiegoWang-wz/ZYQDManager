@@ -11,13 +11,12 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<PageTitle>遮阳产品测试报告</PageTitle>
+<PageTitle>检测报告详情</PageTitle>
 
 <div class="sir-edit-page">
     <MudPaper Class="sir-card pa-0" Elevation="0" Square="true">
         <div class="sir-toolbar">
             <div class="sir-toolbar-left">
-                <MudText Typo="Typo.h6" Class="sir-page-title">遮阳产品测试报告</MudText>
                 <span class="sir-label">测试类型：</span>
                 <MudSelect T="string"
                            Value="_reportType"
@@ -48,8 +47,7 @@
                 </MudSelect>
             </div>
             <div class="sir-toolbar-right">
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/sir">返回列表</MudButton>
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.TableView"
                            OnClick="ExportExcelAsync" Disabled="_busy || !_loaded">导出Excel</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
@@ -59,7 +57,7 @@
                            StartIcon="@Icons.Material.Filled.PictureAsPdf"
                            OnClick="() => ExportPdfAsync(preview: false)" Disabled="_busy || !_loaded">导出PDF</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                           Class="sir-save-btn"
+                           Class="zyqd-btn-save"
                            StartIcon="@Icons.Material.Filled.Save"
                            OnClick="SaveAsync" Disabled="_busy || !_loaded">保存</MudButton>
             </div>
@@ -293,42 +291,35 @@
                 @if (ShowRemoteImages)
                 {
                     <div class="sir-image-block">
-                        <div class="sir-image-title">遥控器主控板正反面附图（最多5张）</div>
-                        <div class="sir-image-area">
-                            <label class="sir-upload-label">
-                                <InputFile OnChange="OnRemoteImagesSelected"
-                                           accept=".jpg,.jpeg,.png,.gif,.bmp,image/*"
-                                           multiple
-                                           disabled="@(_busy || _imgUploading)"/>
-                                <MudButton Variant="Variant.Filled"
-                                           Color="Color.Primary"
-                                           Size="Size.Small"
-                                           StartIcon="@Icons.Material.Filled.CloudUpload"
-                                           Disabled="@(_busy || _imgUploading || _images.Count >= 5)"
-                                           HtmlTag="span">
-                                    @(_imgUploading ? "上传中…" : (_images.Count >= 5 ? "已达上限(5张)" : "选择图片"))
-                                </MudButton>
-                            </label>
-                            <span class="sir-upload-hint">支持JPG、PNG格式，单张不超过5MB</span>
+                        <div class="sir-image-title">遥控器主控板正反面附图（最多5张，JPG/PNG，单张≤5MB）</div>
+                        <div class="sir-image-preview">
+                            @for (var i = 0; i < _images.Count; i++)
+                            {
+                                var idx = i;
+                                <div class="sir-preview-item">
+                                    <LegacyRemoteImg Path="@_images[idx]" CssClass="sir-preview-fill"/>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   Class="sir-preview-remove"
+                                                   Disabled="_busy"
+                                                   OnClick="@(() => RemoveRemoteImage(idx))"/>
+                                </div>
+                            }
+                            @if (_images.Count < 5)
+                            {
+                                <label class="sir-upload-label sir-add-slot sir-add-slot-lg @(_busy || _imgUploading ? "sir-add-slot-disabled" : null)">
+                                    <InputFile OnChange="OnRemoteImagesSelected"
+                                               accept=".jpg,.jpeg,.png,.gif,.bmp,image/*"
+                                               multiple
+                                               disabled="@(_busy || _imgUploading)"/>
+                                    <span class="sir-add-slot-inner">
+                                        <MudIcon Icon="@Icons.Material.Filled.Add" Class="sir-add-slot-icon"/>
+                                        <span>@(_imgUploading ? "上传中…" : "添加")</span>
+                                    </span>
+                                </label>
+                            }
                         </div>
-                        @if (_images.Count > 0)
-                        {
-                            <div class="sir-image-preview">
-                                @for (var i = 0; i < _images.Count; i++)
-                                {
-                                    var idx = i;
-                                    <div class="sir-preview-item">
-                                        <LegacyRemoteImg Path="@_images[idx]" CssClass="sir-preview-fill"/>
-                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                       Size="Size.Small"
-                                                       Color="Color.Error"
-                                                       Class="sir-preview-remove"
-                                                       Disabled="_busy"
-                                                       OnClick="@(() => RemoveRemoteImage(idx))"/>
-                                    </div>
-                                }
-                            </div>
-                        }
                     </div>
                 }
                 else if (ShowSampleFiling)
@@ -462,20 +453,11 @@
         gap: 6px 8px;
         align-items: center;
     }
-    .sir-page-title {
-        margin: 0 4px 0 0 !important;
-        color: #1f2937;
-        font-weight: 700 !important;
-        white-space: nowrap;
-        font-size: 1rem !important;
-        line-height: 1.2 !important;
-    }
     .sir-label { color: #374151; font-weight: 500; white-space: nowrap; font-size: 13px; }
     .sir-type-select { width: 150px; min-width: 130px; }
     .sir-product-select { width: 300px; min-width: 200px; }
     .sir-toolbar .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
     .sir-toolbar .mud-button-root { height: 32px; min-height: 32px; }
-    .sir-save-btn { background: #1d4ed8 !important; }
     .sir-form-wrap {
         flex: 1 1 0;
         min-height: 0;
@@ -746,21 +728,18 @@
     }
     .sir-image-block {
         margin-top: 16px;
-        padding: 12px;
-        border: 1px dashed #ccc;
+        border: 1px solid #e5e7eb;
         border-radius: 6px;
-        background: #fafafa;
+        overflow: hidden;
+        background: #fff;
     }
     .sir-image-title {
         font-weight: 600;
-        margin-bottom: 10px;
+        margin: 0;
+        padding: 8px 12px;
         color: #111;
-    }
-    .sir-image-area {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 12px;
+        background: #f3f4f6;
+        border-bottom: 1px solid #e5e7eb;
     }
     .sir-upload-label {
         display: inline-flex;
@@ -770,15 +749,12 @@
     .sir-upload-label input[type=file] {
         display: none;
     }
-    .sir-upload-hint {
-        color: #6b7280;
-        font-size: 12px;
-    }
     .sir-image-preview {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
-        margin-top: 12px;
+        padding: 12px;
+        margin-top: 0;
     }
     .sir-preview-item {
         position: relative;
@@ -897,6 +873,16 @@
         width: 22px !important;
         height: 22px !important;
         font-size: 22px !important;
+    }
+    .sir-add-slot-lg {
+        width: 96px;
+        height: 96px;
+    }
+    .sir-add-slot-lg .sir-add-slot-inner { font-size: 12px; }
+    .sir-add-slot-lg .sir-add-slot-icon {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 28px !important;
     }
     .sir-note-block { margin-top: 12px; }
 

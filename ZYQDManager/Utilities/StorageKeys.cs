@@ -7,5 +7,4 @@ public static class StorageKeys
 {
     public const string OperatorId = "operatorId";
     public const string CentralAuth = "jcCentralAuth";
-    public const string SirListUi = "sir.list.ui";
 }

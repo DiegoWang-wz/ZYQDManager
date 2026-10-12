@@ -23,11 +23,18 @@
                 <option value="@t">@t</option>
             }
         </select>
-        <button type="button" class="cpi-btn" disabled="@_busy" @onclick="SaveAsync">保存</button>
-        <button type="button" class="cpi-btn" disabled="@(_busy || IsCreate)" @onclick="ExportExcelAsync">导出Excel</button>
-        <button type="button" class="cpi-btn cpi-btn-lo" disabled="@(_busy || IsCreate)" @onclick="ExportPdfAsync">导出PDF</button>
-        <button type="button" class="cpi-btn cpi-btn-freeze" @onclick="ToggleFreeze">@(_freeze ? "取消冻结" : "冻结表头")</button>
-        <a class="cpi-link" href="@ListHref">返回列表</a>
+        <button type="button" class="cpi-btn cpi-btn-excel" disabled="@(_busy || IsCreate)" @onclick="ExportExcelAsync">
+            <MudIcon Icon="@Icons.Material.Filled.TableView" Class="cpi-btn-icon"/>导出Excel
+        </button>
+        <button type="button" class="cpi-btn cpi-btn-pdf" disabled="@(_busy || IsCreate)" @onclick="ExportPdfAsync">
+            <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf" Class="cpi-btn-icon"/>导出PDF
+        </button>
+        <button type="button" class="cpi-btn cpi-btn-save" disabled="@_busy" @onclick="SaveAsync">
+            <MudIcon Icon="@Icons.Material.Filled.Save" Class="cpi-btn-icon"/>保存
+        </button>
+        <button type="button" class="cpi-btn cpi-btn-freeze" @onclick="ToggleFreeze">
+            <MudIcon Icon="@(_freeze ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)" Class="cpi-btn-icon"/>@(_freeze ? "取消冻结" : "冻结表头")
+        </button>
         <span class="cpi-topbar-spacer"></span>
         <input class="cpi-cell cpi-edit cpi-picker-client cpi-lookup" placeholder="选择客户编号" @bind="_productClientNo" @bind:event="oninput" @onkeydown="OnProductKey" @onblur="LoadProductsAsync"/>
         <label>选择产品信息</label>
@@ -334,6 +341,9 @@
         padding: 0 6px;
     }
     .cpi-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
         background: #409eff;
         color: #fff;
         border: none;
@@ -343,9 +353,17 @@
         font-size: 13px;
         white-space: nowrap;
     }
+    .cpi-btn-icon {
+        width: 16px !important;
+        height: 16px !important;
+        font-size: 16px !important;
+    }
     .cpi-btn:disabled { opacity: .55; cursor: not-allowed; }
+    /* 与全站工具栏一致：Excel 紫 / PDF 浅蓝 / 保存 深蓝 */
+    .cpi-btn-excel { background: #594AE2; }
+    .cpi-btn-pdf { background: #0288D1; }
+    .cpi-btn-save { background: #1d4ed8; }
     .cpi-btn-freeze { background: #F56C6C; }
-    .cpi-btn-lo { background: #67c23a; }
     .cpi-btn-add { padding: 5px 12px; }
     .cpi-btn-del { background: #409eff; padding: 2px 8px; font-size: 12px; }
     .cpi-link { color: #409eff; white-space: nowrap; }

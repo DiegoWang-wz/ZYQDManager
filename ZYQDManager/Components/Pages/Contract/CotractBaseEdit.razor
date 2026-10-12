@@ -57,7 +57,6 @@
                             </div>
                         }
                         <div class="cb-detail-actions">
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/contract-base">返回列表</MudButton>
                             @if (IsReadOnly)
                             {
                                 <MudButton Size="Size.Small"
@@ -78,6 +77,8 @@
                                 <MudButton Size="Size.Small"
                                            Variant="Variant.Filled"
                                            Color="Color.Primary"
+                                           Class="zyqd-btn-save"
+                                           StartIcon="@Icons.Material.Filled.Save"
                                            Disabled="_busy"
                                            OnClick="SaveAsync">
                                     @(IsCopy ? "创建" : "保存")

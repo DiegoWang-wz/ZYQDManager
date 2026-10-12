@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject NavigationManager Nav
 @inject CentralAuthService Auth
+@inject NavigationHistoryService NavHistory
 
 @if (!_authReady)
 {
@@ -83,13 +84,12 @@ else
             </div>
 
             <MudSpacer/>
-            @if (!string.IsNullOrEmpty(_empNo))
-            {
-                <MudChip T="string"
-                         Size="Size.Small"
-                         Class="mr-2 zyqd-emp-chip"
-                         OnClick="@(() => GoTo("/Profile"))">@_empNo</MudChip>
-            }
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Filled"
+                       Class="mr-2 zyqd-back-btn"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       Disabled="!NavHistory.CanGoBack"
+                       OnClick="GoBack">返回</MudButton>
             <MudMenu Dense="true"
                      Class="zyqd-nav-menu"
                      AnchorOrigin="Origin.BottomRight"
@@ -265,27 +265,46 @@ else
         flex: 0 0 auto;
     }
 
-    .zyqd-emp-chip.mud-chip {
+    .zyqd-back-btn.mud-button-root {
         background-color: #fff !important;
         color: #000 !important;
         border: 1px solid #ddd;
-        cursor: pointer;
+        text-transform: none;
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 12px !important;
+        border-radius: 14px !important;
+        box-shadow: none !important;
     }
 
-    .zyqd-emp-chip.mud-chip:hover {
+    .zyqd-back-btn.mud-button-root:hover:not(:disabled) {
         background-color: #f0f0f0 !important;
+    }
+
+    .zyqd-back-btn.mud-button-root:disabled {
+        opacity: 0.45;
+    }
+
+    .zyqd-back-btn .mud-button-label {
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .zyqd-back-btn .mud-icon-root {
+        font-size: 16px;
     }
 </style>
 
 @code {
     private bool _checked;
     private bool _authReady;
-    private string? _empNo;
     private bool _canManageUsers;
     private bool _canViewInvoiceKp;
 
     protected override void OnInitialized()
     {
+        NavHistory.EnsureStarted();
+        NavHistory.Changed += OnNavHistoryChanged;
         Nav.LocationChanged += OnLocationChanged;
         if (IsPublicPath)
             _authReady = true;
@@ -294,7 +313,15 @@ else
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
         => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    private void OnNavHistoryChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        NavHistory.Changed -= OnNavHistoryChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+
+    private void GoBack() => NavHistory.GoBack();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -319,7 +346,6 @@ else
         }
 
         var auth = await Auth.GetStoredAsync();
-        _empNo = auth?.EmpNo;
         _canManageUsers = Auth.CanManageUsers(auth);
         try
         {

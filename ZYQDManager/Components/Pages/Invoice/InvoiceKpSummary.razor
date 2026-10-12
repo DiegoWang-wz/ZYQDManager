@@ -199,8 +199,8 @@
     private bool _isAdmin;
     private bool _busy;
     private string _empNo = "";
-    private DateTime? _dateStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime? _dateEnd = DateTime.Today;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
     private string _keyword = "";
     private List<InvoiceKpSummaryRow> _rows = [];
     private double _totalQty;
@@ -225,12 +225,7 @@
         _allowed = Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
         _readOnly = Auth.IsPageDisabled(auth, CentralApiOptions.InvoiceKpRoute);
 
-        _dateStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        _dateEnd = DateTime.Today;
-
         StateHasChanged();
-        if (_allowed)
-            await SearchAsync();
     }
 
     private async Task OnKeyUp(KeyboardEventArgs e)

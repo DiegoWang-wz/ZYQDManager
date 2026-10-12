@@ -48,11 +48,7 @@ out/
 *.publishproj
 *.pubxml.user
 **/Properties/PublishProfiles/*.pubxml.user
-**/App_Data/
-
 ## Local temp / exports
-**/wwwroot/pdf_temp/**
-!**/wwwroot/pdf_temp/**/.gitkeep
 **/_tpl_unz/
 *.tmp
 *.temp

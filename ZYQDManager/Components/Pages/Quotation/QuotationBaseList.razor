@@ -5,6 +5,7 @@
 @inject QuotationBaseService QuotationBase
 @inject CentralAuthService Auth
 @inject NavigationManager Nav
+@inject LastListReturnService LastListReturn
 
 <PageTitle>报价基础数据</PageTitle>
 
@@ -55,8 +56,8 @@
             </MudStack>
             <div class="qb-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qb-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@NewHref">新建</MudButton>
             </MudStack>
         </MudStack>
@@ -68,7 +69,8 @@
             <MudTable @ref="_table"
                       T="QuotationBaseListItemDto"
                       ServerData="LoadServerData"
-                      RowsPerPage="20"
+                      @bind-CurrentPage="_currentPage"
+                      RowsPerPage="@_rowsPerPage"
                       Dense="true"
                       Hover="true"
                       Striped="true"
@@ -306,6 +308,15 @@
         max-width: 42px !important;
         padding: 0 !important;
         text-align: center !important;
+        white-space: nowrap !important;
+    }
+    .qb-table .mud-table-cell:first-child .mud-input-control,
+    .qb-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     .qb-table .mud-table-cell.qb-no-cell {
         left: 42px;
@@ -390,6 +401,8 @@
     private List<QuotationBaseListItemDto> _rows = new();
     private HashSet<QuotationBaseListItemDto> _selected = new();
     private int _skip;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
 
     protected override void OnInitialized()
     {
@@ -401,15 +414,40 @@
         var next = QuotationBaseTypes.Normalize(TypeFromQuery);
         if (next == _itemType) return;
         ApplyType(next, resetKeyword: true);
+        _currentPage = 0;
         _ = ReloadAfterTypeChangeAsync();
     }
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _ready) return;
+        RestoreFromReturn();
         _ready = true;
         StateHasChanged();
     }
+
+    private void RestoreFromReturn()
+    {
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.QuotationBase);
+        if (snap is null) return;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        if (!string.Equals(snap.Extra, _itemType, StringComparison.Ordinal))
+            return;
+        if (!string.IsNullOrWhiteSpace(snap.FilterColumn))
+            _filterColumn = snap.FilterColumn!;
+        _keyword = snap.Keyword;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private void PersistAsync(int page, int pageSize)
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.QuotationBase, new PagedListUiState
+        {
+            Page = page < 0 ? 0 : page,
+            PageSize = pageSize > 0 ? pageSize : 20,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            Extra = _itemType,
+        });
 
     private void ApplyType(string? type, bool resetKeyword)
     {
@@ -543,6 +581,9 @@
             var (rows, total) = await QuotationBase.QueryPageAsync(query, skip, state.PageSize, ct);
             _rows = rows;
             _skip = skip;
+            _currentPage = state.Page;
+            _rowsPerPage = state.PageSize;
+            PersistAsync(state.Page, state.PageSize);
             return new TableData<QuotationBaseListItemDto> { Items = rows, TotalItems = total };
         }
         finally

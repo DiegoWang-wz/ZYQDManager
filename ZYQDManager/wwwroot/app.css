@@ -74,3 +74,31 @@ h1:focus {
     border-radius: 4px;
     padding: 12px;
 }
+
+/* 工具栏按钮色：导出Excel=Primary紫 / 预览PDF=Success绿 / 导出PDF=Info蓝 / 保存=深蓝 */
+.mud-button-filled.zyqd-btn-save,
+button.mud-button-root.zyqd-btn-save.mud-button-filled {
+    background-color: #1d4ed8 !important;
+}
+.mud-button-filled.zyqd-btn-save:hover:not(:disabled),
+button.mud-button-root.zyqd-btn-save.mud-button-filled:hover:not(:disabled) {
+    background-color: #1e40af !important;
+}
+
+/* MudTable 多选勾选列：水平+垂直居中（对齐合同基础数据列表） */
+.mud-table .mud-table-cell:first-child {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+.mud-table .mud-table-cell:first-child .mud-input-control,
+.mud-table .mud-table-cell:first-child .mud-checkbox {
+    margin: 0 auto !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+.mud-table .mud-table-cell:first-child .mud-button-root,
+.mud-table .mud-table-cell:first-child .mud-icon-button {
+    margin: 0 !important;
+}

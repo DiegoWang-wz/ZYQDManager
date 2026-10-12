@@ -1,0 +1,628 @@
+using System.Globalization;
+using System.IO.Compression;
+using System.Xml.Linq;
+using ClosedXML.Excel;
+using ClosedXML.Excel.Drawings;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using ZYQDManager.DataDtos;
+using ZYQDManager.DataModels;
+using ZYQDManager.Utilities;
+
+namespace ZYQDManager.Services;
+
+/// <summary>
+/// 装箱单 Excel 填充（对齐老系统 SetCustomsAndPackingExcel），再交给 LibreOffice 转 PDF。
+/// type：报关 / 客户 / 生产
+/// </summary>
+public class CustomsAndPackingExcelService
+{
+    private const string LegacyHttpClient = "LegacyFiles";
+
+    private readonly IWebHostEnvironment _env;
+    private readonly IHttpClientFactory _httpFactory;
+    private readonly SqlServerDbContext _db;
+    private readonly string _imageBase;
+
+    public CustomsAndPackingExcelService(
+        IWebHostEnvironment env,
+        IHttpClientFactory httpFactory,
+        SqlServerDbContext db,
+        IOptions<LegacyFilesOptions> legacyFiles)
+    {
+        _env = env;
+        _httpFactory = httpFactory;
+        _db = db;
+        _imageBase = legacyFiles.Value.ResolvedBaseUrl();
+    }
+
+    public async Task<byte[]> BuildAsync(string? documentGuid, string type, CancellationToken ct = default)
+    {
+        type = NormalizeType(type);
+        var lists = await _db.CustomsAndPackings.AsNoTracking()
+            .Where(x => x.DocumentGuid == documentGuid && x.deleteSigh != "X")
+            .OrderBy(x => x.Id)
+            .ToListAsync(ct);
+        if (lists.Count == 0)
+            throw new InvalidOperationException("装箱单无数据，请先保存");
+
+        foreach (var row in lists)
+            CustomsAndPackingCalc.RecalcLine(row);
+        CustomsAndPackingService.SyncHeaderTotals(lists);
+
+        var main = lists[0];
+        var images = await DownloadImagesAsync(lists, ct);
+        var path = ResolveTemplatePath(type);
+
+        using var wb = new XLWorkbook(path);
+        var ws = wb.Worksheet(1);
+
+        switch (type)
+        {
+            case "客户":
+                await FillCustomerAsync(ws, main, lists, images, ct);
+                break;
+            case "生产":
+                await FillProductAsync(ws, main, lists, images, ct);
+                break;
+            default:
+                await FillCustomsAsync(ws, main, lists, images, ct);
+                break;
+        }
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        // ClosedXML 会丢掉 dxfs，若仍保留 tableStyles，Excel 会提示“内容有问题”
+        return StripOrphanTableStyles(ms.ToArray());
+    }
+
+    /// <summary>
+    /// ClosedXML 已知会清除 differential formats (dxfs)，但可能留下引用它们的 tableStyles，
+    /// 导致 MS Excel 打开时要求修复。去掉悬空的 tableStyles/dxfs 即可。
+    /// </summary>
+    private static byte[] StripOrphanTableStyles(byte[] xlsx)
+    {
+        try
+        {
+            using var probe = new MemoryStream(xlsx);
+            using (var zip = new ZipArchive(probe, ZipArchiveMode.Read))
+            {
+                var entry = zip.GetEntry("xl/styles.xml");
+                if (entry is null) return xlsx;
+                using var s = entry.Open();
+                var doc = XDocument.Load(s);
+                XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                var root = doc.Root;
+                if (root is null) return xlsx;
+                var dxfCount = root.Element(ns + "dxfs")?.Elements().Count() ?? 0;
+                if (root.Element(ns + "tableStyles") is null || dxfCount > 0)
+                    return xlsx;
+            }
+
+            using var output = new MemoryStream();
+            output.Write(xlsx);
+            output.Position = 0;
+            using (var zip = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+            {
+                var entry = zip.GetEntry("xl/styles.xml")!;
+                XDocument doc;
+                using (var s = entry.Open())
+                    doc = XDocument.Load(s);
+                XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                doc.Root!.Element(ns + "tableStyles")?.Remove();
+                doc.Root.Element(ns + "dxfs")?.Remove();
+                entry.Delete();
+                var neu = zip.CreateEntry("xl/styles.xml");
+                using var w = neu.Open();
+                doc.Save(w);
+            }
+            return output.ToArray();
+        }
+        catch
+        {
+            return xlsx;
+        }
+    }
+
+    public static string NormalizeType(string? type)
+    {
+        var t = (type ?? "").Trim();
+        return t is "客户" or "生产" or "报关" ? t : "报关";
+    }
+
+    public static string DownloadExcelName(ZyqdCustomsAndPackingModel main, string type)
+    {
+        type = NormalizeType(type);
+        var client = Sanitize(main.ClientName);
+        var pi = Sanitize(main.PIcotract_code);
+        var baseName = client.Length > 0 ? client : "装箱单";
+        if (pi.Length > 0) baseName += "-" + pi;
+        return $"{baseName}-{type}.xlsx";
+    }
+
+    public static string DownloadPdfName(ZyqdCustomsAndPackingModel main, string type)
+    {
+        var name = DownloadExcelName(main, type);
+        return name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+            ? name[..^5] + ".pdf"
+            : name + ".pdf";
+    }
+
+    private string ResolveTemplatePath(string type)
+    {
+        var webRoot = string.IsNullOrWhiteSpace(_env.WebRootPath)
+            ? Path.Combine(_env.ContentRootPath, "wwwroot")
+            : _env.WebRootPath;
+        var dir = Path.Combine(webRoot, "Templates");
+        var preferred = type switch
+        {
+            "客户" => "装箱单模板-客户.xlsx",
+            "生产" => "装箱单模板-生产.xlsx",
+            _ => "装箱单模板-报关.xlsx",
+        };
+        var path = Path.Combine(dir, preferred);
+        if (File.Exists(path))
+            return path;
+
+        if (Directory.Exists(dir))
+        {
+            var hit = Directory.GetFiles(dir, "*.xlsx")
+                .FirstOrDefault(f => Path.GetFileName(f).Contains("装箱", StringComparison.OrdinalIgnoreCase)
+                                     && Path.GetFileName(f).Contains(type, StringComparison.OrdinalIgnoreCase));
+            if (hit is not null)
+                return hit;
+        }
+
+        throw new FileNotFoundException("未找到装箱单模板，请确认文件在 wwwroot/Templates/" + preferred);
+    }
+
+    private async Task FillCustomsAsync(
+        IXLWorksheet ws,
+        ZyqdCustomsAndPackingModel main,
+        List<ZyqdCustomsAndPackingModel> lists,
+        Dictionary<string, byte[]> images,
+        CancellationToken ct)
+    {
+        const int dataNpoi = 3; // Excel row 4
+        EnsureRows(ws, dataNpoi + 1, lists.Count);
+
+        Set(ws, 1, 9, (main.delivery_time ?? "").Replace("-", "/", StringComparison.Ordinal));
+        Set(ws, 1, 11, main.Trade_Term);
+        Set(ws, 1, 13, main.encasement_method);
+        Set(ws, 1, 17, main.Box_type_quantity);
+        Set(ws, 1, 23, main.packing_list_type);
+        Set(ws, 1, 29, main.Shipping_method);
+
+        var title = BuildTitle(main, lists);
+
+        for (var i = 0; i < lists.Count; i++)
+        {
+            var item = lists[i];
+            var r = dataNpoi + i;
+            Set(ws, r, 1, " ");
+
+            if (!TryPicture(ws, images, item.Tuo_Mark_url, r, 0))
+                Set(ws, r, 0, item.Tuo_Mark);
+
+            if (!TryPicture(ws, images, item.Box_label_url, r, 2))
+                Set(ws, r, 2, await ResolveBoxLabelAsync(item, prefer2: false, ct));
+            if (!TryPicture(ws, images, item.Box_label_url2, r, 3))
+                Set(ws, r, 3, await ResolveBoxLabelAsync(item, prefer2: true, ct));
+
+            SetText(ws, r, 4, item.Client_poNo);
+            Set(ws, r, 5, item.materialModel);
+            TryPicture(ws, images, item.nameplate_url, r, 6);
+            TryPicture(ws, images, item.nameplate_url2, r, 7);
+            Set(ws, r, 8, item.SAP_order_NO);
+            Set(ws, r, 9, item.materialNo);
+            Set(ws, r, 10, item.materialName);
+            Set(ws, r, 11, Num(item.qty));
+            Set(ws, r, 12, FormatPacking(item));
+            Set(ws, r, 13, Num(item.box_qty));
+            Set(ws, r, 15, item.Carton_Size);
+            Set(ws, r, 17, Num(item.Pallet_qty));
+            Set(ws, r, 18, item.var3);
+
+            if (!string.IsNullOrWhiteSpace(item.var2))
+            {
+                Set(ws, r, 14, Num(item.Pallet_qty + 1));
+                var size = item.Pallet_qty == 0 ? item.var2 : item.Pallet_Size + "\n" + item.var2;
+                Set(ws, r, 16, size);
+                var full = item.Pallet_qty == 0
+                    ? ""
+                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
+                Set(ws, r, 19, full + item.var4 + item.palletizing_method_unit + " 1托");
+            }
+            else
+            {
+                Set(ws, r, 14, Num(item.Pallet_qty));
+                Set(ws, r, 16, item.Pallet_Size);
+                var dd = item.Pallet_qty == 0
+                    ? ""
+                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
+                if (!string.IsNullOrWhiteSpace(item.var4))
+                    dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
+                Set(ws, r, 19, dd);
+            }
+
+            Set(ws, r, 20, Num(item.Pallet_weight));
+            Set(ws, r, 21, Num(item.Net_weight));
+            Set(ws, r, 22, Num(item.gross_weight));
+            Set(ws, r, 23, Num(item.total_Net_weight));
+            Set(ws, r, 24, Num(item.total_gross_weight));
+            Set(ws, r, 25, Num(item.volume));
+            Set(ws, r, 26, item.Pallet_code);
+            Set(ws, r, 27, item.emit);
+            Set(ws, r, 29, item.packing_unit);
+            Set(ws, r, 30, item.Shipping_heads_up);
+            Set(ws, r, 31, item.PIcotract_code);
+            Set(ws, r, 32, item.PI_Material_Name);
+            Set(ws, r, 33, item.sample_type);
+        }
+
+        var totalRow = dataNpoi + lists.Count;
+        Set(ws, totalRow, 11, Num(main.all_qty));
+        Set(ws, totalRow, 13, Num(main.all_box_qty));
+        Set(ws, totalRow, 14, Num(main.all_Pallet_qty));
+        Set(ws, totalRow, 23, Num(main.all_total_Net_weight));
+        Set(ws, totalRow, 24, Num(main.all_total_gross_weight));
+        Set(ws, totalRow, 25, Num(main.all_volume));
+        Set(ws, totalRow, 27, main.all_emit);
+
+        var desc =
+            $"总计:{Num(main.all_box_qty)}箱/{Num(main.all_Pallet_qty)}托/{main.all_emit}箱散发/{Num(main.all_total_gross_weight)}KG/{Num(main.all_volume)}m³{main.Shipping_method}出运";
+        Set(ws, totalRow + 1, 9, desc);
+        Set(ws, 0, 0, title);
+
+        MergeSame(ws, lists.Select(x => x.ClientNo).ToList(), [1], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.Client_poNo).ToList(), [4], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.packing_unit).ToList(), [29], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.Shipping_heads_up).ToList(), [30], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.PIcotract_code).ToList(), [31], dataNpoi + 1);
+
+        if (HasUrl(lists[0].Customer_outer_box_logo))
+            TryPicture(ws, images, lists[0].Customer_outer_box_logo, dataNpoi + lists.Count / 2, 1);
+    }
+
+    private async Task FillCustomerAsync(
+        IXLWorksheet ws,
+        ZyqdCustomsAndPackingModel main,
+        List<ZyqdCustomsAndPackingModel> lists,
+        Dictionary<string, byte[]> images,
+        CancellationToken ct)
+    {
+        const int dataNpoi = 4;
+        lists = lists.OrderByDescending(x => x.Client_poNo).ToList();
+        EnsureRows(ws, dataNpoi + 1, lists.Count);
+
+        var invoiceNos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < lists.Count; i++)
+        {
+            var item = lists[i];
+            var r = dataNpoi + i;
+            if (!string.IsNullOrWhiteSpace(item.PIcotract_code))
+                invoiceNos.Add(item.PIcotract_code.Trim());
+
+            Set(ws, r, 0, (i + 1).ToString(CultureInfo.InvariantCulture));
+            SetText(ws, r, 1, item.Client_poNo);
+            Set(ws, r, 2, item.materialName);
+            Set(ws, r, 3, item.materiaSpecs);
+            Set(ws, r, 4, Num(item.qty));
+            Set(ws, r, 5, (item.Packing_method ?? "") + "PCS/CTN");
+            Set(ws, r, 6, item.Carton_Size);
+            Set(ws, r, 7, Num(item.box_qty));
+            Set(ws, r, 8, item.Pallet_Size);
+            Set(ws, r, 9, Num(CustomsAndPackingCalc.DisplayPalletQty(CustomsAndPackingService.ToLineDto(item, 0))));
+            Set(ws, r, 10, Num(item.total_Net_weight));
+            Set(ws, r, 11, Num(item.total_gross_weight));
+            Set(ws, r, 12, item.Pallet_code);
+            Set(ws, r, 13, Num(item.volume));
+            Set(ws, r, 14, await ResolveBoxLabelAsync(item, prefer2: false, ct));
+            Set(ws, r, 15, await ResolveTuoMarkAsync(item, ct));
+            _ = images; // 客户模板以文本唛头为主
+        }
+
+        var totalRow = dataNpoi + lists.Count;
+        Set(ws, totalRow, 4, Num(main.all_qty));
+        Set(ws, totalRow, 7, Num(main.all_box_qty));
+        Set(ws, totalRow, 9, Num(main.all_Pallet_qty));
+        Set(ws, totalRow, 10, Num(main.all_total_Net_weight));
+        Set(ws, totalRow, 11, Num(main.all_total_gross_weight));
+        Set(ws, totalRow, 13, Num(main.all_volume));
+
+        if (lists.Count > 1)
+            MergeSame(ws, lists.Select(x => x.Client_poNo).ToList(), [1], dataNpoi + 1);
+
+        var invoice = await ResolveInvoiceNoAsync(invoiceNos, ct);
+        if (!string.IsNullOrWhiteSpace(invoice))
+            Set(ws, 2, 15, "INVOICE_NO:" + invoice);
+    }
+
+    private async Task FillProductAsync(
+        IXLWorksheet ws,
+        ZyqdCustomsAndPackingModel main,
+        List<ZyqdCustomsAndPackingModel> lists,
+        Dictionary<string, byte[]> images,
+        CancellationToken ct)
+    {
+        const int dataNpoi = 2;
+        EnsureRows(ws, dataNpoi + 1, lists.Count);
+
+        var title = BuildTitle(main, lists);
+        for (var i = 0; i < lists.Count; i++)
+        {
+            var item = lists[i];
+            var r = dataNpoi + i;
+
+            if (!TryPicture(ws, images, item.Customer_outer_box_logo, r, 0))
+                Set(ws, r, 0, "");
+            if (!TryPicture(ws, images, item.Tuo_Mark_url, r, 1))
+                Set(ws, r, 1, item.Tuo_Mark);
+            if (!TryPicture(ws, images, item.Box_label_url, r, 2))
+                Set(ws, r, 2, await ResolveBoxLabelAsync(item, prefer2: false, ct));
+            if (!TryPicture(ws, images, item.Box_label_url2, r, 3))
+                Set(ws, r, 3, await ResolveBoxLabelAsync(item, prefer2: true, ct));
+
+            Set(ws, r, 4, item.Client_poNo);
+            Set(ws, r, 5, item.materialModel);
+            Set(ws, r, 6, item.SAP_order_NO);
+            TryPicture(ws, images, item.nameplate_url, r, 7);
+            TryPicture(ws, images, item.nameplate_url2, r, 8);
+            Set(ws, r, 9, item.materialNo);
+            Set(ws, r, 10, item.materialName);
+            Set(ws, r, 11, Num(item.qty));
+            Set(ws, r, 12, FormatPacking(item));
+            Set(ws, r, 13, Num(item.box_qty));
+            Set(ws, r, 15, item.Carton_Size);
+
+            if (!string.IsNullOrWhiteSpace(item.var2))
+            {
+                Set(ws, r, 14, Num(item.Pallet_qty + 1));
+                var size = item.Pallet_qty == 0 ? item.var2 : item.Pallet_Size + "\n" + item.var2;
+                Set(ws, r, 16, size);
+                var full = item.Pallet_qty == 0
+                    ? ""
+                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
+                Set(ws, r, 17, full + item.var4 + item.palletizing_method_unit + " 1托");
+            }
+            else
+            {
+                Set(ws, r, 14, Num(item.Pallet_qty));
+                Set(ws, r, 16, item.Pallet_Size);
+                var dd = item.Pallet_qty == 0
+                    ? ""
+                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
+                if (!string.IsNullOrWhiteSpace(item.var4))
+                    dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
+                Set(ws, r, 17, dd);
+            }
+
+            Set(ws, r, 18, Num(item.Pallet_weight));
+            Set(ws, r, 19, Num(item.Net_weight));
+            Set(ws, r, 20, Num(item.gross_weight));
+            Set(ws, r, 21, Num(item.total_Net_weight));
+            Set(ws, r, 22, Num(item.total_gross_weight));
+            Set(ws, r, 23, Num(item.volume));
+            Set(ws, r, 24, item.Pallet_code);
+            Set(ws, r, 25, item.emit);
+        }
+
+        var totalRow = dataNpoi + lists.Count;
+        Set(ws, totalRow, 11, Num(main.all_qty));
+        Set(ws, totalRow, 13, Num(main.all_box_qty));
+        Set(ws, totalRow, 14, Num(main.all_Pallet_qty));
+        Set(ws, totalRow, 21, Num(main.all_total_Net_weight));
+        Set(ws, totalRow, 22, Num(main.all_total_gross_weight));
+        Set(ws, totalRow, 23, Num(main.all_volume));
+        Set(ws, totalRow, 25, main.all_emit);
+        Set(ws, 0, 0, title);
+
+        if (lists.Count > 1)
+            MergeSame(ws, lists.Select(x => x.Pallet_code).ToList(), [1], dataNpoi + 1);
+    }
+
+    private async Task<string?> ResolveInvoiceNoAsync(HashSet<string> invoiceNos, CancellationToken ct)
+    {
+        if (invoiceNos.Count == 0) return null;
+        var candidates = await _db.CotractPis.AsNoTracking()
+            .Where(x => x.deleteSigh != "X" && x.INVOICE_NO != null && invoiceNos.Contains(x.INVOICE_NO))
+            .Where(x => x.var6 == "标准订单"
+                        || x.var6 == "贸易订单（1300）"
+                        || x.var6 == "贸易订单（1300-2001）"
+                        || x.var6 == "寄售订单（1300-2001）")
+            .OrderByDescending(x => x.TOTAL)
+            .Select(x => x.INVOICE_NO)
+            .FirstOrDefaultAsync(ct);
+        return candidates;
+    }
+
+    private async Task<string?> ResolveBoxLabelAsync(ZyqdCustomsAndPackingModel item, bool prefer2, CancellationToken ct)
+    {
+        var stored = prefer2 ? item.Box_label2 : item.Box_label;
+        if (string.IsNullOrWhiteSpace(stored))
+            return stored;
+
+        var client = (item.ClientNo ?? "").Trim();
+        var mat = (item.materialNo ?? "").Trim();
+        if (client.Length == 0 || mat.Length == 0)
+            return stored;
+
+        var bas = await _db.CotractBases.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.ClientNo == client && x.materialNo == mat, ct);
+        if (bas is null) return stored;
+        var raw = prefer2 ? bas.Box_label2 : bas.Box_label;
+        return string.IsNullOrWhiteSpace(raw) ? stored : raw;
+    }
+
+    private async Task<string?> ResolveTuoMarkAsync(ZyqdCustomsAndPackingModel item, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(item.Tuo_Mark))
+            return item.Tuo_Mark;
+        var client = (item.ClientNo ?? "").Trim();
+        var mat = (item.materialNo ?? "").Trim();
+        if (client.Length == 0 || mat.Length == 0)
+            return item.Tuo_Mark;
+        var bas = await _db.CotractBases.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.ClientNo == client && x.materialNo == mat, ct);
+        return string.IsNullOrWhiteSpace(bas?.Tuo_Mark) ? item.Tuo_Mark : bas.Tuo_Mark;
+    }
+
+    private static string BuildTitle(ZyqdCustomsAndPackingModel main, List<ZyqdCustomsAndPackingModel> lists)
+    {
+        var title = (main.Customer_destination_country ?? "") + "  " + (main.ClientName ?? "") + " ";
+        foreach (var sap in lists.Select(x => (x.SAP_order_NO ?? "").Trim()).Where(x => x.Length > 0).Distinct())
+        {
+            if (!title.Contains(sap, StringComparison.Ordinal))
+                title += sap + "+";
+        }
+        return title.TrimEnd('+') + "  装箱单";
+    }
+
+    private static string FormatPacking(ZyqdCustomsAndPackingModel item)
+    {
+        var baseText = (item.Packing_method ?? "") + (item.Packing_method_unit ?? "");
+        if (string.IsNullOrWhiteSpace(item.var1) || item.var1 == "0")
+            return baseText;
+        if (Math.Abs(item.box_qty - 1) < 0.0001)
+            return baseText;
+        return baseText + "\n" + item.var1 + item.Packing_method_unit;
+    }
+
+    private static void EnsureRows(IXLWorksheet ws, int templateExcelRow, int count)
+    {
+        if (count <= 1) return;
+        var extra = count - 1;
+        ws.Row(templateExcelRow).InsertRowsBelow(extra);
+        var src = ws.Range(templateExcelRow, 1, templateExcelRow, ws.LastColumnUsed()?.ColumnNumber() ?? 40);
+        for (var i = 0; i < extra; i++)
+            src.CopyTo(ws.Cell(templateExcelRow + 1 + i, 1));
+    }
+
+    private static void MergeSame(IXLWorksheet ws, List<string?> keys, int[] npoiCols, int excelStartRow)
+    {
+        if (keys.Count <= 1) return;
+        var i = 0;
+        while (i < keys.Count)
+        {
+            var j = i + 1;
+            while (j < keys.Count && string.Equals(keys[i] ?? "", keys[j] ?? "", StringComparison.Ordinal))
+                j++;
+            if (j - i > 1 && !string.IsNullOrWhiteSpace(keys[i]))
+            {
+                foreach (var c in npoiCols)
+                {
+                    var col = c + 1;
+                    var range = ws.Range(excelStartRow + i, col, excelStartRow + j - 1, col);
+                    if (!range.Cells().Any(cell => cell.IsMerged()))
+                        range.Merge();
+                }
+            }
+            i = j;
+        }
+    }
+
+    private async Task<Dictionary<string, byte[]>> DownloadImagesAsync(
+        List<ZyqdCustomsAndPackingModel> lists, CancellationToken ct)
+    {
+        var paths = lists
+            .SelectMany(x => new[]
+            {
+                x.Customer_outer_box_logo, x.Tuo_Mark_url, x.Box_label_url, x.Box_label_url2,
+                x.nameplate_url, x.nameplate_url2
+            })
+            .Where(HasUrl)
+            .Select(p => LegacyFileUrl.Resolve(p, _imageBase))
+            .Where(u => u.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var result = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        if (paths.Count == 0) return result;
+
+        var http = _httpFactory.CreateClient(LegacyHttpClient);
+        var bag = new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        using var gate = new SemaphoreSlim(4);
+        await Task.WhenAll(paths.Select(async url =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var bytes = await TryDownloadAsync(http, url, ct);
+                if (bytes is { Length: > 0 })
+                    bag[url] = bytes;
+            }
+            finally { gate.Release(); }
+        }));
+        foreach (var kv in bag)
+            result[kv.Key] = kv.Value;
+        return result;
+    }
+
+    private static async Task<byte[]?> TryDownloadAsync(HttpClient http, string url, CancellationToken ct)
+    {
+        try
+        {
+            using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+            return bytes.Length > 0 ? bytes : null;
+        }
+        catch { return null; }
+    }
+
+    private bool TryPicture(
+        IXLWorksheet ws, Dictionary<string, byte[]> images, string? path, int npoiRow, int npoiCol)
+    {
+        if (!HasUrl(path)) return false;
+        var url = LegacyFileUrl.Resolve(path, _imageBase);
+        if (!images.TryGetValue(url, out var bytes))
+            return false;
+
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            var format = DetectPictureFormat(bytes);
+            var name = "pk_" + Guid.NewGuid().ToString("N")[..8];
+            var pic = format == XLPictureFormat.Unknown
+                ? ws.AddPicture(ms, name)
+                : ws.AddPicture(ms, format, name);
+            pic.MoveTo(ws.Cell(npoiRow + 1, npoiCol + 1));
+            pic.WithSize(72, 72);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static XLPictureFormat DetectPictureFormat(byte[] bytes)
+    {
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8) return XLPictureFormat.Jpeg;
+        if (bytes.Length >= 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+            return XLPictureFormat.Png;
+        if (bytes.Length >= 3 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) return XLPictureFormat.Gif;
+        if (bytes.Length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) return XLPictureFormat.Bmp;
+        return XLPictureFormat.Unknown;
+    }
+
+    private static bool HasUrl(string? path) => !LegacyFileUrl.IsBlankOrPlaceholder(path);
+
+    private static void Set(IXLWorksheet ws, int npoiRow, int npoiCol, string? value)
+    {
+        var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
+        cell.Style.NumberFormat.Format = "@";
+        cell.SetValue(value ?? "");
+    }
+
+    private static void SetText(IXLWorksheet ws, int npoiRow, int npoiCol, string? value)
+        => Set(ws, npoiRow, npoiCol, value);
+
+    private static string Num(double n)
+        => n.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Sanitize(string? s)
+    {
+        var t = (s ?? "").Trim();
+        foreach (var c in Path.GetInvalidFileNameChars())
+            t = t.Replace(c, '_');
+        return t;
+    }
+}

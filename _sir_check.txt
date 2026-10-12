@@ -1,0 +1,10 @@
+﻿Id|SalesmanName|Client|Department|Report_type|product_type
+--|------------|------|----------|-----------|------------
+386|9051|俞梽聪|遮阳研发二部|motor|基础版电机
+
+(1 行受影响)
+swapped
+-------
+7
+
+(1 行受影响)

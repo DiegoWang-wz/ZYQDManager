@@ -6,6 +6,8 @@ public sealed class SirQueryDto
 {
     public DateTime? DateStart { get; set; }
     public DateTime? DateEnd { get; set; }
+    /// <summary>报告类型代码（motor/remote…）；空或「全部」表示不限。</summary>
+    public string? ReportType { get; set; }
     public string? FilterColumn { get; set; }
     public string? Keyword { get; set; }
     public string? SortLabel { get; set; }
@@ -20,7 +22,6 @@ public static class SirFilterFields
         ("产品型号", "产品型号"),
         ("产品名称", "产品名称"),
         ("业务员", "业务员"),
-        ("报告类型", "报告类型"),
     ];
 }
 

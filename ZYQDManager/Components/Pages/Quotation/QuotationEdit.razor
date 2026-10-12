@@ -19,22 +19,22 @@
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
             <MudText Typo="Typo.h6">@Title</MudText>
             <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
-                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="/quotation">返回列表</MudButton>
                 @if (!IsDetail)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveAsync">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="zyqd-btn-save"
+                               StartIcon="@Icons.Material.Filled.Save" Disabled="_busy" OnClick="SaveAsync">
                         @(IsCopy ? "创建" : "保存")
                     </MudButton>
                 }
                 @if (!IsCreate)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info" Disabled="_busy"
                                StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                OnClick="@(() => ExportPdfAsync("ZH"))">PDF-中文</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info" Disabled="_busy"
                                StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                OnClick="@(() => ExportPdfAsync("EN"))">PDF-英文</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Disabled="_busy"
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info" Disabled="_busy"
                                StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                OnClick="@(() => ExportPdfAsync("DE"))">PDF-JIECANG Europe GmbH</MudButton>
                 }

@@ -4,6 +4,7 @@
 @inject CotractPiService CotractPi
 @inject CentralAuthService Auth
 @inject CentralUserInformationService UserInfo
+@inject LastListReturnService LastListReturn
 
 <PageTitle>合同列表</PageTitle>
 
@@ -70,8 +71,8 @@
             </MudStack>
             <div class="cpi-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpi-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0 || IsPackingList">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy || IsPackingList">删除</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0 || IsPackingList">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy || IsPackingList">删除</MudButton>
                 @if (IsCustomerPi)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-pi/new">新建</MudButton>
@@ -91,7 +92,8 @@
             <MudTable @ref="_table"
                       T="ZyqdCotractPiModel"
                       ServerData="LoadServerData"
-                      RowsPerPage="20"
+                      @bind-CurrentPage="_currentPage"
+                      RowsPerPage="@_rowsPerPage"
                       Dense="true"
                       Hover="true"
                       Striped="true"
@@ -115,7 +117,7 @@
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_DATE">日期</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="CreateTime">创建日期</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_PO_REF">PO号</MudTableSortLabel></MudTh>
-                    <MudTh Class="cpi-ops-cell">操作</MudTh>
+                    <MudTh Class="@OpsCellClass">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd Class="cpi-no-cell">@RowNo(context)</MudTd>
@@ -127,8 +129,8 @@
                     <MudTd>@FormatBillDate(context)</MudTd>
                     <MudTd>@FormatCreateTime(context)</MudTd>
                     <MudTd>@Dash(context.BILL_TO_PO_REF)</MudTd>
-                    <MudTd Class="cpi-ops-cell">
-                        <div class="cpi-ops-grid">
+                    <MudTd Class="@OpsCellClass">
+                        <div class="@OpsGridClass">
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.Edit"
                                        Class="cpi-ops-btn"
@@ -279,6 +281,15 @@
         max-width: 42px !important;
         padding: 0 !important;
         text-align: center !important;
+        white-space: nowrap !important;
+    }
+    .cotract-pi-table .mud-table-cell:first-child .mud-input-control,
+    .cotract-pi-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 
     .cotract-pi-table .mud-table-cell.cpi-no-cell {
@@ -317,6 +328,15 @@
         border-left: 1px solid #e0e0e0;
     }
 
+    /* 仅编辑+删除：单行横排，按内容收窄 */
+    .cotract-pi-table .mud-table-cell.cpi-ops-cell.cpi-ops-cell--compact {
+        width: 136px;
+        min-width: 136px;
+        max-width: 136px;
+        padding: 4px 6px !important;
+        white-space: nowrap;
+    }
+
     .cotract-pi-table .mud-table-head .mud-table-cell.cpi-ops-cell {
         z-index: 6;
         background-color: #fff !important;
@@ -338,6 +358,16 @@
         width: 100%;
     }
 
+    .cpi-ops-grid.cpi-ops-grid--compact {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        width: 100%;
+    }
+
     .cpi-ops-grid .cpi-ops-btn.mud-button-root {
         min-width: 0 !important;
         width: 100%;
@@ -349,13 +379,23 @@
         justify-content: center;
     }
 
+    .cpi-ops-grid.cpi-ops-grid--compact .cpi-ops-btn.mud-button-root {
+        width: auto;
+        flex: 0 0 auto;
+        min-width: auto !important;
+        padding: 0 4px !important;
+        white-space: nowrap;
+    }
+
     .cpi-ops-grid .cpi-ops-btn .mud-button-label {
         font-size: 12px !important;
+        white-space: nowrap !important;
     }
 
     .cpi-ops-grid .cpi-ops-btn .mud-icon-root {
         font-size: 16px !important;
         margin-right: 2px !important;
+        flex-shrink: 0;
     }
 
     .cotract-pi-table .mud-table-body .mud-table-row {
@@ -376,8 +416,8 @@
     private string? _appliedTypeQuery;
     private string _filterColumn = "客户编号";
     private string? _keyword;
-    private DateTime? _dateStart = DateTime.Today.AddDays(-7);
-    private DateTime? _dateEnd = DateTime.Today;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
     private List<ZyqdCotractPiModel> _rows = new();
     private HashSet<ZyqdCotractPiModel> _selected = new();
     private int _skip;
@@ -387,10 +427,14 @@
     private bool _pendingReload;
     private bool _pendingGenerateHint;
     private bool _generateHintConsumed;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
 
     private bool IsCustomerPi => _documentType == "客户PI";
     private bool IsCustomsPi => _documentType == "报关PI";
     private bool IsPackingList => _documentType == "装箱单";
+    private string OpsCellClass => IsCustomerPi ? "cpi-ops-cell" : "cpi-ops-cell cpi-ops-cell--compact";
+    private string OpsGridClass => IsCustomerPi ? "cpi-ops-grid" : "cpi-ops-grid cpi-ops-grid--compact";
     private string EmptyText => _busy
         ? "加载中…"
         : IsPackingList
@@ -449,6 +493,7 @@
     {
         if (firstRender && !_ready)
         {
+            RestoreFromReturn();
             _ready = true;
             StateHasChanged();
             return;
@@ -466,6 +511,34 @@
 
         await ReloadTableAsync(resetPage: true);
     }
+
+    private void RestoreFromReturn()
+    {
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.CotractPi);
+        if (snap is null) return;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        // Extra 存单据类型；仅同类型时恢复筛选与页码
+        if (!string.Equals(snap.Extra, _documentType, StringComparison.Ordinal))
+            return;
+        if (!string.IsNullOrWhiteSpace(snap.FilterColumn))
+            _filterColumn = snap.FilterColumn!;
+        _keyword = snap.Keyword;
+        _dateStart = snap.DateStart;
+        _dateEnd = snap.DateEnd;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private void PersistAsync(int page, int pageSize)
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.CotractPi, new PagedListUiState
+        {
+            Page = page < 0 ? 0 : page,
+            PageSize = pageSize > 0 ? pageSize : 20,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            DateStart = _dateStart,
+            DateEnd = _dateEnd,
+            Extra = _documentType,
+        });
 
     private void GoCustomerPiForCreateAsync()
     {
@@ -509,8 +582,8 @@
     {
         _filterColumn = "客户编号";
         _keyword = null;
-        _dateStart = DateTime.Today.AddDays(-7);
-        _dateEnd = DateTime.Today;
+        _dateStart = null;
+        _dateEnd = null;
         await SearchAsync();
     }
 
@@ -533,6 +606,7 @@
 
         _selected.Clear();
         _documentType = next;
+        _currentPage = 0;
         _pendingReload = true;
         NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString(next)}", replace: true);
     }
@@ -632,6 +706,9 @@
             var (rows, total) = await CotractPi.QueryPageAsync(query, _skip, take, ct);
             _rows = rows;
             _filteredTotal = total;
+            _currentPage = state.Page;
+            _rowsPerPage = take;
+            PersistAsync(state.Page, take);
             if (_infoFailed && !_infoWarned)
             {
                 _infoWarned = true;

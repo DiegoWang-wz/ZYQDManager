@@ -182,10 +182,14 @@ public class CustomsAndPackingService
                 }
             }
 
+            if (string.IsNullOrWhiteSpace(model.packing_list_type))
+                model.packing_list_type = "总箱单";
+
+            CustomsAndPackingCalc.RecalcLine(model);
             list.Add(model);
         }
 
-        RecalcTotals(list);
+        SyncHeaderTotals(list);
         return list;
     }
 
@@ -242,12 +246,8 @@ public class CustomsAndPackingService
                 Trade_Term = header.Trade_Term,
                 encasement_method = header.encasement_method,
                 Box_type_quantity = header.Box_type_quantity,
-                packing_list_type = header.packing_list_type,
+                packing_list_type = string.IsNullOrWhiteSpace(header.packing_list_type) ? "总箱单" : header.packing_list_type,
                 Shipping_method = header.Shipping_method,
-                var1 = header.var1,
-                var2 = header.var2,
-                var3 = header.var3,
-                var5 = header.var5,
                 var6 = string.IsNullOrWhiteSpace(header.var6) ? "报关PI" : header.var6,
                 materialNo = line.materialNo,
                 materialName = line.materialName,
@@ -263,21 +263,29 @@ public class CustomsAndPackingService
                 currency_unit = line.currency_unit,
                 Packing_method = line.Packing_method,
                 Packing_method_unit = line.Packing_method_unit,
+                var1 = line.var1,
                 box_qty = line.box_qty,
                 Pallet_qty = line.Pallet_qty,
+                var3 = line.var3,
+                var2 = line.var2,
+                var4 = line.var4,
                 Carton_Size = line.Carton_Size,
                 Pallet_Size = line.Pallet_Size,
                 palletizing_method = line.palletizing_method,
                 palletizing_method_unit = line.palletizing_method_unit,
+                Pallet_weight = line.Pallet_weight,
                 Net_weight = line.Net_weight,
                 gross_weight = line.gross_weight,
                 total_Net_weight = line.total_Net_weight,
                 total_gross_weight = line.total_gross_weight,
                 volume = line.volume,
+                Pallet_code = line.Pallet_code,
+                emit = line.emit,
+                packing_unit = line.packing_unit,
+                sample_type = line.sample_type,
                 SAP_order_NO = line.SAP_order_NO,
                 Client_poNo = line.Client_poNo,
                 PI_Material_Name = line.PI_Material_Name,
-                var4 = line.var4,
                 var7 = string.IsNullOrWhiteSpace(line.var7) ? "原始行" : line.var7,
                 Customer_outer_box_logo = line.Customer_outer_box_logo,
                 Tuo_Mark = line.Tuo_Mark,
@@ -296,7 +304,9 @@ public class CustomsAndPackingService
             });
         }
 
-        RecalcTotals(rows);
+        foreach (var r in rows)
+            CustomsAndPackingCalc.RecalcLine(r);
+        SyncHeaderTotals(rows);
 
         if (old.Count > 0)
             _db.CustomsAndPackings.RemoveRange(old);
@@ -305,25 +315,25 @@ public class CustomsAndPackingService
         return (true, null, guid);
     }
 
-    public static void RecalcTotals(List<ZyqdCustomsAndPackingModel> rows)
+    public static void SyncHeaderTotals(List<ZyqdCustomsAndPackingModel> rows)
     {
         if (rows.Count == 0) return;
-        var allQty = rows.Sum(x => x.qty);
-        var allBox = rows.Sum(x => x.box_qty);
-        var allPallet = rows.Sum(x => x.Pallet_qty);
-        var allNet = rows.Sum(x => x.total_Net_weight != 0 ? x.total_Net_weight : x.Net_weight * x.qty);
-        var allGross = rows.Sum(x => x.total_gross_weight != 0 ? x.total_gross_weight : x.gross_weight * x.qty);
-        var allVol = rows.Sum(x => x.volume);
+        var lines = rows.Select((x, i) => ToLineDto(x, i + 1)).ToList();
+        CustomsAndPackingCalc.ApplySummary(rows[0], lines);
+        var h = rows[0];
         foreach (var r in rows)
         {
-            r.all_qty = allQty;
-            r.all_box_qty = allBox;
-            r.all_Pallet_qty = allPallet;
-            r.all_Net_weight = allNet;
-            r.all_gross_weight = allGross;
-            r.all_total_Net_weight = allNet;
-            r.all_total_gross_weight = allGross;
-            r.all_volume = allVol;
+            r.all_qty = h.all_qty;
+            r.all_box_qty = h.all_box_qty;
+            r.all_Pallet_qty = h.all_Pallet_qty;
+            r.all_Net_weight = h.all_Net_weight;
+            r.all_gross_weight = h.all_gross_weight;
+            r.all_total_Net_weight = h.all_total_Net_weight;
+            r.all_total_gross_weight = h.all_total_gross_weight;
+            r.all_volume = h.all_volume;
+            r.all_emit = h.all_emit;
+            r.all_Pallet_weight = h.all_Pallet_weight;
+            r.var5 = h.var5;
         }
     }
 
@@ -345,17 +355,26 @@ public class CustomsAndPackingService
             currency_unit = x.currency_unit,
             Packing_method = x.Packing_method,
             Packing_method_unit = x.Packing_method_unit,
+            var1 = x.var1,
             box_qty = x.box_qty,
             Pallet_qty = x.Pallet_qty,
+            var3 = x.var3,
+            var2 = x.var2,
+            var4 = x.var4,
             Carton_Size = x.Carton_Size,
             Pallet_Size = x.Pallet_Size,
             palletizing_method = x.palletizing_method,
             palletizing_method_unit = x.palletizing_method_unit,
+            Pallet_weight = x.Pallet_weight,
             Net_weight = x.Net_weight,
             gross_weight = x.gross_weight,
             total_Net_weight = x.total_Net_weight,
             total_gross_weight = x.total_gross_weight,
             volume = x.volume,
+            Pallet_code = x.Pallet_code,
+            emit = x.emit,
+            packing_unit = x.packing_unit,
+            sample_type = x.sample_type,
             SAP_order_NO = x.SAP_order_NO,
             Client_poNo = x.Client_poNo,
             PI_Material_Name = x.PI_Material_Name,
@@ -370,7 +389,6 @@ public class CustomsAndPackingService
             nameplate_url = x.nameplate_url,
             nameplate_url2 = x.nameplate_url2,
             Customer_destination_country = x.Customer_destination_country,
-            var4 = x.var4
         };
 
     private static IQueryable<ZyqdCustomsAndPackingModel> ApplyFilter(

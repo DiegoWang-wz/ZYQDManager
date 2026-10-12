@@ -4,6 +4,7 @@
 @inject CentralAuthService Auth
 @inject CentralUserInformationService UserInfo
 @inject UserCustomerAssignService CustomerAssign
+@inject LastListReturnService LastListReturn
 
 <PageTitle>遮阳项目列表</PageTitle>
 
@@ -50,13 +51,13 @@
 
                 <MudItem xs="12">
                     <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/motor/new">新增电机</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/remote/new">新增遥控器</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/controlbox/new">新增控制盒</MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/project/actuator/new">新增推杆</MudButton>
-                        <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                        <MudButton Variant="Variant.Outlined" OnClick="@(() => NotReady("拷贝"))" Disabled="_selected.Count == 0">拷贝</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/project/motor/new">新增电机</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/project/remote/new">新增遥控器</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/project/controlbox/new">新增控制盒</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/project/actuator/new">新增推杆</MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => NotReady("拷贝"))" Disabled="_selected.Count == 0">拷贝</MudButton>
                         <MudCheckBox T="bool" @bind-Value="_includeDraft" Label="草稿" Color="Color.Primary" Dense="true"/>
                         <MudCheckBox T="bool" @bind-Value="_includeForwarded" Label="已转发" Color="Color.Primary" Dense="true"/>
                     </MudStack>
@@ -66,8 +67,13 @@
     </div>
 
     <MudPaper Class="project-list-table-wrap pa-0" Outlined="true">
-        <MudTable T="ProjectListItemDto"
+        <MudTable @ref="_table"
+                  T="ProjectListItemDto"
                   Items="_rows"
+                  @bind-CurrentPage="_currentPage"
+                  @bind-CurrentPage:after="PersistAsync"
+                  @bind-RowsPerPage="_rowsPerPage"
+                  @bind-RowsPerPage:after="PersistAsync"
                   Dense="true"
                   Hover="true"
                   Striped="true"
@@ -269,23 +275,57 @@
 </style>
 
 @code {
+    private MudTable<ProjectListItemDto>? _table;
     private bool _busy;
+    private bool _restored;
     private List<ProjectListItemDto> _rows = new();
     private HashSet<ProjectListItemDto> _selected = new();
     private bool _confirmDelete;
 
-    private DateTime? _dateStart = DateTime.Today.AddDays(-30);
-    private DateTime? _dateEnd = DateTime.Today;
+    private DateTime? _dateStart;
+    private DateTime? _dateEnd;
     private string _filterColumn = "Customer";
     private string? _keyword;
     private bool _includeDraft = true;
     private bool _includeForwarded = true;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        RestoreFromReturn();
+        _restored = true;
         await SearchAsync();
     }
+
+    private void RestoreFromReturn()
+    {
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.Project);
+        if (snap is null) return;
+        if (!string.IsNullOrWhiteSpace(snap.FilterColumn))
+            _filterColumn = snap.FilterColumn!;
+        _keyword = snap.Keyword;
+        _dateStart = snap.DateStart;
+        _dateEnd = snap.DateEnd;
+        _includeDraft = snap.Flag1 ?? true;
+        _includeForwarded = snap.Flag2 ?? true;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private void PersistAsync()
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.Project, new PagedListUiState
+        {
+            Page = _table?.CurrentPage ?? _currentPage,
+            PageSize = _table is { RowsPerPage: > 0 } ? _table.RowsPerPage : _rowsPerPage,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            DateStart = _dateStart,
+            DateEnd = _dateEnd,
+            Flag1 = _includeDraft,
+            Flag2 = _includeForwarded,
+        });
 
     private async Task SearchAsync()
     {
@@ -318,6 +358,8 @@
             };
             _rows = await Projects.QueryAsync(query);
             _selected.Clear();
+            if (_restored)
+                PersistAsync();
         }
         catch (Exception ex)
         {
@@ -383,6 +425,7 @@
 
     private void OpenItem(ProjectListItemDto item)
     {
+        PersistAsync();
         if (item.ProductType == "电机")
             NavManager.NavigateTo($"/project/motor/{item.DocGuid}?projectGuid={item.ProjectGuid}");
         else

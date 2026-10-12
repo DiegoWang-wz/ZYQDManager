@@ -6,6 +6,7 @@
 @inject UserCustomerAssignService CustomerAssign
 @inject IConfiguration Config
 @inject IJSRuntime JS
+@inject LastListReturnService LastListReturn
 
 <PageTitle>合同基础数据</PageTitle>
 
@@ -61,8 +62,8 @@
             </MudStack>
             <div class="cb-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cb-toolbar-right">
-                <MudButton Variant="Variant.Outlined" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_selected.Count == 0 || _busy">
                     @(_selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
                 </MudButton>
@@ -92,7 +93,8 @@
         <MudTable @ref="_table"
                   T="ZyqdCotractBaseModel"
                   ServerData="LoadServerData"
-                  RowsPerPage="20"
+                  @bind-CurrentPage="_currentPage"
+                  RowsPerPage="@_rowsPerPage"
                   Dense="true"
                   Hover="true"
                   Striped="true"
@@ -459,15 +461,42 @@
     private bool _infoWarned;
     private string? _sortLabel;
     private bool _sortDescending = true;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
     private const long MaxImportBytes = 32L * 1024 * 1024;
     private string ImageBase => Config["LegacyFiles:BaseUrl"] ?? LegacyFileUrl.DefaultBase;
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _ready) return;
+        RestoreFromReturn();
         _ready = true;
         StateHasChanged();
     }
+
+    private void RestoreFromReturn()
+    {
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.CotractBase);
+        if (snap is null) return;
+        if (!string.IsNullOrWhiteSpace(snap.FilterColumn))
+            _filterColumn = snap.FilterColumn!;
+        _keyword = snap.Keyword;
+        _dateStart = snap.DateStart;
+        _dateEnd = snap.DateEnd;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private void PersistAsync(int page, int pageSize)
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.CotractBase, new PagedListUiState
+        {
+            Page = page < 0 ? 0 : page,
+            PageSize = pageSize > 0 ? pageSize : 20,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+            DateStart = _dateStart,
+            DateEnd = _dateEnd,
+        });
 
     private int RowNo(ZyqdCotractBaseModel row) => _skip + _rows.IndexOf(row) + 1;
 
@@ -575,6 +604,9 @@
             var (rows, total) = await CotractBase.QueryPageAsync(query, _skip, take, ct);
             _rows = rows;
             _filteredTotal = total;
+            _currentPage = state.Page;
+            _rowsPerPage = take;
+            PersistAsync(state.Page, take);
             if (_infoFailed && !_infoWarned)
             {
                 _infoWarned = true;

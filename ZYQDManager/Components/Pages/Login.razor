@@ -15,171 +15,163 @@
             </div>
         </div>
 
-        <div class="auth-viewport" style="height:@(_viewportHeight)px">
-            <div class="auth-track panel-@_panel">
-                <div class="auth-slide">
-                    <div class="login-fields">
-                        <MudTextField @bind-Value="RegEmpNo"
-                                      Label="工号"
+        <div class="auth-viewport">
+            @if (_panel == PanelRegister)
+            {
+                <div class="login-fields">
+                    <MudTextField @bind-Value="RegEmpNo"
+                                  Label="工号"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="_reg.DisplayName"
+                                  Label="姓名"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="_reg.Password"
+                                  Label="密码"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  InputType="@PwdType(_regPwdVisible)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@PwdIcon(_regPwdVisible)"
+                                  OnAdornmentClick="@(() => _regPwdVisible = !_regPwdVisible)"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="_reg.PasswordConfirm"
+                                  Label="确认密码"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  InputType="@PwdType(_regPwd2Visible)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@PwdIcon(_regPwd2Visible)"
+                                  OnAdornmentClick="@(() => _regPwd2Visible = !_regPwd2Visible)"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="RegEmail"
+                                  Label="邮箱"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <div class="auth-code-row">
+                        <MudTextField @bind-Value="RegCode"
+                                      Label="邮箱验证码"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 0)"
+                                      Disabled="_busy"
                                       Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="_reg.DisplayName"
-                                      Label="姓名"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 0)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="_reg.Password"
-                                      Label="密码"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      InputType="@PwdType(_regPwdVisible)"
-                                      Adornment="Adornment.End"
-                                      AdornmentIcon="@PwdIcon(_regPwdVisible)"
-                                      OnAdornmentClick="@(() => _regPwdVisible = !_regPwdVisible)"
-                                      Disabled="@(_busy || _panel != 0)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="_reg.PasswordConfirm"
-                                      Label="确认密码"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      InputType="@PwdType(_regPwd2Visible)"
-                                      Adornment="Adornment.End"
-                                      AdornmentIcon="@PwdIcon(_regPwd2Visible)"
-                                      OnAdornmentClick="@(() => _regPwd2Visible = !_regPwd2Visible)"
-                                      Disabled="@(_busy || _panel != 0)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="RegEmail"
-                                      Label="邮箱"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 0)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <div class="auth-code-row">
-                            <MudTextField @bind-Value="RegCode"
-                                          Label="邮箱验证码"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Disabled="@(_busy || _panel != 0)"
-                                          Immediate="true"
-                                          OnKeyDown="OnKeyDown"
-                                          Class="auth-code-field"/>
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Primary"
-                                       Class="auth-code-btn"
-                                       Disabled="@(_busy || _sendingCode || _panel != 0 || _codeCooldown > 0)"
-                                       OnClick="SendRegisterCodeAsync">
-                                @_sendCodeText
-                            </MudButton>
-                        </div>
-                        <MudTextField @bind-Value="_reg.Department"
-                                      Label="部门"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 0)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="_reg.Phone"
-                                      Label="电话"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 0)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
+                                      OnKeyDown="OnKeyDown"
+                                      Class="auth-code-field"/>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Class="auth-code-btn"
+                                   Disabled="@(_busy || _sendingCode || _codeCooldown > 0)"
+                                   OnClick="SendRegisterCodeAsync">
+                            @_sendCodeText
+                        </MudButton>
                     </div>
+                    <MudTextField @bind-Value="_reg.Department"
+                                  Label="部门"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
                 </div>
-
-                <div class="auth-slide">
-                    <div class="login-fields">
-                        <MudTextField @bind-Value="_empNo"
-                                      Label="工号"
+            }
+            else if (_panel == PanelLogin)
+            {
+                <div class="login-fields">
+                    <MudTextField @bind-Value="_empNo"
+                                  Label="工号"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  AutoFocus="true"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="_password"
+                                  Label="密码"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  InputType="@PwdType(_pwdVisible)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@PwdIcon(_pwdVisible)"
+                                  OnAdornmentClick="TogglePwd"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                </div>
+            }
+            else
+            {
+                <div class="login-fields">
+                    <MudTextField @bind-Value="FpEmpNo"
+                                  Label="工号"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="FpEmail"
+                                  Label="邮箱"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Disabled="_busy"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <div class="auth-code-row">
+                        <MudTextField @bind-Value="FpCode"
+                                      Label="邮箱验证码"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 1)"
-                                      AutoFocus="true"
+                                      Disabled="_busy"
                                       Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="_password"
-                                      Label="密码"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      InputType="@PwdType(_pwdVisible)"
-                                      Adornment="Adornment.End"
-                                      AdornmentIcon="@PwdIcon(_pwdVisible)"
-                                      OnAdornmentClick="TogglePwd"
-                                      Disabled="@(_busy || _panel != 1)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
+                                      OnKeyDown="OnKeyDown"
+                                      Class="auth-code-field"/>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Class="auth-code-btn"
+                                   Disabled="@(_busy || _sendingCode || _codeCooldown > 0)"
+                                   OnClick="SendResetCodeAsync">
+                            @_sendCodeText
+                        </MudButton>
                     </div>
+                    <MudTextField @bind-Value="_fp.NewPassword"
+                                  Label="新密码"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="auth-locked-until-verify"
+                                  InputType="@PwdType(_fpPwdVisible)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@PwdIcon(_fpPwdVisible)"
+                                  OnAdornmentClick="@(() => { if (_emailVerified) _fpPwdVisible = !_fpPwdVisible; })"
+                                  Disabled="@(_busy || !_emailVerified)"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
+                    <MudTextField @bind-Value="_fp.NewPasswordConfirm"
+                                  Label="确认新密码"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="auth-locked-until-verify"
+                                  InputType="@PwdType(_fpPwd2Visible)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@PwdIcon(_fpPwd2Visible)"
+                                  OnAdornmentClick="@(() => { if (_emailVerified) _fpPwd2Visible = !_fpPwd2Visible; })"
+                                  Disabled="@(_busy || !_emailVerified)"
+                                  Immediate="true"
+                                  OnKeyDown="OnKeyDown"/>
                 </div>
-
-                <div class="auth-slide">
-                    <div class="login-fields">
-                        <MudTextField @bind-Value="FpEmpNo"
-                                      Label="工号"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 2)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="FpEmail"
-                                      Label="邮箱"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Disabled="@(_busy || _panel != 2)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <div class="auth-code-row">
-                            <MudTextField @bind-Value="FpCode"
-                                          Label="邮箱验证码"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Disabled="@(_busy || _panel != 2)"
-                                          Immediate="true"
-                                          OnKeyDown="OnKeyDown"
-                                          Class="auth-code-field"/>
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Primary"
-                                       Class="auth-code-btn"
-                                       Disabled="@(_busy || _sendingCode || _panel != 2 || _codeCooldown > 0)"
-                                       OnClick="SendResetCodeAsync">
-                                @_sendCodeText
-                            </MudButton>
-                        </div>
-                        <MudTextField @bind-Value="_fp.NewPassword"
-                                      Label="新密码"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Class="auth-locked-until-verify"
-                                      InputType="@PwdType(_fpPwdVisible)"
-                                      Adornment="Adornment.End"
-                                      AdornmentIcon="@PwdIcon(_fpPwdVisible)"
-                                      OnAdornmentClick="@(() => { if (_emailVerified) _fpPwdVisible = !_fpPwdVisible; })"
-                                      Disabled="@(_busy || _panel != 2 || !_emailVerified)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                        <MudTextField @bind-Value="_fp.NewPasswordConfirm"
-                                      Label="确认新密码"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      Class="auth-locked-until-verify"
-                                      InputType="@PwdType(_fpPwd2Visible)"
-                                      Adornment="Adornment.End"
-                                      AdornmentIcon="@PwdIcon(_fpPwd2Visible)"
-                                      OnAdornmentClick="@(() => { if (_emailVerified) _fpPwd2Visible = !_fpPwd2Visible; })"
-                                      Disabled="@(_busy || _panel != 2 || !_emailVerified)"
-                                      Immediate="true"
-                                      OnKeyDown="OnKeyDown"/>
-                    </div>
-                </div>
-            </div>
+            }
         </div>
 
         @if (_panel == PanelRegister)
@@ -279,26 +271,8 @@
     }
 
     .auth-viewport {
-        overflow: hidden;
         width: 100%;
-        transition: height 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
-    }
-
-    .auth-track {
-        display: flex;
-        width: 300%;
-        transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
-        will-change: transform;
-    }
-
-    .auth-track.panel-0 { transform: translateX(0); }
-    .auth-track.panel-1 { transform: translateX(-33.3333%); }
-    .auth-track.panel-2 { transform: translateX(-66.6666%); }
-
-    .auth-slide {
-        width: 33.3333%;
-        box-sizing: border-box;
-        padding: 0 1px;
+        height: auto;
     }
 
     .login-fields {
@@ -495,8 +469,6 @@
     private string _sendCodeText => _sendingCode
         ? "发送中…"
         : _codeCooldown > 0 ? $"{_codeCooldown}s" : "发送验证码";
-
-    private int _viewportHeight => _panel == PanelRegister ? 470 : _panel == PanelForgot ? 328 : 128;
 
     private void GoToRegister()
     {
@@ -780,8 +752,7 @@
                 new ZyqdUserInformationDto
                 {
                     Department = _reg.Department,
-                    Email = _reg.Email,
-                    Phone = _reg.Phone
+                    Email = _reg.Email
                 });
             if (!ok)
             {
@@ -810,9 +781,9 @@
                 To = [_reg.Email.Trim()],
                 Subject = MailTemplate.Subject(pending ? "注册已提交" : "账号已开通"),
                 Body = pending
-                    ? MailTemplate.RegisterSubmitted(_reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, _reg.Phone)
+                    ? MailTemplate.RegisterSubmitted(_reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, null)
                     : MailTemplate.AccountOpened(
-                        _reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, _reg.Phone,
+                        _reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, null,
                         NavManager.ToAbsoluteUri("login").AbsoluteUri),
                 IsHtml = true
             });
@@ -828,7 +799,6 @@
                     DisplayName = _reg.DisplayName,
                     Department = _reg.Department,
                     Email = _reg.Email,
-                    Phone = _reg.Phone,
                     PersonnelUrl = NavManager.ToAbsoluteUri("personnel").AbsoluteUri,
                     Source = "用户自助注册",
                     PendingReview = pending
@@ -1100,7 +1070,6 @@
         public string Email { get; set; } = "";
         public string Code { get; set; } = "";
         public string Department { get; set; } = "";
-        public string Phone { get; set; } = "";
     }
 
     private sealed class ForgotForm
