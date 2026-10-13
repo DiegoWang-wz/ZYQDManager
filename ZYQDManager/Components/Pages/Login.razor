@@ -497,7 +497,7 @@
         try
         {
             if (await Auth.IsLoggedInAsync())
-                NavManager.NavigateTo("/project-list", replace: true);
+                NavManager.NavigateTo("/contract-base", replace: true);
         }
         catch
         {
@@ -691,7 +691,7 @@
             }
 
             Notify.Show("登录成功", Severity.Success);
-            NavManager.NavigateTo("/project-list", replace: true);
+            NavManager.NavigateTo("/contract-base", replace: true);
         }
         catch (Exception ex)
         {

@@ -1,6 +1,0 @@
-﻿Guid|ClientName|PIcotract_code|tuo|box1
-----|----------|--------------|---|----
-114538717e1e4346bd5d3873fd39cd6e|Mac Lifestyle Products Ltd|26JC0225-Mac Lifestyle Products Ltd||
-7294d087f1cc483bbb1cf42502165acf|Mac Lifestyle Products Ltd|NULL||
-
-(2 行受影响)

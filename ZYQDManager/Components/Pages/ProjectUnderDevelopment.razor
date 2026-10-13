@@ -1,0 +1,33 @@
+@page "/project"
+@page "/project-list"
+@rendermode InteractiveServer
+
+<PageTitle>项目管理</PageTitle>
+
+<div class="proj-wip-page">
+    <MudPaper Outlined="true" Class="pa-8 proj-wip-card">
+        <MudStack AlignItems="AlignItems.Center" Spacing="3">
+            <MudIcon Icon="@Icons.Material.Filled.Construction"
+                     Color="Color.Warning"
+                     Style="font-size: 3.5rem;"/>
+            <MudText Typo="Typo.h5">该功能页还在开发中</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                项目管理模块暂未开放，请先使用合同、报价等其它功能。
+            </MudText>
+        </MudStack>
+    </MudPaper>
+</div>
+
+<style>
+    .proj-wip-page {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: min(60vh, 520px);
+        padding: 24px 12px;
+    }
+    .proj-wip-card {
+        width: min(520px, 100%);
+        text-align: center;
+    }
+</style>

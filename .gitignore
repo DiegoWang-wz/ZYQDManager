@@ -56,6 +56,15 @@ out/
 *.swp
 *~
 
+## Local probe / one-off scripts at repo root
+/_pack_extract/
+/_xlprobe/
+/_pack_roundtrip.xlsx
+/_sir_check.txt
+/_xltest.csx
+/_*.csx
+/build_out*.txt
+
 ## Secrets / local overrides (keep base appsettings tracked)
 **/appsettings.*.local.json
 **/secrets.json

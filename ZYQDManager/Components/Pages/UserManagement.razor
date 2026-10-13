@@ -431,7 +431,7 @@
         if (!Auth.CanManageUsers(auth))
         {
             Notify.Show("没有人员管理权限", Severity.Warning);
-            NavManager.NavigateTo("/project-list");
+            NavManager.NavigateTo("/contract-base");
             return;
         }
 

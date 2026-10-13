@@ -19,21 +19,9 @@ else
     <MudLayout>
         <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
             <div class="zyqd-nav">
-                <MudMenu Dense="true"
-                         Class="zyqd-nav-menu"
-                         AnchorOrigin="Origin.BottomLeft"
-                         TransformOrigin="Origin.TopLeft">
-                    <ActivatorContent>
-                        <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
-                            <span>项目管理</span>
-                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
-                        </button>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem OnClick="@(() => GoTo("/project-list"))">项目列表</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => GoTo("/dev/motor-doc-schema-test"))">电机文档字段测试</MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
+                <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/project"))">
+                    <span>项目管理</span>
+                </button>
 
                 <MudMenu Dense="true"
                          Class="zyqd-nav-menu"
@@ -104,7 +92,7 @@ else
                     </button>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo("/project-list"))"/>
+                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo("/contract-base"))"/>
                     <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
                     @if (_canManageUsers)
                     {
@@ -409,12 +397,11 @@ else
             }
             if (Starts(path, "invoice-kp")) return "开票管理";
             if (Starts(path, "sir")) return path is "sir" ? "检测报告管理" : "检测报告详情";
-            if (Starts(path, "project-list")) return "项目列表";
+            if (path is "project" or "project-list") return "项目管理";
             if (Starts(path, "project/motor")) return "电机立项单";
             if (Starts(path, "project/")) return "立项单";
             if (Starts(path, "personnel") || Starts(path, "UserManagement")) return "人员管理";
             if (Starts(path, "Profile")) return "个人信息";
-            if (Starts(path, "dev/motor-doc-schema-test")) return "电机文档字段测试";
             if (Starts(path, "tools/decrypt")) return "文件解密";
             return "遮阳管理系统";
         }
