@@ -185,7 +185,25 @@
                 <MudTd>@context.palletizing_method_unit</MudTd>
                 <MudTd>@context.Net_weight</MudTd>
                 <MudTd>@context.gross_weight</MudTd>
-                <MudTd>@context.Customer_Manager</MudTd>
+                <MudTd Class="cb-manager-cell">
+                    @{
+                        var managers = SplitManagers(context.Customer_Manager);
+                    }
+                    @if (managers.Count == 0)
+                    {
+                        <span>-</span>
+                    }
+                    else
+                    {
+                        <MudChipSet T="string" ReadOnly="true" Class="cb-manager-chipset">
+                            @foreach (var m in managers)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                                         Text="@m"/>
+                            }
+                        </MudChipSet>
+                    }
+                </MudTd>
                 <MudTd>@context.CreatePerson</MudTd>
                 <MudTd>@(context.CreateTime?.ToString("yyyy-MM-dd"))</MudTd>
                 <MudTd Class="cb-ops-cell">
@@ -443,6 +461,23 @@
         object-fit: contain;
         display: block;
     }
+
+    .cotract-base-table .mud-table-cell.cb-manager-cell {
+        white-space: normal !important;
+        min-width: 180px;
+        vertical-align: middle !important;
+    }
+
+    .cb-manager-chipset {
+        display: grid !important;
+        grid-template-columns: repeat(2, max-content);
+        gap: 4px 6px;
+        justify-content: start;
+    }
+
+    .cb-manager-chipset .mud-chip {
+        margin: 0 !important;
+    }
 </style>
 
 @code {
@@ -500,6 +535,16 @@
         });
 
     private int RowNo(ZyqdCotractBaseModel row) => _skip + _rows.IndexOf(row) + 1;
+
+    private static List<string> SplitManagers(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return [];
+        return raw
+            .Split(['/', ',', ';', '|', ' ', '、', '，'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     private async Task OnKeyUp(KeyboardEventArgs e)
     {

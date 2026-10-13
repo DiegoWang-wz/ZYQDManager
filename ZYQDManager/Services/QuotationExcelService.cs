@@ -384,7 +384,8 @@ public class QuotationExcelService
     {
         ctx.InsertPageBreakIfNeeded(7);
         var npoiRow = ctx.Row + 12;
-        TryAddPicture(ctx, npoiRow, signatureUrl, width: 160, height: 90);
+        // 对齐老系统签字锚点（约 3 行高），避免签名图过大压住签章区文字
+        TryAddPicture(ctx, npoiRow, signatureUrl, width: 90, height: 48);
     }
 
     private void TryAddPicture(WriteContext ctx, int npoiRow, string? path, int width = 140, int height = 140)

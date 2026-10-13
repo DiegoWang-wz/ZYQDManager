@@ -41,6 +41,51 @@ public class QuotationBaseService
         };
     }
 
+    /// <summary>导出用：按筛选/勾选拉全量（不分页）。</summary>
+    public async Task<List<QuotationBaseListItemDto>> QueryAllAsync(
+        QuotationBaseQueryDto query,
+        IReadOnlyCollection<int>? selectedIds = null,
+        CancellationToken ct = default)
+    {
+        var type = QuotationBaseTypes.Normalize(query.ItemType);
+        var ids = selectedIds?.Where(x => x > 0).Distinct().ToList();
+
+        return type switch
+        {
+            QuotationBaseTypes.Remote => await AllAsync(
+                ApplyIds(Filter(_db.QuotationBaseRemotes.AsNoTracking(), query), ids),
+                query, MapRemote, ct),
+            QuotationBaseTypes.Accessory => await AllAsync(
+                ApplyIds(Filter(_db.QuotationBaseAccessories.AsNoTracking(), query), ids),
+                query, MapAccessory, ct),
+            QuotationBaseTypes.CB => await AllAsync(
+                ApplyIds(Filter(_db.QuotationBaseCbs.AsNoTracking(), query), ids),
+                query, MapCb, ct),
+            QuotationBaseTypes.PR => await AllAsync(
+                ApplyIds(Filter(_db.QuotationBasePrs.AsNoTracking(), query), ids),
+                query, MapPr, ct),
+            _ => await AllAsync(
+                ApplyIds(Filter(_db.QuotationBaseMotors.AsNoTracking(), query), ids),
+                query, MapMotor, ct),
+        };
+    }
+
+    private static IQueryable<T> ApplyIds<T>(IQueryable<T> q, List<int>? ids)
+        where T : QuotationBaseEntity
+        => ids is { Count: > 0 } ? q.Where(x => ids.Contains(x.Id)) : q;
+
+    private static async Task<List<QuotationBaseListItemDto>> AllAsync<T>(
+        IQueryable<T> q,
+        QuotationBaseQueryDto query,
+        Func<T, QuotationBaseListItemDto> map,
+        CancellationToken ct)
+        where T : QuotationBaseEntity
+    {
+        q = Sort(q, query);
+        var entities = await q.ToListAsync(ct);
+        return entities.Select(map).ToList();
+    }
+
     public async Task<(bool Ok, string? Message)> SoftDeleteAsync(
         string itemType, int id, string? person, CancellationToken ct = default)
     {
@@ -94,6 +139,159 @@ public class QuotationBaseService
 
         await _db.SaveChangesAsync(ct);
         return (true, null);
+    }
+
+    /// <summary>
+    /// 批量把相同字段值写到勾选行（对齐老系统 BatchUpdate：fields 为 field→value）。
+    /// </summary>
+    public async Task<(bool Ok, string? Message)> BatchUpdateAsync(
+        string itemType,
+        IEnumerable<int> ids,
+        IReadOnlyDictionary<string, string?> fields,
+        string? empNo,
+        CancellationToken ct = default)
+    {
+        var idList = ids.Distinct().Where(x => x > 0).ToList();
+        if (idList.Count == 0)
+            return (false, "未选择记录");
+
+        var allowed = AllowedBatchFields(itemType);
+        var patch = fields
+            .Where(kv => allowed.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value ?? "", StringComparer.OrdinalIgnoreCase);
+        if (patch.Count == 0)
+            return (false, "没有需要保存的字段");
+
+        var type = QuotationBaseTypes.Normalize(itemType);
+        var now = DateTime.Now;
+        empNo = (empNo ?? "").Trim();
+
+        var updated = type switch
+        {
+            QuotationBaseTypes.Remote => await BatchPatchAsync(
+                _db.QuotationBaseRemotes, idList, patch, empNo, now, ApplyRemoteBatch, ct),
+            QuotationBaseTypes.Accessory => await BatchPatchAsync(
+                _db.QuotationBaseAccessories, idList, patch, empNo, now, ApplyAccessoryBatch, ct),
+            QuotationBaseTypes.CB => await BatchPatchAsync(
+                _db.QuotationBaseCbs, idList, patch, empNo, now, ApplyCbBatch, ct),
+            QuotationBaseTypes.PR => await BatchPatchAsync(
+                _db.QuotationBasePrs, idList, patch, empNo, now, ApplyPrBatch, ct),
+            _ => await BatchPatchAsync(
+                _db.QuotationBaseMotors, idList, patch, empNo, now, ApplyMotorBatch, ct),
+        };
+
+        if (updated == 0)
+            return (false, "没有可更新的记录");
+
+        await _db.SaveChangesAsync(ct);
+        return (true, $"已更新 {updated} 条记录");
+    }
+
+    public static HashSet<string> AllowedBatchFields(string? itemType)
+    {
+        var type = QuotationBaseTypes.Normalize(itemType);
+        return type switch
+        {
+            QuotationBaseTypes.Remote => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Remote_controller_type", "Battery_Type", "Radio_Frequency",
+                "Working_Temperature", "NoOfChannels", "Remark",
+            },
+            QuotationBaseTypes.Accessory => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "adaptor", "Remark",
+            },
+            QuotationBaseTypes.CB => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Rated_Voltage", "Size", "Rated_Power", "No_Of_Actuator",
+                "Output_Control", "Sensor", "Protection_Degree", "Remark",
+            },
+            QuotationBaseTypes.PR => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Max_Loading", "Max_Stroke", "Protection_Degree2", "Noise", "Remark",
+            },
+            _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Rated_torque", "Rated_speed", "Power_supply", "Rated_Power",
+                "Rated_Current", "Noise_dBA", "Motor_Length", "Tube_diameter",
+                "Battery_Capacity", "Exclude_text", "Remark",
+            },
+        };
+    }
+
+    private static async Task<int> BatchPatchAsync<T>(
+        DbSet<T> set,
+        List<int> idList,
+        Dictionary<string, string> patch,
+        string empNo,
+        DateTime now,
+        Action<T, Dictionary<string, string>> apply,
+        CancellationToken ct)
+        where T : QuotationBaseEntity
+    {
+        var items = await set
+            .Where(x => idList.Contains(x.Id) && (x.deleteSigh == null || x.deleteSigh == ""))
+            .ToListAsync(ct);
+        foreach (var item in items)
+        {
+            apply(item, patch);
+            item.UpdateTime = now;
+            item.UpdatePerson = empNo;
+        }
+
+        return items.Count;
+    }
+
+    private static void ApplyMotorBatch(ZyqdQuotationBaseMotorModel row, Dictionary<string, string> f)
+    {
+        if (f.TryGetValue("Rated_torque", out var v)) row.Rated_torque = v;
+        if (f.TryGetValue("Rated_speed", out v)) row.Rated_speed = v;
+        if (f.TryGetValue("Power_supply", out v)) row.Power_supply = v;
+        if (f.TryGetValue("Rated_Power", out v)) row.Rated_Power = v;
+        if (f.TryGetValue("Rated_Current", out v)) row.Rated_Current = v;
+        if (f.TryGetValue("Noise_dBA", out v)) row.Noise_dBA = v;
+        if (f.TryGetValue("Motor_Length", out v)) row.Motor_Length = v;
+        if (f.TryGetValue("Tube_diameter", out v)) row.Tube_diameter = v;
+        if (f.TryGetValue("Battery_Capacity", out v)) row.Battery_Capacity = v;
+        if (f.TryGetValue("Exclude_text", out v)) row.Exclude_text = v;
+        if (f.TryGetValue("Remark", out v)) row.Remark = v;
+    }
+
+    private static void ApplyRemoteBatch(ZyqdQuotationBaseRemoteModel row, Dictionary<string, string> f)
+    {
+        if (f.TryGetValue("Remote_controller_type", out var v)) row.Remote_controller_type = v;
+        if (f.TryGetValue("Battery_Type", out v)) row.Battery_Type = v;
+        if (f.TryGetValue("Radio_Frequency", out v)) row.Radio_Frequency = v;
+        if (f.TryGetValue("Working_Temperature", out v)) row.Working_Temperature = v;
+        if (f.TryGetValue("NoOfChannels", out v)) row.NoOfChannels = v;
+        if (f.TryGetValue("Remark", out v)) row.Remark = v;
+    }
+
+    private static void ApplyAccessoryBatch(ZyqdQuotationBaseAccessoryModel row, Dictionary<string, string> f)
+    {
+        if (f.TryGetValue("adaptor", out var v)) row.adaptor = v;
+        if (f.TryGetValue("Remark", out v)) row.Remark = v;
+    }
+
+    private static void ApplyCbBatch(ZyqdQuotationBaseCbModel row, Dictionary<string, string> f)
+    {
+        if (f.TryGetValue("Rated_Voltage", out var v)) row.Rated_Voltage = v;
+        if (f.TryGetValue("Size", out v)) row.Size = v;
+        if (f.TryGetValue("Rated_Power", out v)) row.Rated_Power = v;
+        if (f.TryGetValue("No_Of_Actuator", out v)) row.No_Of_Actuator = v;
+        if (f.TryGetValue("Output_Control", out v)) row.Output_Control = v;
+        if (f.TryGetValue("Sensor", out v)) row.Sensor = v;
+        if (f.TryGetValue("Protection_Degree", out v)) row.Protection_Degree = v;
+        if (f.TryGetValue("Remark", out v)) row.Remark = v;
+    }
+
+    private static void ApplyPrBatch(ZyqdQuotationBasePrModel row, Dictionary<string, string> f)
+    {
+        if (f.TryGetValue("Max_Loading", out var v)) row.Max_Loading = v;
+        if (f.TryGetValue("Max_Stroke", out v)) row.Max_Stroke = v;
+        if (f.TryGetValue("Protection_Degree2", out v)) row.Protection_Degree2 = v;
+        if (f.TryGetValue("Noise", out v)) row.Noise = v;
+        if (f.TryGetValue("Remark", out v)) row.Remark = v;
     }
 
     private static async Task<bool> SoftDeleteEntityAsync<T>(

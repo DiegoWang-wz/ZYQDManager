@@ -3,8 +3,8 @@
 @using ZYQDManager.Components.Pages.Contract
 @using ZYQDManager.DataModels.Quotation
 @inject QuotationBaseService QuotationBase
+@inject QuotationBaseExcelService QuotationBaseExcel
 @inject CentralAuthService Auth
-@inject NavigationManager Nav
 @inject LastListReturnService LastListReturn
 
 <PageTitle>报价基础数据</PageTitle>
@@ -21,7 +21,7 @@
                            Margin="Margin.Dense"
                            Class="@($"qb-type-select qb-type-{TypeCss(_itemType)}")"
                            ToStringFunc="@(v => QuotationBaseTypes.LabelOf(v))"
-                           Disabled="_busy">
+                           Disabled="_busy || _batchEditMode">
                     @foreach (var t in QuotationBaseTypes.All)
                     {
                         <MudSelectItem Value="@t.Key">
@@ -37,7 +37,8 @@
                            Label="条件"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
-                           Class="qb-filter-select">
+                           Class="qb-filter-select"
+                           Disabled="_batchEditMode">
                     @foreach (var field in QuotationBaseFilterFields.ForType(_itemType))
                     {
                         <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
@@ -50,15 +51,71 @@
                               Margin="Margin.Dense"
                               Immediate="true"
                               Class="qb-filter-input"
-                              OnKeyUp="OnKeyUp"/>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+                              OnKeyUp="OnKeyUp"
+                              Disabled="_batchEditMode"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy || _batchEditMode">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy || _batchEditMode">清空</MudButton>
             </MudStack>
             <div class="qb-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qb-toolbar-right">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@NewHref">新建</MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Deselect"
+                           OnClick="ClearSelection"
+                           Disabled="_selected.Count == 0 || _batchEditMode">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Error"
+                           StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="DeleteSelectedAsync"
+                           Disabled="_selected.Count == 0 || _busy || _batchEditMode">删除</MudButton>
+                @if (_batchEditMode)
+                {
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveBatchAsync"
+                               Disabled="_busy || _pendingFields.Count == 0">
+                        保存
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Close"
+                               OnClick="CancelBatchEditAsync"
+                               Disabled="_busy">
+                        取消修改
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.EditNote"
+                               OnClick="EnterBatchEdit"
+                               Disabled="_busy">
+                        批量修改
+                    </MudButton>
+                }
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy || _batchEditMode">
+                    @(_selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
+                </MudButton>
+                <label class="qb-file-label">
+                    <InputFile OnChange="OnImportFile" accept=".xlsx" disabled="@(_busy || _batchEditMode)"/>
+                    <MudButton Variant="Variant.Outlined"
+                               StartIcon="@Icons.Material.Filled.Upload"
+                               Disabled="_busy || _batchEditMode"
+                               HtmlTag="span">
+                        上传
+                    </MudButton>
+                </label>
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Description"
+                           OnClick="DownloadTemplateAsync"
+                           Disabled="_busy || _batchEditMode">
+                    下载模板
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           Href="@NewHref"
+                           Disabled="_batchEditMode">新建</MudButton>
             </MudStack>
         </MudStack>
     </MudPaper>
@@ -83,7 +140,8 @@
                       Breakpoint="Breakpoint.None"
                       FixedHeader="true"
                       SortMode="SortMode.Single"
-                      Class="qb-table">
+                      RowClassFunc="BatchRowClass"
+                      Class="@(_batchEditMode ? "qb-table qb-batch-edit" : "qb-table")">
                 <HeaderContent>
                     <MudTh Class="qb-no-cell">序号</MudTh>
                     <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Part_No">型号</MudTableSortLabel></MudTh>
@@ -141,67 +199,70 @@
                     <MudTd><LegacyRemoteImg Path="@context.Quotation_logo" CssClass="cotract-thumb"/></MudTd>
                     @if (_itemType == QuotationBaseTypes.Motor)
                     {
-                        <MudTd>@Dash(context.Rated_torque)</MudTd>
-                        <MudTd>@Dash(context.Rated_speed)</MudTd>
-                        <MudTd>@Dash(context.Power_supply)</MudTd>
-                        <MudTd>@Dash(context.Rated_Power)</MudTd>
-                        <MudTd>@Dash(context.Rated_Current)</MudTd>
-                        <MudTd>@Dash(context.Noise_dBA)</MudTd>
-                        <MudTd>@Dash(context.Motor_Length)</MudTd>
-                        <MudTd>@Dash(context.Tube_diameter)</MudTd>
-                        <MudTd>@Dash(context.Battery_Capacity)</MudTd>
-                        <MudTd>@Dash(context.Exclude_text)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Rated_torque")">@BatchCell(context, "Rated_torque", context.Rated_torque)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Rated_speed")">@BatchCell(context, "Rated_speed", context.Rated_speed)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Power_supply")">@BatchCell(context, "Power_supply", context.Power_supply)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Rated_Power")">@BatchCell(context, "Rated_Power", context.Rated_Power)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Rated_Current")">@BatchCell(context, "Rated_Current", context.Rated_Current)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Noise_dBA")">@BatchCell(context, "Noise_dBA", context.Noise_dBA)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Motor_Length")">@BatchCell(context, "Motor_Length", context.Motor_Length)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Tube_diameter")">@BatchCell(context, "Tube_diameter", context.Tube_diameter)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Battery_Capacity")">@BatchCell(context, "Battery_Capacity", context.Battery_Capacity)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Exclude_text")">@BatchCell(context, "Exclude_text", context.Exclude_text)</MudTd>
                     }
                     else if (_itemType == QuotationBaseTypes.Remote)
                     {
-                        <MudTd>@Dash(context.Remote_controller_type)</MudTd>
-                        <MudTd>@Dash(context.Battery_Type)</MudTd>
-                        <MudTd>@Dash(context.Radio_Frequency)</MudTd>
-                        <MudTd>@Dash(context.Working_Temperature)</MudTd>
-                        <MudTd>@Dash(context.NoOfChannels)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Remote_controller_type")">@BatchCell(context, "Remote_controller_type", context.Remote_controller_type)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Battery_Type")">@BatchCell(context, "Battery_Type", context.Battery_Type)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Radio_Frequency")">@BatchCell(context, "Radio_Frequency", context.Radio_Frequency)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Working_Temperature")">@BatchCell(context, "Working_Temperature", context.Working_Temperature)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "NoOfChannels")">@BatchCell(context, "NoOfChannels", context.NoOfChannels)</MudTd>
                     }
                     else if (_itemType == QuotationBaseTypes.Accessory)
                     {
-                        <MudTd>@Dash(context.adaptor)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "adaptor")">@BatchCell(context, "adaptor", context.adaptor)</MudTd>
                     }
                     else if (_itemType == QuotationBaseTypes.CB)
                     {
-                        <MudTd>@Dash(context.Rated_Voltage)</MudTd>
-                        <MudTd>@Dash(context.Size)</MudTd>
-                        <MudTd>@Dash(context.Rated_Power)</MudTd>
-                        <MudTd>@Dash(context.No_Of_Actuator)</MudTd>
-                        <MudTd>@Dash(context.Output_Control)</MudTd>
-                        <MudTd>@Dash(context.Sensor)</MudTd>
-                        <MudTd>@Dash(context.Protection_Degree)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Rated_Voltage")">@BatchCell(context, "Rated_Voltage", context.Rated_Voltage)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Size")">@BatchCell(context, "Size", context.Size)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Rated_Power")">@BatchCell(context, "Rated_Power", context.Rated_Power)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "No_Of_Actuator")">@BatchCell(context, "No_Of_Actuator", context.No_Of_Actuator)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Output_Control")">@BatchCell(context, "Output_Control", context.Output_Control)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Sensor")">@BatchCell(context, "Sensor", context.Sensor)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Protection_Degree")">@BatchCell(context, "Protection_Degree", context.Protection_Degree)</MudTd>
                     }
                     else if (_itemType == QuotationBaseTypes.PR)
                     {
-                        <MudTd>@Dash(context.Max_Loading)</MudTd>
-                        <MudTd>@Dash(context.Max_Stroke)</MudTd>
-                        <MudTd>@Dash(context.Protection_Degree2)</MudTd>
-                        <MudTd>@Dash(context.Noise)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Max_Loading")">@BatchCell(context, "Max_Loading", context.Max_Loading)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Max_Stroke")">@BatchCell(context, "Max_Stroke", context.Max_Stroke)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Protection_Degree2")">@BatchCell(context, "Protection_Degree2", context.Protection_Degree2)</MudTd>
+                        <MudTd Class="@BatchTdClass(context, "Noise")">@BatchCell(context, "Noise", context.Noise)</MudTd>
                     }
                     <MudTd>@FormatDate(context.CreateTime)</MudTd>
                     <MudTd>@Dash(context.CreatePerson)</MudTd>
-                    <MudTd>@Dash(context.Remark)</MudTd>
+                    <MudTd Class="@BatchTdClass(context, "Remark")">@BatchCell(context, "Remark", context.Remark)</MudTd>
                     <MudTd Class="qb-ops-cell">
                         <div class="qb-ops-grid">
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.Edit"
                                        Class="qb-ops-btn"
+                                       Disabled="_batchEditMode"
                                        Href="@EditHref(context)">编辑</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Filled.Visibility"
                                        Class="qb-ops-btn"
+                                       Disabled="_batchEditMode"
                                        Href="@DetailHref(context)">详情</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Filled.ContentCopy"
                                        Class="qb-ops-btn"
+                                       Disabled="_batchEditMode"
                                        Href="@CopyHref(context)">复制</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
                                        StartIcon="@Icons.Material.Filled.Delete"
                                        Class="qb-ops-btn"
-                                       Disabled="_busy"
+                                       Disabled="_busy || _batchEditMode"
                                        OnClick="@(() => DeleteAsync(context))">删除</MudButton>
                         </div>
                     </MudTd>
@@ -232,6 +293,49 @@
     .qb-toolbar-left, .qb-toolbar-right { flex: 0 0 auto; }
     .qb-toolbar-right { margin-left: auto; }
     .qb-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .qb-file-label {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        margin: 0;
+        cursor: pointer;
+    }
+    .qb-file-label input[type=file] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+        z-index: -1;
+    }
+    /* 批量勾选行整行高亮；须盖过 sticky 勾选/序号/操作列的白底与斑马纹 */
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell:first-child,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-no-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-ops-cell,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(even) > .mud-table-cell:first-child,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(even) > .mud-table-cell.qb-no-cell,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(even) > .mud-table-cell.qb-ops-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row:hover > .mud-table-cell.qb-ops-cell {
+        background-color: #fff8e1 !important;
+    }
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-cell-dirty {
+        outline: 1px dashed #ef6c00;
+        outline-offset: -2px;
+        background-color: #fff3e0 !important;
+    }
+    .qb-batch-input {
+        min-width: 88px;
+        max-width: 180px;
+    }
+    .qb-batch-input .mud-input-control,
+    .qb-batch-input .mud-input {
+        margin-top: 0 !important;
+    }
+    .qb-table.qb-batch-edit .qb-batch-input .mud-input-outlined,
+    .qb-table.qb-batch-edit .qb-batch-input .mud-input-slot {
+        background-color: #fffdf5 !important;
+    }
     .qb-type-select { width: 160px; min-width: 160px; }
     .qb-type-select .mud-input-slot,
     .qb-type-select input.mud-select-input {
@@ -402,8 +506,14 @@
     private List<QuotationBaseListItemDto> _rows = new();
     private HashSet<QuotationBaseListItemDto> _selected = new();
     private int _skip;
+    private int _total;
     private int _currentPage;
     private int _rowsPerPage = 20;
+    private string? _sortLabel = "Id";
+    private bool _sortDescending = true;
+    private const long MaxImportBytes = 32L * 1024 * 1024;
+    private bool _batchEditMode;
+    private readonly Dictionary<string, string?> _pendingFields = new(StringComparer.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
@@ -457,15 +567,17 @@
         if (resetKeyword)
             _keyword = null;
         _selected.Clear();
+        ExitBatchEdit();
     }
 
     private async Task OnItemTypeChangedAsync(string value)
     {
         var next = QuotationBaseTypes.Normalize(value);
         if (next == _itemType) return;
+        if (!await ConfirmLeaveBatchAsync()) return;
 
         ApplyType(next, resetKeyword: true);
-        Nav.NavigateTo($"/quotation-base?type={Uri.EscapeDataString(next)}", replace: true);
+        NavManager.NavigateTo($"/quotation-base?type={Uri.EscapeDataString(next)}", replace: true);
         await ReloadAfterTypeChangeAsync();
     }
 
@@ -501,6 +613,7 @@
 
     private async Task SearchAsync()
     {
+        if (!await ConfirmLeaveBatchAsync()) return;
         _selected.Clear();
         await ReloadTableAsync(resetPage: true);
     }
@@ -509,8 +622,178 @@
 
     private void OnRowClick(TableRowClickEventArgs<QuotationBaseListItemDto> args)
     {
+        if (_batchEditMode) return;
         if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
         NavManager.NavigateTo(DetailHref(args.Item));
+    }
+
+    private bool CanBatchEdit(QuotationBaseListItemDto row)
+        => _batchEditMode && _selected.Contains(row);
+
+    private string BatchRowClass(QuotationBaseListItemDto row, int _)
+        => CanBatchEdit(row) ? "qb-batch-row" : string.Empty;
+
+    private string BatchTdClass(QuotationBaseListItemDto row, string field)
+        => CanBatchEdit(row) && _pendingFields.ContainsKey(field)
+            ? "qb-batch-td qb-cell-dirty"
+            : "qb-batch-td";
+
+    private RenderFragment BatchCell(QuotationBaseListItemDto row, string field, string? value) => builder =>
+    {
+        if (CanBatchEdit(row))
+        {
+            builder.OpenComponent<MudTextField<string>>(0);
+            builder.AddAttribute(1, "Value", value ?? "");
+            builder.AddAttribute(2, "ValueChanged", EventCallback.Factory.Create<string>(this, v => OnBatchFieldChanged(field, v)));
+            builder.AddAttribute(3, "Variant", Variant.Outlined);
+            builder.AddAttribute(4, "Margin", Margin.Dense);
+            builder.AddAttribute(5, "Immediate", false);
+            builder.AddAttribute(6, "Class", "qb-batch-input");
+            builder.AddAttribute(7, "Disabled", _busy);
+            builder.CloseComponent();
+        }
+        else
+        {
+            builder.AddContent(10, Dash(value));
+        }
+    };
+
+    private void OnBatchFieldChanged(string field, string? value)
+    {
+        if (!_batchEditMode) return;
+        value ??= "";
+        _pendingFields[field] = value;
+        foreach (var row in _selected)
+            SetRowField(row, field, value);
+        StateHasChanged();
+    }
+
+    private static void SetRowField(QuotationBaseListItemDto row, string field, string value)
+    {
+        switch (field)
+        {
+            case "Rated_torque": row.Rated_torque = value; break;
+            case "Rated_speed": row.Rated_speed = value; break;
+            case "Power_supply": row.Power_supply = value; break;
+            case "Rated_Power": row.Rated_Power = value; break;
+            case "Rated_Current": row.Rated_Current = value; break;
+            case "Noise_dBA": row.Noise_dBA = value; break;
+            case "Motor_Length": row.Motor_Length = value; break;
+            case "Tube_diameter": row.Tube_diameter = value; break;
+            case "Battery_Capacity": row.Battery_Capacity = value; break;
+            case "Exclude_text": row.Exclude_text = value; break;
+            case "Remote_controller_type": row.Remote_controller_type = value; break;
+            case "Battery_Type": row.Battery_Type = value; break;
+            case "Radio_Frequency": row.Radio_Frequency = value; break;
+            case "Working_Temperature": row.Working_Temperature = value; break;
+            case "NoOfChannels": row.NoOfChannels = value; break;
+            case "adaptor": row.adaptor = value; break;
+            case "Rated_Voltage": row.Rated_Voltage = value; break;
+            case "Size": row.Size = value; break;
+            case "No_Of_Actuator": row.No_Of_Actuator = value; break;
+            case "Output_Control": row.Output_Control = value; break;
+            case "Sensor": row.Sensor = value; break;
+            case "Protection_Degree": row.Protection_Degree = value; break;
+            case "Max_Loading": row.Max_Loading = value; break;
+            case "Max_Stroke": row.Max_Stroke = value; break;
+            case "Protection_Degree2": row.Protection_Degree2 = value; break;
+            case "Noise": row.Noise = value; break;
+            case "Remark": row.Remark = value; break;
+        }
+    }
+
+    private void EnterBatchEdit()
+    {
+        if (_selected.Count == 0)
+        {
+            Notify.Show("请先勾选要批量修改的记录", Severity.Warning);
+            return;
+        }
+
+        _batchEditMode = true;
+        _pendingFields.Clear();
+        Notify.Show("已进入批量修改：编辑勾选行单元格，同列勾选行会同步，完成后点保存", Severity.Info);
+    }
+
+    private async Task CancelBatchEditAsync()
+    {
+        if (_pendingFields.Count > 0)
+        {
+            var ok = await DialogService.ShowMessageBoxAsync(
+                "取消修改",
+                "取消后未保存的修改将丢失，确定取消？",
+                yesText: "确定取消", cancelText: "继续编辑");
+            if (ok != true) return;
+        }
+
+        ExitBatchEdit();
+        _selected.Clear();
+        await ReloadTableAsync(resetPage: false);
+    }
+
+    private async Task SaveBatchAsync()
+    {
+        if (_selected.Count == 0)
+        {
+            Notify.Show("请先勾选要保存的记录", Severity.Warning);
+            return;
+        }
+
+        if (_pendingFields.Count == 0)
+        {
+            Notify.Show("没有需要保存的修改，请先编辑单元格", Severity.Warning);
+            return;
+        }
+
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认保存",
+            $"将把修改同步到已勾选的 {_selected.Count} 条记录，确定保存？",
+            yesText: "保存", cancelText: "取消");
+        if (ok != true) return;
+
+        _busy = true;
+        try
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync() ?? "";
+            var ids = _selected.Select(x => x.Id).ToList();
+            var (success, msg) = await QuotationBase.BatchUpdateAsync(_itemType, ids, _pendingFields, empNo);
+            if (!success)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Error);
+                return;
+            }
+
+            Notify.Show(msg ?? "保存成功", Severity.Success);
+            ExitBatchEdit();
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ExitBatchEdit()
+    {
+        _batchEditMode = false;
+        _pendingFields.Clear();
+    }
+
+    private async Task<bool> ConfirmLeaveBatchAsync()
+    {
+        if (!_batchEditMode) return true;
+        if (_pendingFields.Count > 0)
+        {
+            var ok = await DialogService.ShowMessageBoxAsync(
+                "离开批量修改",
+                "当前有未保存的批量修改，离开将丢失，确定继续？",
+                yesText: "离开", cancelText: "留下");
+            if (ok != true) return false;
+        }
+
+        ExitBatchEdit();
+        return true;
     }
 
     private string NewHref => $"/quotation-base/new?type={Uri.EscapeDataString(_itemType)}";
@@ -570,18 +853,14 @@
         _busy = true;
         try
         {
-            var query = new QuotationBaseQueryDto
-            {
-                ItemType = _itemType,
-                FilterColumn = _filterColumn,
-                Keyword = _keyword,
-                SortLabel = string.IsNullOrWhiteSpace(state.SortLabel) ? "Id" : state.SortLabel,
-                SortDescending = state.SortDirection != SortDirection.Ascending,
-            };
+            _sortLabel = string.IsNullOrWhiteSpace(state.SortLabel) ? "Id" : state.SortLabel;
+            _sortDescending = state.SortDirection != SortDirection.Ascending;
+            var query = BuildQuery();
             var skip = state.Page * state.PageSize;
             var (rows, total) = await QuotationBase.QueryPageAsync(query, skip, state.PageSize, ct);
             _rows = rows;
             _skip = skip;
+            _total = total;
             _currentPage = state.Page;
             _rowsPerPage = state.PageSize;
             PersistAsync(state.Page, state.PageSize);
@@ -646,6 +925,139 @@
             Notify.Show("已删除", Severity.Success);
             _selected.Clear();
             await ReloadTableAsync(resetPage: false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private QuotationBaseQueryDto BuildQuery() => new()
+    {
+        ItemType = _itemType,
+        FilterColumn = _filterColumn,
+        Keyword = _keyword,
+        SortLabel = _sortLabel,
+        SortDescending = _sortDescending,
+    };
+
+    private async Task ExportAsync()
+    {
+        var selectedIds = _selected.Count > 0 ? _selected.Select(x => x.Id).ToList() : null;
+        if (selectedIds is null)
+        {
+            if (_total <= 0)
+            {
+                Notify.Show("没有可导出的数据", Severity.Warning);
+                return;
+            }
+
+            var typeLabel = QuotationBaseTypes.LabelOf(_itemType);
+            var ok = await DialogService.ShowMessageBoxAsync(
+                "确认导出",
+                $"未勾选记录，将按当前筛选条件导出全部「{typeLabel}」数据，共 {_total} 条，是否继续？",
+                yesText: "导出全部", cancelText: "取消");
+            if (ok != true) return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = await QuotationBaseExcel.ExportAsync(BuildQuery(), selectedIds);
+            if (bytes.Length == 0)
+            {
+                Notify.Show("没有可导出的数据", Severity.Warning);
+                return;
+            }
+
+            var typeLabel = QuotationBaseTypes.LabelOf(_itemType);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                $"报价基础_{typeLabel}_{DateTime.Now:yyyyMMddHHmmss}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+            Notify.Show(
+                selectedIds is { Count: > 0 } ? $"已导出选中的 {selectedIds.Count} 条" : $"已按当前条件导出全部 {_total} 条",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DownloadTemplateAsync()
+    {
+        _busy = true;
+        try
+        {
+            var bytes = await QuotationBaseExcel.GetTemplateBytesAsync(_itemType);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                QuotationBaseExcelService.TemplateFileNameFor(_itemType),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("下载模板失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnImportFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            Notify.Show("请上传 xlsx 文件（请先下载模板）", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > MaxImportBytes)
+        {
+            Notify.Show("文件超过 32MB，请拆分后再导入", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxImportBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            var empNo = await Auth.GetCurrentEmpNoAsync();
+            if (string.IsNullOrWhiteSpace(empNo))
+            {
+                Notify.Show("无法获取当前登录工号，请重新登录后再导入", Severity.Error);
+                return;
+            }
+
+            var result = await QuotationBaseExcel.ImportAsync(ms, empNo);
+            if (!result.Ok)
+            {
+                Notify.Show(result.Message, Severity.Error);
+                return;
+            }
+
+            Notify.Show(result.Message, Severity.Success);
+            _selected.Clear();
+            await ReloadTableAsync(resetPage: true);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导入失败：" + ex.Message, Severity.Error);
         }
         finally
         {

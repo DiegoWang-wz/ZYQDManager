@@ -106,7 +106,7 @@
                     <MudTh>目的国</MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="PIcotract_code">PI合同</MudTableSortLabel></MudTh>
                     <MudTh>SAP订单</MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="Person">需求人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
                     <MudTh Class="cpk-ops-cell">操作</MudTh>
                 </HeaderContent>
@@ -117,7 +117,7 @@
                     <MudTd>@Dash(context.Customer_destination_country)</MudTd>
                     <MudTd>@Dash(context.PIcotract_code)</MudTd>
                     <MudTd>@Dash(context.SAP_order_NO)</MudTd>
-                    <MudTd>@Dash(context.Person)</MudTd>
+                    <MudTd>@Dash(context.CreatePerson)</MudTd>
                     <MudTd>@(context.CreateTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</MudTd>
                     <MudTd Class="cpk-ops-cell">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"

@@ -135,7 +135,7 @@
                                             <button type="button"
                                                     class="profile-sig-thumb-x"
                                                     title="删除中文签名"
-                                                    @onclick="ClearSignature"
+                                                    @onclick="ClearSignatureAsync"
                                                     @onclick:stopPropagation="true">×</button>
                                         }
                                     </div>
@@ -172,7 +172,7 @@
                                             <button type="button"
                                                     class="profile-sig-thumb-x"
                                                     title="删除英文签名"
-                                                    @onclick="ClearSignatureEn"
+                                                    @onclick="ClearSignatureEnAsync"
                                                     @onclick:stopPropagation="true">×</button>
                                         }
                                     </div>
@@ -755,16 +755,22 @@
         }
     }
 
-    private void ClearSignature()
+    private async Task ClearSignatureAsync()
     {
+        if (_busy || _readOnly) return;
         _signatureUrl = "";
         _signature = "";
+        if (await PersistProfileAsync())
+            Notify.Show("中文签名已删除", Severity.Success);
     }
 
-    private void ClearSignatureEn()
+    private async Task ClearSignatureEnAsync()
     {
+        if (_busy || _readOnly) return;
         _signatureUrlEn = "";
         _signatureEn = "";
+        if (await PersistProfileAsync())
+            Notify.Show("英文签名已删除", Severity.Success);
     }
 
     private Task OnSignatureFile(InputFileChangeEventArgs e) => UploadSignatureAsync(e, chinese: true);
@@ -801,7 +807,9 @@
                 else if (!string.IsNullOrWhiteSpace(_displayName))
                     _signatureEn = _displayName.Trim();
             }
-            Notify.Show((chinese ? "中文" : "英文") + "签名已上传（请点保存写入档案）", Severity.Success);
+
+            if (await PersistProfileAsync())
+                Notify.Show((chinese ? "中文" : "英文") + "签名已保存", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -819,17 +827,27 @@
         if (_busy || _readOnly)
             return;
 
+        if (await PersistProfileAsync())
+            Notify.Show("个人信息已保存", Severity.Success);
+    }
+
+    /// <summary>写入档案；成功返回 true（不弹成功提示，由调用方决定）。</summary>
+    private async Task<bool> PersistProfileAsync()
+    {
+        if (_readOnly)
+            return false;
+
         if (string.IsNullOrWhiteSpace(_displayName))
         {
             Notify.Show("请输入姓名", Severity.Warning);
-            return;
+            return false;
         }
 
         var email = (_email ?? "").Trim();
         if (email.Length > 0 && (email.Length < 5 || !email.Contains('@') || !email.Contains('.')))
         {
             Notify.Show("请输入有效邮箱", Severity.Warning);
-            return;
+            return false;
         }
 
         _busy = true;
@@ -863,10 +881,10 @@
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
-                return;
+                return false;
             }
 
-            Notify.Show("个人信息已保存", Severity.Success);
+            return true;
         }
         finally
         {

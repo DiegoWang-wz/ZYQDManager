@@ -9,6 +9,14 @@ public sealed class QuotationBaseQueryDto
     public bool SortDescending { get; set; } = true;
 }
 
+public sealed class QuotationBaseImportResult
+{
+    public bool Ok { get; set; }
+    public string Message { get; set; } = "";
+    public int Imported { get; set; }
+    public int Updated { get; set; }
+}
+
 /// <summary>统一列表行：按 ItemType 只填对应规格列。</summary>
 public sealed class QuotationBaseListItemDto
 {

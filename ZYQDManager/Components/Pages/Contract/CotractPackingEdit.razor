@@ -21,14 +21,39 @@
                 <MudTextField @bind-Value="_header.ClientName" Label="客户名称" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
                 <MudTextField @bind-Value="_header.Customer_destination_country" Label="目的国" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
                 <MudTextField @bind-Value="_header.PIcotract_code" Label="PI合同号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.Person" Label="需求人" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.Shipping_heads_up" Label="出运抬头" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.CreatePerson" Label="创建人" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy" ReadOnly="true"/>
+                <MudSelect T="string" @bind-Value="_header.Shipping_heads_up" Label="出运抬头" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="_busy">
+                    @foreach (var o in ShippingHeadsOptions)
+                    {
+                        <MudSelectItem Value="@o">@o</MudSelectItem>
+                    }
+                </MudSelect>
                 <MudTextField @bind-Value="_header.delivery_time" Label="货好时间" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.Trade_Term" Label="贸易术语" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.packing_list_type" Label="箱单类型" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.Shipping_method" Label="出货方式" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.encasement_method" Label="装箱方式" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.Box_type_quantity" Label="箱型箱量" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudSelect T="string" @bind-Value="_header.Trade_Term" Label="贸易术语" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="_busy">
+                    @foreach (var o in TradeTermOptions)
+                    {
+                        <MudSelectItem Value="@o">@o</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_header.packing_list_type" Label="箱单类型" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="_busy"/>
+                <MudSelect T="string" @bind-Value="_header.Shipping_method" Label="出货方式" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="_busy">
+                    @foreach (var o in ShippingMethodOptions)
+                    {
+                        <MudSelectItem Value="@o">@o</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" @bind-Value="_header.encasement_method" Label="装箱方式" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="_busy">
+                    @foreach (var o in EncasementMethodOptions)
+                    {
+                        <MudSelectItem Value="@o">@o</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" @bind-Value="_header.Box_type_quantity" Label="箱型箱量" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true" Disabled="_busy">
+                    @foreach (var o in BoxTypeOptions)
+                    {
+                        <MudSelectItem Value="@o">@o</MudSelectItem>
+                    }
+                </MudSelect>
                 <div class="cpk-form-actions">
                     <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                         <ActivatorContent>
@@ -65,9 +90,9 @@
                     <MudTh>SAP订单</MudTh>
                     <MudTh>铭牌1</MudTh>
                     <MudTh>铭牌2</MudTh>
-                    <MudTh>物料号</MudTh>
-                    <MudTh>物料名</MudTh>
-                    <MudTh>数量</MudTh>
+                    <MudTh Class="cpk-sticky-l1">物料号</MudTh>
+                    <MudTh Class="cpk-sticky-l2">物料名</MudTh>
+                    <MudTh Class="cpk-sticky-l3">数量</MudTh>
                     <MudTh>打包方式</MudTh>
                     <MudTh>打包单位</MudTh>
                     <MudTh>箱数</MudTh>
@@ -86,9 +111,10 @@
                     <MudTh>总毛重</MudTh>
                     <MudTh>托重</MudTh>
                     <MudTh>体积</MudTh>
+                    <MudTh>托盘编号</MudTh>
                     <MudTh>散发</MudTh>
                     <MudTh>行类型</MudTh>
-                    <MudTh Style="width:120px">操作</MudTh>
+                    <MudTh Class="cpk-sticky-ops">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
                     @{
@@ -121,14 +147,20 @@
                                     ValueChanged="v => line.nameplate_url2 = v"
                                     ReadOnly="_busy"/>
                     </MudTd>
-                    <MudTd>
-                        <CpkFitText Value="@line.materialNo" ValueChanged="v => line.materialNo = v" Disabled="_busy"/>
+                    <MudTd Class="cpk-sticky-l1">
+                        <div class="cpk-sticky-clip">
+                            <CpkFitText Value="@line.materialNo" ValueChanged="v => line.materialNo = v" Disabled="_busy"/>
+                        </div>
                     </MudTd>
-                    <MudTd>
-                        <CpkFitText Value="@line.materialName" ValueChanged="v => line.materialName = v" Disabled="_busy" MinChars="8"/>
+                    <MudTd Class="cpk-sticky-l2">
+                        <div class="cpk-sticky-clip">
+                            <CpkFitText Value="@line.materialName" ValueChanged="v => line.materialName = v" Disabled="_busy" MinChars="8"/>
+                        </div>
                     </MudTd>
-                    <MudTd>
-                        <CpkFitNum Value="line.qty" ValueChanged="v => OnLineChanged(line, () => line.qty = v)" Disabled="_busy"/>
+                    <MudTd Class="cpk-sticky-l3">
+                        <div class="cpk-sticky-clip">
+                            <CpkFitNum Value="line.qty" ValueChanged="v => OnLineChanged(line, () => line.qty = v)" Disabled="_busy"/>
+                        </div>
                     </MudTd>
                     <MudTd>
                         <CpkFitText Value="@line.Packing_method"
@@ -199,12 +231,18 @@
                         <CpkFitNum Value="line.volume" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
+                        <CpkFitText Value="@line.Pallet_code"
+                                    ValueChanged="v => line.Pallet_code = v"
+                                    Disabled="_busy"
+                                    MinChars="6"/>
+                    </MudTd>
+                    <MudTd>
                         <CpkFitText Value="@line.emit"
                                     ValueChanged="v => OnLineChanged(line, () => line.emit = v)"
                                     Disabled="_busy"/>
                     </MudTd>
                     <MudTd>@(line.var7 ?? "原始行")</MudTd>
-                    <MudTd>
+                    <MudTd Class="cpk-sticky-ops">
                         <MudStack Row="true" Spacing="0">
                             @if (string.Equals(line.var7, "原始行", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line.var7))
                             {
@@ -217,20 +255,44 @@
                         </MudStack>
                     </MudTd>
                 </RowTemplate>
+                <FooterContent>
+                    <MudTd Class="cpk-summary-label">数据汇总</MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd Class="cpk-sticky-l1"></MudTd>
+                    <MudTd Class="cpk-sticky-l2"></MudTd>
+                    <MudTd Class="cpk-sticky-l3">
+                        <div class="cpk-sticky-clip">
+                            <CpkFitNum Value="_header.all_qty" ReadOnly="true"/>
+                        </div>
+                    </MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd><CpkFitNum Value="_header.all_box_qty" ReadOnly="true"/></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd><CpkFitNum Value="_header.all_Pallet_qty" ReadOnly="true"/></MudTd>
+                    <MudTd><CpkFitText Value="@(_header.var5 ?? "0")" ReadOnly="true"/></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd><CpkFitNum Value="_header.all_total_Net_weight" ReadOnly="true"/></MudTd>
+                    <MudTd><CpkFitNum Value="_header.all_total_gross_weight" ReadOnly="true"/></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd><CpkFitNum Value="_header.all_volume" ReadOnly="true"/></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd><CpkFitText Value="@(_header.all_emit ?? "0")" ReadOnly="true"/></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd Class="cpk-sticky-ops"></MudTd>
+                </FooterContent>
             </MudTable>
-        </MudPaper>
-
-        <MudPaper Class="pa-3 cpk-summary-panel" Outlined="true">
-            <MudStack Row="true" Spacing="3" Class="cpk-summary" Wrap="Wrap.Wrap">
-                <MudText Typo="Typo.body2">总数量：@_header.all_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.body2">总箱数：@_header.all_box_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.body2">总托数：@_header.all_Pallet_qty.ToString("0.##")</MudText>
-                <MudText Typo="Typo.body2">不足托箱：@(_header.var5 ?? "0")</MudText>
-                <MudText Typo="Typo.body2">总净重：@_header.all_total_Net_weight.ToString("0.##")</MudText>
-                <MudText Typo="Typo.body2">总毛重：@_header.all_total_gross_weight.ToString("0.##")</MudText>
-                <MudText Typo="Typo.body2">总体积：@_header.all_volume.ToString("0.##")</MudText>
-                <MudText Typo="Typo.body2">散发合计：@(_header.all_emit ?? "0")</MudText>
-            </MudStack>
         </MudPaper>
     }
 </div>
@@ -261,9 +323,32 @@
         overflow: hidden;
         gap: 8px;
     }
-    .cpk-header-panel,
-    .cpk-summary-panel {
+    .cpk-header-panel {
         flex: 0 0 auto;
+    }
+    /* 汇总行钉在滚动区底部，纵向滚动时始终可见 */
+    .cpk-line-table .mud-table-foot .mud-table-cell {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        background-color: var(--mud-palette-background-grey, #f5f5f5) !important;
+        font-weight: 600;
+        white-space: nowrap;
+        vertical-align: middle;
+        text-align: center !important;
+        padding: 4px 6px !important;
+        box-shadow: 0 -1px 0 var(--mud-palette-lines-default, #e0e0e0);
+    }
+    .cpk-line-table .mud-table-foot .mud-table-cell.cpk-summary-label {
+        text-align: left !important;
+        padding-left: 12px !important;
+    }
+    .cpk-line-table .mud-table-foot .mud-table-cell.cpk-sticky-l1,
+    .cpk-line-table .mud-table-foot .mud-table-cell.cpk-sticky-l2,
+    .cpk-line-table .mud-table-foot .mud-table-cell.cpk-sticky-l3,
+    .cpk-line-table .mud-table-foot .mud-table-cell.cpk-sticky-ops {
+        background-color: var(--mud-palette-background-grey, #f5f5f5) !important;
+        z-index: 9;
     }
     .cpk-lines-panel {
         flex: 1 1 0;
@@ -320,10 +405,13 @@
         white-space: nowrap;
         text-align: center !important;
     }
-    .cpk-line-table table {
+    .cpk-line-table table,
+    .cpk-line-table .mud-table-root {
         table-layout: auto !important;
         width: max-content !important;
         min-width: 100%;
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
     }
     .cpk-line-table .mud-table-body .mud-table-cell {
         white-space: nowrap;
@@ -331,6 +419,7 @@
         text-align: center !important;
         width: 1%;
         padding: 4px 6px !important;
+        background-color: var(--mud-palette-surface, #fff);
     }
     .cpk-line-table .mud-table-body .mud-table-cell > * {
         margin-left: auto;
@@ -342,6 +431,94 @@
         vertical-align: middle !important;
         white-space: normal !important;
         text-align: center !important;
+    }
+    /* 横滑固定列：宽度用 px 锁死，left 与宽度一致，避免重叠 */
+    .cpk-line-table {
+        --cpk-l1-w: 108px;
+        --cpk-l2-w: 168px;
+        --cpk-l3-w: 72px;
+        --cpk-ops-w: 72px;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-l1,
+    .cpk-line-table .mud-table-cell.cpk-sticky-l2,
+    .cpk-line-table .mud-table-cell.cpk-sticky-l3,
+    .cpk-line-table .mud-table-cell.cpk-sticky-ops {
+        position: sticky !important;
+        background-color: var(--mud-palette-surface, #fff) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-l1 {
+        left: 0 !important;
+        z-index: 4;
+        width: var(--cpk-l1-w) !important;
+        min-width: var(--cpk-l1-w) !important;
+        max-width: var(--cpk-l1-w) !important;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-l2 {
+        left: var(--cpk-l1-w) !important;
+        z-index: 4;
+        width: var(--cpk-l2-w) !important;
+        min-width: var(--cpk-l2-w) !important;
+        max-width: var(--cpk-l2-w) !important;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-l3 {
+        left: calc(var(--cpk-l1-w) + var(--cpk-l2-w)) !important;
+        z-index: 4;
+        width: var(--cpk-l3-w) !important;
+        min-width: var(--cpk-l3-w) !important;
+        max-width: var(--cpk-l3-w) !important;
+        box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.14);
+    }
+    /* 裁剪层：阻止 CpkFit 的 size 撑破固定列宽 */
+    .cpk-line-table .mud-table-cell .cpk-sticky-clip {
+        width: 0;
+        min-width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-l1 .cpk-fit-input,
+    .cpk-line-table .mud-table-cell.cpk-sticky-l2 .cpk-fit-input,
+    .cpk-line-table .mud-table-cell.cpk-sticky-l3 .cpk-fit-input {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-ops {
+        right: 0 !important;
+        z-index: 4;
+        width: var(--cpk-ops-w) !important;
+        min-width: var(--cpk-ops-w) !important;
+        max-width: var(--cpk-ops-w) !important;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+        border-left: 1px solid var(--mud-palette-lines-default, #e0e0e0);
+        box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.14);
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-ops .mud-stack {
+        justify-content: center;
+        gap: 0 !important;
+        flex-wrap: nowrap;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-ops .mud-icon-button {
+        padding: 4px !important;
+        margin: 0 !important;
+    }
+    .cpk-line-table .mud-table-head .mud-table-cell.cpk-sticky-l1,
+    .cpk-line-table .mud-table-head .mud-table-cell.cpk-sticky-l2,
+    .cpk-line-table .mud-table-head .mud-table-cell.cpk-sticky-l3,
+    .cpk-line-table .mud-table-head .mud-table-cell.cpk-sticky-ops {
+        top: 0;
+        z-index: 8;
+    }
+    .cpk-line-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-sticky-l1,
+    .cpk-line-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-sticky-l2,
+    .cpk-line-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-sticky-l3,
+    .cpk-line-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-sticky-ops {
+        background-color: #eeeeee !important;
     }
     .cpk-split-mask {
         position: fixed;
@@ -369,6 +546,16 @@
     private double _splitQty;
 
     private string Title => _isCreate ? "新建装箱单" : "编辑装箱单";
+
+    private static readonly string[] TradeTermOptions = ["EXW", "FOB", "CIF", "DDP", "DAP", "DDU", "C&F"];
+    private static readonly string[] EncasementMethodOptions = ["整箱", "拼箱"];
+    private static readonly string[] BoxTypeOptions = ["20GP", "40GP", "40HQ", "20OT", "40OT"];
+    private static readonly string[] ShippingMethodOptions = ["海运", "空运", "快递", "铁路"];
+    private static readonly string[] ShippingHeadsOptions =
+    [
+        "浙江捷昌线性驱动科技股份有限公司",
+        "新昌县捷昌进出口有限公司"
+    ];
 
     protected override async Task OnParametersSetAsync()
     {
