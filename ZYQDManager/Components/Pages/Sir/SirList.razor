@@ -1,6 +1,7 @@
 @page "/sir"
 @rendermode InteractiveServer
 @inject SirService Sir
+@inject CentralAuthService Auth
 @inject LastListReturnService LastListReturn
 
 <PageTitle>检测报告管理列表</PageTitle>
@@ -73,9 +74,12 @@
             </MudStack>
             <div class="sir-toolbar-spacer"></div>
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-right">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
+                @if (_canManageReports)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
+                }
             </MudStack>
         </MudStack>
     </MudPaper>
@@ -93,14 +97,14 @@
                       Striped="true"
                       Bordered="true"
                       Loading="_busy"
-                      MultiSelection="true"
+                      MultiSelection="_canManageReports"
                       SelectOnRowClick="false"
                       @bind-SelectedItems="_selected"
                       Breakpoint="Breakpoint.None"
                       FixedHeader="true"
                       SortMode="SortMode.Single"
                       OnRowClick="OnRowClick"
-                      Class="sir-table">
+                      Class="@($"sir-table{(_canManageReports ? "" : " sir-table-no-select")}")">
                 <HeaderContent>
                     <MudTh Class="sir-no-cell">序号</MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Department">申请部门</MudTableSortLabel></MudTh>
@@ -130,11 +134,14 @@
                     <MudTd Class="sir-ops-cell">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Edit"
-                                   OnClick="@(() => GoEditAsync(context))">编辑</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
-                                   StartIcon="@Icons.Material.Filled.Delete"
-                                   Disabled="_busy"
-                                   OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                                   OnClick="@(() => GoEditAsync(context))">@(_canManageReports ? "编辑" : "打开")</MudButton>
+                        @if (_canManageReports)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       Disabled="_busy"
+                                       OnClick="@(() => DeleteAsync(context))">删除</MudButton>
+                        }
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
@@ -185,24 +192,39 @@
         margin-top: auto;
         border-top: 1px solid var(--mud-palette-lines-default);
     }
+    /* 有勾选时跳过 first-child（勾选列）；无勾选时 first 已是 sir-no-cell，同样被排除 */
     .sir-table .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell):not(:first-child),
     .sir-table .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell):not(:first-child) {
         white-space: nowrap;
         min-width: 88px;
         vertical-align: middle;
     }
-    .sir-table .mud-table-cell:first-child,
+    .sir-table.sir-table-no-select .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell),
+    .sir-table.sir-table-no-select .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell) {
+        white-space: nowrap;
+        min-width: 88px;
+        vertical-align: middle;
+    }
     .sir-table .mud-table-cell.sir-no-cell {
         position: sticky;
         z-index: 4;
         box-sizing: border-box;
         background-color: #fff !important;
         vertical-align: middle !important;
+        width: 56px !important;
+        min-width: 56px !important;
+        max-width: 56px !important;
+        padding: 0 4px !important;
+        text-align: center;
+        border-right: 1px solid #e0e0e0;
     }
-    .sir-table .mud-table-head .mud-table-cell:first-child,
-    .sir-table .mud-table-head .mud-table-cell.sir-no-cell { z-index: 6; }
-    .sir-table .mud-table-cell:first-child {
+    /* 有勾选列：勾选在最左，序号跟在 42px 后 */
+    .sir-table:not(.sir-table-no-select) .mud-table-cell:first-child:not(.sir-no-cell) {
+        position: sticky;
         left: 0;
+        z-index: 4;
+        box-sizing: border-box;
+        background-color: #fff !important;
         width: 42px !important;
         min-width: 42px !important;
         max-width: 42px !important;
@@ -210,23 +232,23 @@
         text-align: center !important;
         white-space: nowrap !important;
     }
-    .sir-table .mud-table-cell:first-child .mud-input-control,
-    .sir-table .mud-table-cell:first-child .mud-checkbox {
+    .sir-table:not(.sir-table-no-select) .mud-table-head .mud-table-cell:first-child:not(.sir-no-cell) { z-index: 6; }
+    .sir-table:not(.sir-table-no-select) .mud-table-cell:first-child:not(.sir-no-cell) .mud-input-control,
+    .sir-table:not(.sir-table-no-select) .mud-table-cell:first-child:not(.sir-no-cell) .mud-checkbox {
         margin: 0 auto !important;
         padding: 0 !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
     }
-    .sir-table .mud-table-cell.sir-no-cell {
+    .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-no-cell {
         left: 42px;
-        width: 48px !important;
-        min-width: 48px !important;
-        max-width: 48px !important;
-        padding: 0 2px !important;
-        text-align: center;
-        border-right: 1px solid #e0e0e0;
     }
+    /* 无勾选列：序号贴左 */
+    .sir-table.sir-table-no-select .mud-table-cell.sir-no-cell {
+        left: 0;
+    }
+    .sir-table .mud-table-head .mud-table-cell.sir-no-cell { z-index: 6; }
     .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
     .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.sir-no-cell {
         background-color: #f5f5f5 !important;
@@ -239,11 +261,20 @@
         position: sticky;
         right: 0;
         z-index: 4;
-        min-width: 148px;
+        width: 88px !important;
+        min-width: 88px !important;
+        max-width: 100px !important;
         white-space: nowrap;
         background-color: #fff !important;
         border-left: 1px solid #e0e0e0;
         vertical-align: middle;
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+    }
+    .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-ops-cell {
+        width: 140px !important;
+        min-width: 140px !important;
+        max-width: 160px !important;
     }
     .sir-table .mud-table-head .mud-table-cell.sir-ops-cell { z-index: 6; }
     .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.sir-ops-cell {
@@ -261,6 +292,7 @@
     private MudTable<ZyqdSirMainModel>? _table;
     private bool _ready;
     private bool _busy;
+    private bool _canManageReports = true;
     private int _currentPage;
     private int _rowsPerPage = 20;
     private string _reportType = SirReportTypeAll;
@@ -275,6 +307,10 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _ready) return;
+
+        var auth = await Auth.GetStoredAsync();
+        // 业务员只能打开维护样品；检测员/管理员可新增删除
+        _canManageReports = !AppRoles.IsOperator(auth?.Role) || AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
 
         // 仅顶栏「返回」时恢复上一次筛选/分页
         RestoreFromReturn();

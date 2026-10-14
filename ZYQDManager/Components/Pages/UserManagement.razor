@@ -116,17 +116,22 @@
                     <MudTextField @bind-Value="_edit.Phone" Label="电话" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudSelect T="string" @bind-Value="RoleBind" Label="本系统角色" Variant="Variant.Outlined" Margin="Margin.Dense">
                         <MudSelectItem Value="@("operator")">业务员</MudSelectItem>
+                        <MudSelectItem Value="@("inspector")">检测员</MudSelectItem>
                         <MudSelectItem Value="@("admin")">管理员</MudSelectItem>
                     </MudSelect>
+                    @if (IsInspectorRole)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">检测员仅可访问「检测报告管理」模块。</MudAlert>
+                    }
                     <MudSwitch @bind-Value="_edit.IsActive" Color="Color.Primary"
                                Label="@(_edit.IsCreate ? "立即启用本系统（默认关闭，需管理员确认）" : "启用本系统权限")"/>
                     <MudSwitch T="bool" @bind-Value="ViewAllSwitch"
                                Color="Color.Primary"
-                               Disabled="@IsAdminRole"
+                               Disabled="@(IsAdminRole || IsInspectorRole)"
                                Label="可查看全部客户"/>
                     <MudSwitch T="bool" @bind-Value="_edit.CanViewInvoiceKp"
                                Color="Color.Primary"
-                               Disabled="@IsAdminRole"
+                               Disabled="@(IsAdminRole || IsInspectorRole)"
                                Label="@(IsAdminRole ? "遮阳开票汇总（管理员默认可用）" : "可查看遮阳开票汇总")"/>
                 </MudStack>
             </MudTabPanel>
@@ -222,6 +227,20 @@
                                          Adornment="Adornment.End"
                                          AdornmentIcon="@Icons.Material.Filled.Add"
                                          OnAdornmentClick="AddPickedOrTypedAsync"/>
+                        <MudTextField @bind-Value="_batchCustomerText"
+                                      Label="批量导入客户"
+                                      Placeholder="每行一个短号或完整号，短号自动加 10000000（如 12696→10012696）"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="6"
+                                      Immediate="true"/>
+                        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                       OnClick="BatchImportCustomers" Disabled="_busy">
+                                识别并添加
+                            </MudButton>
+                        </MudStack>
                         @if (_edit.Customers.Count == 0)
                         {
                             <MudText Typo="Typo.body2" Color="Color.Secondary">尚未分配客户。可从已有项目中选择，也可直接输入新客户编号。</MudText>
@@ -389,6 +408,7 @@
     private Dictionary<string, ControlPermissionApiDto>? _existingControls;
     private CustomerOptionDto? _picked;
     private string _typedCustomer = "";
+    private string _batchCustomerText = "";
 
     private IEnumerable<ManagedUserRowDto> FilteredRows
     {
@@ -407,8 +427,9 @@
     private static string InactiveRowClass(ManagedUserRowDto row, int _) =>
         row.IsActive ? "" : "personnel-row-inactive";
 
-    private bool IsAdminRole =>
-        string.Equals(_edit.Role, "admin", StringComparison.OrdinalIgnoreCase);
+    private bool IsAdminRole => AppRoles.IsAdmin(_edit.Role);
+
+    private bool IsInspectorRole => AppRoles.IsInspector(_edit.Role);
 
     private bool EffectiveViewAll => IsAdminRole || _edit.ViewAllCustomers;
 
@@ -516,6 +537,7 @@
         _existingControls = null;
         _picked = null;
         _typedCustomer = "";
+        _batchCustomerText = "";
         _dialogOpen = true;
     }
 
@@ -553,16 +575,22 @@
         };
         _picked = null;
         _typedCustomer = "";
+        _batchCustomerText = "";
         _dialogOpen = true;
     }
 
     private void OnRoleChanged(string role)
     {
         _edit.Role = role;
-        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
+        if (AppRoles.IsAdmin(role))
         {
             _edit.ViewAllCustomers = true;
             _edit.CanViewInvoiceKp = true;
+        }
+        else if (AppRoles.IsInspector(role))
+        {
+            _edit.ViewAllCustomers = false;
+            _edit.CanViewInvoiceKp = false;
         }
     }
 
@@ -639,6 +667,75 @@
 
     private void RemoveCustomer(CustomerOptionDto item)
         => _edit.Customers.RemoveAll(x => string.Equals(x.Code, item.Code, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// 批量导入：短号按 10000000+n 补成 8 位客户号；已是 8 位（≥10000000）则原样使用。
+    /// </summary>
+    private void BatchImportCustomers()
+    {
+        var raw = _batchCustomerText ?? "";
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            Notify.Show("请先粘贴客户短号或完整客户号", Severity.Warning);
+            return;
+        }
+
+        var tokens = raw
+            .Split(['\r', '\n', ',', ';', '，', '；', '\t', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var added = 0;
+        var skippedDup = 0;
+        var invalid = 0;
+
+        foreach (var token in tokens)
+        {
+            if (!TryNormalizeCustomerCode(token, out var code))
+            {
+                invalid++;
+                continue;
+            }
+
+            if (_edit.Customers.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+            {
+                skippedDup++;
+                continue;
+            }
+
+            var existing = _catalog.FirstOrDefault(x =>
+                string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
+            AddCustomer(existing ?? new CustomerOptionDto { Code = code });
+            added++;
+        }
+
+        if (added > 0)
+            _batchCustomerText = "";
+
+        var parts = new List<string> { $"新增 {added} 个" };
+        if (skippedDup > 0) parts.Add($"已存在跳过 {skippedDup}");
+        if (invalid > 0) parts.Add($"无法识别 {invalid}");
+        Notify.Show(string.Join("，", parts), added > 0 ? Severity.Success : Severity.Warning);
+    }
+
+    /// <summary>8888→10008888；12696→10012696；已是 10006111 这类则保留。</summary>
+    private static bool TryNormalizeCustomerCode(string? token, out string code)
+    {
+        code = "";
+        var t = (token ?? "").Trim();
+        if (t.Length == 0) return false;
+        if (!long.TryParse(t, out var n) || n <= 0)
+            return false;
+
+        const long baseNo = 10_000_000L;
+        long full;
+        if (n < baseNo)
+            full = baseNo + n;
+        else if (n <= 99_999_999L)
+            full = n;
+        else
+            return false;
+
+        code = full.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return code.Length <= 50;
+    }
 
     private void ClearSignature()
     {
@@ -723,11 +820,12 @@
         _busy = true;
         try
         {
-            var role = string.IsNullOrWhiteSpace(_edit.Role) ? "operator" : _edit.Role.Trim();
-            var isAdminRole = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
-            var viewAll = isAdminRole || _edit.ViewAllCustomers;
-            var canInvoice = isAdminRole || _edit.CanViewInvoiceKp;
-            var controls = BuildAppControls(isAdminRole, canInvoice, _existingControls);
+            var role = string.IsNullOrWhiteSpace(_edit.Role) ? AppRoles.Operator : _edit.Role.Trim();
+            var isAdminRole = AppRoles.IsAdmin(role);
+            var isInspectorRole = AppRoles.IsInspector(role);
+            var viewAll = isAdminRole || (!isInspectorRole && _edit.ViewAllCustomers);
+            var canInvoice = isAdminRole || (!isInspectorRole && _edit.CanViewInvoiceKp);
+            var controls = BuildAppControls(role, canInvoice, _existingControls);
             var created = _edit.IsCreate;
             var empNo = _edit.EmpNo.Trim();
             var displayName = _edit.DisplayName?.Trim() ?? "";
@@ -941,13 +1039,7 @@
         string.IsNullOrWhiteSpace(value) ? "—" : value;
 
     private static string RoleText(string? role, string empNo)
-    {
-        if (string.Equals(empNo, "JcAdmin", StringComparison.OrdinalIgnoreCase))
-            return "超级管理员";
-        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
-            return "管理员";
-        return "业务员";
-    }
+        => AppRoles.Display(role, empNo);
 
     private static bool HasInvoiceKpVisible(SystemPermissionEntryApiDto? entry)
     {
@@ -964,14 +1056,29 @@
         return false;
     }
 
-    /// <summary>写入 JcCommonApi Controls；管理员可不带 Controls；操作员保留其它页权限并更新开票页。</summary>
+    /// <summary>
+    /// 写入 JcCommonApi Controls：
+    /// 管理员可不带 Controls；检测员仅开放检测报告；业务员保留其它页并更新开票页。
+    /// </summary>
     private static Dictionary<string, ControlPermissionApiDto>? BuildAppControls(
-        bool isAdminRole,
+        string role,
         bool canViewInvoiceKp,
         Dictionary<string, ControlPermissionApiDto>? existing)
     {
-        if (isAdminRole)
+        if (AppRoles.IsAdmin(role))
             return null;
+
+        if (AppRoles.IsInspector(role))
+        {
+            return new Dictionary<string, ControlPermissionApiDto>(StringComparer.OrdinalIgnoreCase)
+            {
+                [CentralApiOptions.SirRoute] = new ControlPermissionApiDto
+                {
+                    Visible = true,
+                    Disabled = false
+                }
+            };
+        }
 
         var map = new Dictionary<string, ControlPermissionApiDto>(StringComparer.OrdinalIgnoreCase);
         var invoiceKey = CentralApiOptions.NormalizeControlKey(CentralApiOptions.InvoiceKpRoute);

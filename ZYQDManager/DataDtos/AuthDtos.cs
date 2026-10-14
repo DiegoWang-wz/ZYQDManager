@@ -11,6 +11,9 @@ public sealed class CentralApiOptions
     /// <summary>开票汇总页路由（与 JcCommonApi Controls 键一致）</summary>
     public const string InvoiceKpRoute = "/invoice-kp";
 
+    /// <summary>检测报告管理路由</summary>
+    public const string SirRoute = "/sir";
+
     public string BaseUrl { get; set; } = "";
     public bool IgnoreSslCertificateErrors { get; set; } = true;
     public string ApiResourceRoot { get; set; } = "api/zh";

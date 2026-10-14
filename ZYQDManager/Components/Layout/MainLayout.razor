@@ -19,50 +19,53 @@ else
     <MudLayout>
         <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
             <div class="zyqd-nav">
-                <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/project"))">
-                    <span>项目管理</span>
-                </button>
-
-                <MudMenu Dense="true"
-                         Class="zyqd-nav-menu"
-                         AnchorOrigin="Origin.BottomLeft"
-                         TransformOrigin="Origin.TopLeft">
-                    <ActivatorContent>
-                        <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
-                            <span>合同管理</span>
-                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
-                        </button>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("客户PI")))">客户PI列表</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("客户CI")))">客户CI列表</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("报关PI")))">报关PI列表</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => GoTo("/contract-pk"))">装箱单列表</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => GoTo("/contract-base"))">合同基础数据</MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
-
-                <MudMenu Dense="true"
-                         Class="zyqd-nav-menu"
-                         AnchorOrigin="Origin.BottomLeft"
-                         TransformOrigin="Origin.TopLeft">
-                    <ActivatorContent>
-                        <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
-                            <span>报价</span>
-                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
-                        </button>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem OnClick="@(() => GoTo("/quotation"))">报价列表</MudMenuItem>
-                        <MudMenuItem OnClick="@(() => GoTo("/quotation-base"))">基础数据维护</MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
-
-                @if (_canViewInvoiceKp)
+                @if (_canSeeBusinessModules)
                 {
-                    <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/invoice-kp"))">
-                        <span>开票管理</span>
+                    <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/project"))">
+                        <span>项目管理</span>
                     </button>
+
+                    <MudMenu Dense="true"
+                             Class="zyqd-nav-menu"
+                             AnchorOrigin="Origin.BottomLeft"
+                             TransformOrigin="Origin.TopLeft">
+                        <ActivatorContent>
+                            <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                                <span>合同管理</span>
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
+                            </button>
+                        </ActivatorContent>
+                        <ChildContent>
+                            <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("客户PI")))">客户PI列表</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("客户CI")))">客户CI列表</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => GoTo("/contract?type=" + Uri.EscapeDataString("报关PI")))">报关PI列表</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => GoTo("/contract-pk"))">装箱单列表</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => GoTo("/contract-base"))">合同基础数据</MudMenuItem>
+                        </ChildContent>
+                    </MudMenu>
+
+                    <MudMenu Dense="true"
+                             Class="zyqd-nav-menu"
+                             AnchorOrigin="Origin.BottomLeft"
+                             TransformOrigin="Origin.TopLeft">
+                        <ActivatorContent>
+                            <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                                <span>报价</span>
+                                <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
+                            </button>
+                        </ActivatorContent>
+                        <ChildContent>
+                            <MudMenuItem OnClick="@(() => GoTo("/quotation"))">报价列表</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => GoTo("/quotation-base"))">基础数据维护</MudMenuItem>
+                        </ChildContent>
+                    </MudMenu>
+
+                    @if (_canViewInvoiceKp)
+                    {
+                        <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/invoice-kp"))">
+                            <span>开票管理</span>
+                        </button>
+                    }
                 }
 
                 <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/sir"))">
@@ -92,7 +95,7 @@ else
                     </button>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo("/contract-base"))"/>
+                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo(_homePath))"/>
                     <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
                     @if (_canManageUsers)
                     {
@@ -291,6 +294,9 @@ else
     private bool _authReady;
     private bool _canManageUsers;
     private bool _canViewInvoiceKp;
+    private bool _canSeeBusinessModules = true;
+    private bool _isInspector;
+    private string _homePath = "/contract-base";
 
     protected override void OnInitialized()
     {
@@ -302,7 +308,15 @@ else
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => InvokeAsync(StateHasChanged);
+    {
+        if (_isInspector && !IsPublicPath && !IsInspectorAllowedPath(CurrentPath))
+        {
+            Nav.NavigateTo("/sir", replace: true);
+            return;
+        }
+
+        _ = InvokeAsync(StateHasChanged);
+    }
 
     private void OnNavHistoryChanged() => InvokeAsync(StateHasChanged);
 
@@ -349,9 +363,29 @@ else
             // 刷新失败时沿用本地缓存
         }
 
-        _canViewInvoiceKp = Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
+        _isInspector = AppRoles.IsInspector(auth?.Role);
+        _canSeeBusinessModules = !_isInspector;
+        _homePath = AppRoles.HomePath(auth?.Role);
+        _canViewInvoiceKp = !_isInspector && Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
+
+        if (_isInspector && !IsInspectorAllowedPath(CurrentPath))
+        {
+            Nav.NavigateTo("/sir", replace: true);
+            return;
+        }
+
         _authReady = true;
         StateHasChanged();
+    }
+
+    private static bool IsInspectorAllowedPath(string path)
+    {
+        if (path.Length == 0) return false;
+        if (Starts(path, "sir")) return true;
+        if (Starts(path, "Profile")) return true;
+        if (Starts(path, "login")) return true;
+        if (Starts(path, "Error")) return true;
+        return false;
     }
 
     private bool IsPublicPath

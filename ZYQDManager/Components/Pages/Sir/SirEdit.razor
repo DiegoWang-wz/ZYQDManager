@@ -8,6 +8,7 @@
 @inject LibreOfficePdfService LibreOffice
 @inject CrmCustomerService Crm
 @inject CotractBaseService CotractBase
+@inject CentralAuthService Auth
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -25,7 +26,7 @@
                            Margin="Margin.Dense"
                            Dense="true"
                            Class="sir-type-select"
-                           Disabled="_busy">
+                           Disabled="_busy || _reportReadOnly">
                     @foreach (var t in SirReportTypes.Tests)
                     {
                         <MudSelectItem Value="@t.Value">@t.Label</MudSelectItem>
@@ -39,12 +40,16 @@
                            Margin="Margin.Dense"
                            Dense="true"
                            Class="sir-product-select"
-                           Disabled="_busy">
+                           Disabled="_busy || _reportReadOnly">
                     @foreach (var p in _productOptions)
                     {
                         <MudSelectItem Value="@p">@p</MudSelectItem>
                     }
                 </MudSelect>
+                @if (_reportReadOnly)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">业务员：报告只读，可维护样品留样</MudChip>
+                }
             </div>
             <div class="sir-toolbar-right">
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
@@ -59,7 +64,9 @@
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                            Class="zyqd-btn-save"
                            StartIcon="@Icons.Material.Filled.Save"
-                           OnClick="SaveAsync" Disabled="_busy || !_loaded">保存</MudButton>
+                           OnClick="SaveAsync" Disabled="_busy || !_loaded">
+                    @(_reportReadOnly ? "保存样品" : "保存")
+                </MudButton>
             </div>
         </div>
 
@@ -69,7 +76,7 @@
         }
         else
         {
-            <div class="sir-form-wrap">
+            <div class="sir-form-wrap @(_reportReadOnly ? "sir-operator-sample-only" : null)">
                 <table class="sir-form-table">
                     <colgroup>
                         <col style="width:7%"/><col style="width:8%"/><col style="width:12%"/><col style="width:8%"/>
@@ -343,11 +350,12 @@
                             {
                                 var s = _samples[si];
                                 var sIndex = si;
+                                var rowEditable = CanEditSample(s);
                                 var imgs = GetSampleImages(s);
-                                <tr>
+                                <tr class="@(rowEditable ? null : "sir-sample-row-readonly")">
                                     <td class="center">@(si + 1)</td>
-                                    <td><MudTextField @bind-Value="s.materialNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
-                                    <td><MudTextField @bind-Value="s.materialName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                                    <td><MudTextField @bind-Value="s.materialNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!rowEditable)"/></td>
+                                    <td><MudTextField @bind-Value="s.materialName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!rowEditable)"/></td>
                                     <td class="sir-sample-img-col">
                                         <div class="sir-sample-imgs">
                                             <div class="sir-image-preview sir-sample-preview">
@@ -356,15 +364,18 @@
                                                     var imgIdx = ii;
                                                     <div class="sir-preview-item sir-preview-item-sm">
                                                         <LegacyRemoteImg Path="@imgs[imgIdx]" CssClass="sir-preview-fill"/>
-                                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                                       Size="Size.Small"
-                                                                       Color="Color.Error"
-                                                                       Class="sir-preview-remove"
-                                                                       Disabled="_busy"
-                                                                       OnClick="@(() => RemoveSampleImage(sIndex, imgIdx))"/>
+                                                        @if (rowEditable)
+                                                        {
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                                           Size="Size.Small"
+                                                                           Color="Color.Error"
+                                                                           Class="sir-preview-remove"
+                                                                           Disabled="_busy"
+                                                                           OnClick="@(() => RemoveSampleImage(sIndex, imgIdx))"/>
+                                                        }
                                                     </div>
                                                 }
-                                                @if (imgs.Count < 5)
+                                                @if (rowEditable && imgs.Count < 5)
                                                 {
                                                     <label class="sir-upload-label sir-add-slot @(_busy || _imgUploading ? "sir-add-slot-disabled" : null)">
                                                         <InputFile OnChange="@(e => OnSampleImagesSelected(e, sIndex))"
@@ -381,15 +392,18 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <MudTextField @bind-Value="s.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="样品部件"/>
+                                        <MudTextField @bind-Value="s.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="样品部件" ReadOnly="@(!rowEditable)"/>
                                     </td>
-                                    <td><MudTextField @bind-Value="s.Note1" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="留底要求"/></td>
+                                    <td><MudTextField @bind-Value="s.Note1" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="留底要求" ReadOnly="@(!rowEditable)"/></td>
                                     <td class="center">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                       Color="Color.Error"
-                                                       Size="Size.Small"
-                                                       Disabled="_busy"
-                                                       OnClick="@(() => RemoveSampleRow(sIndex))"/>
+                                        @if (rowEditable)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           Disabled="_busy"
+                                                           OnClick="@(() => RemoveSampleRow(sIndex))"/>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -889,6 +903,19 @@
     .sir-form-table .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
     .sir-form-table .mud-input > input.mud-input-slot,
     .sir-form-table .mud-input > input { font-size: 13px; }
+
+    /* 业务员：报告区不可编辑，仅样品留样可操作 */
+    .sir-form-wrap.sir-operator-sample-only > *:not(.sir-sample-block) {
+        pointer-events: none;
+        opacity: 0.88;
+    }
+    .sir-form-wrap.sir-operator-sample-only > .sir-sample-block {
+        pointer-events: auto;
+        opacity: 1;
+    }
+    .sir-sample-row-readonly td {
+        background: #fafafa;
+    }
 </style>
 
 @code {
@@ -908,13 +935,32 @@
     private bool _loaded;
     private bool _imgUploading;
     private string _guid = "";
+    /// <summary>业务员：报告只读，仅可维护自己加的样品留样。</summary>
+    private bool _reportReadOnly;
+    private string _empNo = "";
     private bool ShowRemoteImages => SirService.IsRemoteWithoutSample(_reportType);
     private bool ShowSampleFiling => SirService.NeedsSampleFiling(_reportType);
 
+    private bool CanEditSample(ZyqdSirSampleForFilingModel s) =>
+        !_reportReadOnly
+        || string.Equals((s.CreatePerson ?? "").Trim(), _empNo, StringComparison.OrdinalIgnoreCase);
+
     protected override async Task OnParametersSetAsync()
     {
+        var auth = await Auth.GetStoredAsync();
+        _empNo = (auth?.EmpNo ?? "").Trim();
+        _reportReadOnly = AppRoles.IsOperator(auth?.Role) && !AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
+
         var guid = (DocumentGuid ?? "").Trim();
-        if (guid.Length == 0 || string.Equals(guid, "new", StringComparison.OrdinalIgnoreCase))
+        var isNew = guid.Length == 0 || string.Equals(guid, "new", StringComparison.OrdinalIgnoreCase);
+        if (_reportReadOnly && isNew)
+        {
+            Notify.Show("业务员不能新建检测报告，请打开已有报告维护样品留样", Severity.Warning);
+            Nav.NavigateTo("/sir");
+            return;
+        }
+
+        if (isNew)
             guid = Guid.NewGuid().ToString("N");
 
         _guid = guid;
@@ -1051,14 +1097,16 @@
                 Details = _details,
                 Samples = ShowSampleFiling ? _samples : [],
             };
-            var (ok, msg) = await Sir.SaveAsync(doc);
+            var (ok, msg) = _reportReadOnly
+                ? await Sir.SaveSamplesOnlyAsync(doc, _empNo)
+                : await Sir.SaveAsync(doc);
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
                 return;
             }
 
-            Notify.Show("保存成功", Severity.Success);
+            Notify.Show(_reportReadOnly ? "样品留样已保存" : "保存成功", Severity.Success);
             if (!Nav.Uri.Contains(_guid, StringComparison.OrdinalIgnoreCase))
             {
                 var href = $"/sir/{Uri.EscapeDataString(_guid)}?rt={Uri.EscapeDataString(_reportType)}&pt={Uri.EscapeDataString(_productType)}";
@@ -1250,6 +1298,7 @@
     {
         if (sampleIndex < 0 || sampleIndex >= _samples.Count) return;
         var row = _samples[sampleIndex];
+        if (!CanEditSample(row)) return;
         var imgs = GetSampleImages(row);
         var files = e.GetMultipleFiles(5).ToList();
         if (files.Count == 0) return;
@@ -1300,6 +1349,7 @@
     {
         if (sampleIndex < 0 || sampleIndex >= _samples.Count) return;
         var row = _samples[sampleIndex];
+        if (!CanEditSample(row)) return;
         var imgs = GetSampleImages(row);
         if (imgIndex < 0 || imgIndex >= imgs.Count) return;
         imgs.RemoveAt(imgIndex);
@@ -1319,12 +1369,14 @@
             code = code,
             createTime = DateTime.Now,
             ImageUrls = "[]",
+            CreatePerson = _reportReadOnly ? _empNo : null,
         });
     }
 
     private void RemoveSampleRow(int index)
     {
         if (index < 0 || index >= _samples.Count) return;
+        if (!CanEditSample(_samples[index])) return;
         _samples.RemoveAt(index);
     }
 

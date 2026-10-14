@@ -37,6 +37,21 @@
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info" Disabled="_busy"
                                StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                OnClick="@(() => ExportPdfAsync("DE"))">PDF-JIECANG Europe GmbH</MudButton>
+                    <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        <ActivatorContent>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_busy"
+                                       StartIcon="@Icons.Material.Filled.TableView"
+                                       EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                                       OnClick="context.ToggleAsync">
+                                导出Excel
+                            </MudButton>
+                        </ActivatorContent>
+                        <ChildContent>
+                            <MudMenuItem OnClick="@(() => ExportExcelAsync("ZH"))">Excel-中文</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => ExportExcelAsync("EN"))">Excel-英文</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => ExportExcelAsync("DE"))">Excel-JIECANG Europe GmbH</MudMenuItem>
+                        </ChildContent>
+                    </MudMenu>
                 }
             </MudStack>
         </MudStack>
@@ -641,7 +656,9 @@
             await EnsurePartsAsync();
 
             var empNo = await Auth.GetCurrentEmpNoAsync();
-            await LoadSignatureOptionsAsync();
+            // 详情只读：不拉全员签名列表（业务员无人员列表权限会报「无法解析人员列表」）
+            if (!IsDetail)
+                await LoadSignatureOptionsAsync();
 
             if (IsCreate && !IsCopy)
             {
@@ -678,7 +695,9 @@
 
             _doc = doc;
             _main = doc.Main;
-            if (IsCopy)
+            if (IsDetail)
+                ApplySavedSignatureForDetail();
+            else if (IsCopy)
                 ApplyDefaultSignature(empNo);
             else
                 SyncSignatureKeyFromMain();
@@ -750,6 +769,29 @@
         }
 
         _sigKey = hit.Key;
+    }
+
+    /// <summary>详情页：用单据上已保存的签名拼一条下拉项，不请求人员列表。</summary>
+    private void ApplySavedSignatureForDetail()
+    {
+        var name = (_main.signature ?? "").Trim();
+        var url = (_main.signature_url ?? "").Trim();
+        if (name.Length == 0 && url.Length == 0)
+        {
+            _sigOptions = [];
+            _sigKey = "";
+            return;
+        }
+
+        var opt = new QuotationSignatureOptionDto
+        {
+            EmpNo = "saved",
+            Kind = "cn",
+            Signature = name.Length > 0 ? name : "已保存签名",
+            SignatureUrl = url,
+        };
+        _sigOptions = [opt];
+        _sigKey = opt.Key;
     }
 
     private Task OnSignatureChangedAsync(string value)
@@ -1046,21 +1088,7 @@
         await Task.Yield();
         try
         {
-            _doc.Main = _main;
-            var mail = "";
-            var tel = "";
-            var emp = (_main.personId ?? "").Trim();
-            if (emp.Length > 0)
-            {
-                var (ok, _, info, _) = await UserInfo.GetAsync(emp);
-                if (ok && info is not null)
-                {
-                    mail = info.Email ?? "";
-                    tel = info.Phone ?? "";
-                }
-            }
-
-            var xlsx = await QuotationExcel.BuildAsync(_main, _doc.Details, lang, mail, tel);
+            var xlsx = await BuildQuotationExcelAsync(lang);
             var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
             await JS.InvokeVoidAsync(
                 "downloadFileFromBase64",
@@ -1077,5 +1105,56 @@
         {
             _busy = false;
         }
+    }
+
+    private async Task ExportExcelAsync(string lang)
+    {
+        if (IsCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        Notify.Show("正在生成 Excel…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+        try
+        {
+            var xlsx = await BuildQuotationExcelAsync(lang);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                QuotationExcelService.DownloadExcelName(_main, lang),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(xlsx));
+            Notify.Show("Excel 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 Excel 失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<byte[]> BuildQuotationExcelAsync(string lang)
+    {
+        _doc.Main = _main;
+        var mail = "";
+        var tel = "";
+        var emp = (_main.personId ?? "").Trim();
+        if (emp.Length > 0)
+        {
+            var (ok, _, info, _) = await UserInfo.GetAsync(emp);
+            if (ok && info is not null)
+            {
+                mail = info.Email ?? "";
+                tel = info.Phone ?? "";
+            }
+        }
+
+        return await QuotationExcel.BuildAsync(_main, _doc.Details, lang, mail, tel);
     }
 }

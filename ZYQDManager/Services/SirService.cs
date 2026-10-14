@@ -190,6 +190,84 @@ public class SirService
         return (true, null);
     }
 
+    /// <summary>
+    /// 业务员专用：仅增改删自己创建的样品留样行（CreatePerson=工号），不改他人行与报告主表/明细。
+    /// </summary>
+    public async Task<(bool Ok, string? Message)> SaveSamplesOnlyAsync(SirDocumentDto doc, string empNo, CancellationToken ct = default)
+    {
+        empNo = (empNo ?? "").Trim();
+        if (empNo.Length == 0)
+            return (false, "未登录或工号无效");
+
+        if (doc.Main is null)
+            return (false, "主表为空");
+
+        var guid = (doc.Main.guid ?? "").Trim();
+        if (guid.Length == 0)
+            return (false, "guid 为空");
+
+        var reportType = (doc.Main.Report_type ?? "").Trim();
+        if (reportType.Length == 0)
+            return (false, "报告类型为空");
+
+        var existing = await _db.SirMains.AsNoTracking().FirstOrDefaultAsync(x => x.guid == guid, ct);
+        if (existing is null)
+            return (false, "报告不存在，业务员不能新建检测报告，请联系检测员或管理员");
+
+        if (!NeedsSampleFiling(reportType))
+            return (false, "当前报告类型无需留样记录");
+
+        var oldSamples = await _db.SirSamples
+            .Where(x => x.main_guid == guid && x.Report_type == reportType)
+            .ToListAsync(ct);
+
+        static bool Owned(ZyqdSirSampleForFilingModel x, string who) =>
+            string.Equals((x.CreatePerson ?? "").Trim(), who, StringComparison.OrdinalIgnoreCase);
+
+        var oldOwned = oldSamples.Where(x => Owned(x, empNo)).ToList();
+        var oldOwnedIds = oldOwned.Select(x => x.Id).ToHashSet();
+
+        // 仅接受：新建行，或库中已属本人的行；忽略他人行（防篡改）
+        var clientOwned = (doc.Samples ?? [])
+            .Where(x => x.Id == 0 || oldOwnedIds.Contains(x.Id))
+            .ToList();
+        var clientOwnedIds = clientOwned.Where(x => x.Id > 0).Select(x => x.Id).ToHashSet();
+
+        foreach (var old in oldOwned.Where(x => !clientOwnedIds.Contains(x.Id)))
+            _db.SirSamples.Remove(old);
+
+        foreach (var s in clientOwned)
+        {
+            s.CreatePerson = empNo;
+            s.main_guid = guid;
+            s.Report_type = reportType;
+            if (s.Id > 0)
+            {
+                var track = oldOwned.First(x => x.Id == s.Id);
+                track.materialNo = s.materialNo;
+                track.materialName = s.materialName;
+                track.manufacturer = s.manufacturer;
+                track.materialModel = s.materialModel;
+                track.materiaSpecs = s.materiaSpecs;
+                track.Note = s.Note;
+                track.Note1 = s.Note1;
+                track.ImageUrls = s.ImageUrls;
+                track.Specification_type = s.Specification_type;
+                track.code = s.code;
+                track.CreatePerson = empNo;
+            }
+            else
+            {
+                s.Id = 0;
+                s.createTime ??= DateTime.Now;
+                _db.SirSamples.Add(s);
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
     private static IQueryable<ZyqdSirMainModel> ApplyFilter(IQueryable<ZyqdSirMainModel> q, SirQueryDto query)
     {
         if (query.DateStart is { } ds)

@@ -497,7 +497,10 @@
         try
         {
             if (await Auth.IsLoggedInAsync())
-                NavManager.NavigateTo("/contract-base", replace: true);
+            {
+                var auth = await Auth.GetStoredAsync();
+                NavManager.NavigateTo(AppRoles.HomePath(auth?.Role), replace: true);
+            }
         }
         catch
         {
@@ -691,7 +694,8 @@
             }
 
             Notify.Show("登录成功", Severity.Success);
-            NavManager.NavigateTo("/contract-base", replace: true);
+            var auth = await Auth.GetStoredAsync();
+            NavManager.NavigateTo(AppRoles.HomePath(auth?.Role), replace: true);
         }
         catch (Exception ex)
         {
