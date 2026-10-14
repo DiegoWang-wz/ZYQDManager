@@ -59,6 +59,10 @@ public sealed class CustomsAndPackingLineDto
     public string? PI_Material_Name { get; set; }
     /// <summary>原始行 / 拆分行</summary>
     public string? var7 { get; set; }
+    /// <summary>拼托角色：拼托主 / 拼托（挂靠）；空=未拼托</summary>
+    public string? var8 { get; set; }
+    /// <summary>编辑页勾选，不落库</summary>
+    public bool Selected { get; set; }
     public string? Customer_outer_box_logo { get; set; }
     public string? Tuo_Mark { get; set; }
     public string? Tuo_Mark_url { get; set; }

@@ -55,6 +55,21 @@
                     }
                 </MudSelect>
                 <div class="cpk-form-actions">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.MergeType"
+                               OnClick="OpenMergePallet" Disabled="_busy">
+                        拼托
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.LinkOff"
+                               OnClick="CancelMergePallet" Disabled="_busy">
+                        取消拼托
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.CallMerge"
+                               OnClick="MergeSelectedLines" Disabled="_busy">
+                        合并
+                    </MudButton>
                     <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || _isCreate"
@@ -84,6 +99,10 @@
                       Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table"
                       Height="100%">
                 <HeaderContent>
+                    <MudTh Style="width:40px">
+                        <MudCheckBox T="bool" Dense="true" Value="_selectAll" ValueChanged="OnSelectAllChanged"
+                                     Disabled="_busy"/>
+                    </MudTh>
                     <MudTh>客户外箱标识</MudTh>
                     <MudTh>客户PO号</MudTh>
                     <MudTh>客户型号</MudTh>
@@ -119,7 +138,13 @@
                 <RowTemplate>
                     @{
                         var line = context;
+                        var mergeMember = CustomsAndPackingCalc.IsMergeMember(line.var8);
                     }
+                    <MudTd>
+                        <MudCheckBox T="bool" Dense="true" Value="line.Selected"
+                                     ValueChanged="v => { line.Selected = v; SyncSelectAll(); }"
+                                     Disabled="_busy"/>
+                    </MudTd>
                     <MudTd Class="cpk-img-cell">
                         <CpkLineImg Label="客户外箱标识"
                                     Value="@line.Customer_outer_box_logo"
@@ -195,9 +220,16 @@
                         <CpkFitText Value="@(line.var3 ?? "0")" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitText Value="@line.var2"
-                                    ValueChanged="v => OnLineChanged(line, () => line.var2 = v)"
-                                    Disabled="_busy" Placeholder="长*宽*高"/>
+                        @if (mergeMember)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
+                        }
+                        else
+                        {
+                            <CpkFitText Value="@line.var2"
+                                        ValueChanged="v => OnLineChanged(line, () => line.var2 = v)"
+                                        Disabled="_busy" Placeholder="长*宽*高"/>
+                        }
                     </MudTd>
                     <MudTd>
                         <CpkFitText Value="@line.var4" ValueChanged="v => line.var4 = v" Disabled="_busy"/>
@@ -208,9 +240,16 @@
                                     Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitText Value="@line.Pallet_Size"
-                                    ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
-                                    Disabled="_busy"/>
+                        @if (mergeMember)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">拼托（见主行）</MudText>
+                        }
+                        else
+                        {
+                            <CpkFitText Value="@line.Pallet_Size"
+                                        ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
+                                        Disabled="_busy"/>
+                        }
                     </MudTd>
                     <MudTd>
                         <CpkFitNum Value="line.Net_weight" ValueChanged="v => OnLineChanged(line, () => line.Net_weight = v)" Disabled="_busy"/>
@@ -241,21 +280,30 @@
                                     ValueChanged="v => OnLineChanged(line, () => line.emit = v)"
                                     Disabled="_busy"/>
                     </MudTd>
-                    <MudTd>@(line.var7 ?? "原始行")</MudTd>
+                    <MudTd>
+                        @(line.var7 ?? "原始行")
+                        @if (!string.IsNullOrWhiteSpace(line.var8))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-1">@line.var8</MudChip>
+                        }
+                    </MudTd>
                     <MudTd Class="cpk-sticky-ops">
-                        <MudStack Row="true" Spacing="0">
-                            @if (string.Equals(line.var7, "原始行", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line.var7))
-                            {
-                                <MudIconButton Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" Color="Color.Primary"
-                                               Title="拆分此行" Disabled="_busy || line.qty <= 1"
-                                               OnClick="@(() => OpenSplit(line))"/>
-                            }
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
-                                           Disabled="_busy" OnClick="@(() => RemoveLine(line))"/>
-                        </MudStack>
+                        <div class="cpk-sticky-clip cpk-ops-clip">
+                            <MudStack Row="true" Spacing="0" Class="cpk-ops-stack">
+                                @if (string.Equals(line.var7, "原始行", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line.var7))
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" Color="Color.Primary"
+                                                   Title="拆分此行" Disabled="_busy || line.qty <= 1"
+                                                   OnClick="@(() => OpenSplit(line))"/>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                               Disabled="_busy" OnClick="@(() => RemoveLine(line))"/>
+                            </MudStack>
+                        </div>
                     </MudTd>
                 </RowTemplate>
                 <FooterContent>
+                    <MudTd></MudTd>
                     <MudTd Class="cpk-summary-label">数据汇总</MudTd>
                     <MudTd></MudTd>
                     <MudTd></MudTd>
@@ -308,6 +356,37 @@
             <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1" Class="mt-3">
                 <MudButton OnClick="CloseSplit" Disabled="_busy">取消</MudButton>
                 <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmSplit" Disabled="_busy">确认拆分</MudButton>
+            </MudStack>
+        </MudPaper>
+    </div>
+}
+
+@if (_mergeOpen)
+{
+    <div class="cpk-split-mask">
+        <MudPaper Class="pa-4 cpk-merge-card" Elevation="8">
+            <MudText Typo="Typo.h6" Class="mb-3">拼托</MudText>
+            <MudSelect T="int" @bind-Value="_mergePrimaryTempId" Label="拼入（托主物料）*"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3">
+                @foreach (var c in _mergeCandidates)
+                {
+                    <MudSelectItem Value="@c.TempId">
+                        @(c.materialNo) / @(c.materialName) × @c.qty.ToString("0.##")
+                        @if (!string.IsNullOrWhiteSpace(c.Pallet_Size))
+                        {
+                            <text> （@c.Pallet_Size）</text>
+                        }
+                    </MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_mergePalletCode" Label="托盘编号*" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mb-3" Required="true"/>
+            <MudTextField @bind-Value="_mergeTailSize" Label="尾托尺寸*" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mb-3" Required="true" Placeholder="长*宽*高"/>
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1">
+                <MudButton OnClick="CloseMergePallet" Disabled="_busy">取消</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmMergePallet"
+                           Disabled="_busy || !CanConfirmMerge">确认拼托</MudButton>
             </MudStack>
         </MudPaper>
     </div>
@@ -432,12 +511,13 @@
         white-space: normal !important;
         text-align: center !important;
     }
-    /* 横滑固定列：宽度用 px 锁死，left 与宽度一致，避免重叠 */
+    /* 横滑固定列：宽度用 px 锁死，left/right 与宽度一致，避免重叠 */
     .cpk-line-table {
         --cpk-l1-w: 108px;
         --cpk-l2-w: 168px;
         --cpk-l3-w: 72px;
-        --cpk-ops-w: 72px;
+        /* 拆分+删除两个 Size.Small 按钮约需 88px，72 会被撑破导致 sticky 白条错位 */
+        --cpk-ops-w: 88px;
     }
     .cpk-line-table .mud-table-cell.cpk-sticky-l1,
     .cpk-line-table .mud-table-cell.cpk-sticky-l2,
@@ -470,7 +550,7 @@
         max-width: var(--cpk-l3-w) !important;
         box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.14);
     }
-    /* 裁剪层：阻止 CpkFit 的 size 撑破固定列宽 */
+    /* 裁剪层：阻止 CpkFit / 按钮撑破固定列宽 */
     .cpk-line-table .mud-table-cell .cpk-sticky-clip {
         width: 0;
         min-width: 100%;
@@ -489,7 +569,7 @@
     }
     .cpk-line-table .mud-table-cell.cpk-sticky-ops {
         right: 0 !important;
-        z-index: 4;
+        z-index: 6;
         width: var(--cpk-ops-w) !important;
         min-width: var(--cpk-ops-w) !important;
         max-width: var(--cpk-ops-w) !important;
@@ -498,14 +578,26 @@
         border-left: 1px solid var(--mud-palette-lines-default, #e0e0e0);
         box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.14);
     }
-    .cpk-line-table .mud-table-cell.cpk-sticky-ops .mud-stack {
+    .cpk-line-table .mud-table-cell.cpk-sticky-ops .cpk-ops-clip {
+        display: flex;
+        align-items: center;
         justify-content: center;
+        height: 100%;
+    }
+    .cpk-line-table .mud-table-cell.cpk-sticky-ops .cpk-ops-stack {
+        justify-content: center !important;
+        align-items: center !important;
         gap: 0 !important;
-        flex-wrap: nowrap;
+        flex-wrap: nowrap !important;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin: 0 !important;
     }
     .cpk-line-table .mud-table-cell.cpk-sticky-ops .mud-icon-button {
-        padding: 4px !important;
+        padding: 2px !important;
         margin: 0 !important;
+        flex: 0 0 auto;
     }
     .cpk-line-table .mud-table-head .mud-table-cell.cpk-sticky-l1,
     .cpk-line-table .mud-table-head .mud-table-cell.cpk-sticky-l2,
@@ -530,6 +622,7 @@
         z-index: 1300;
     }
     .cpk-split-card { width: min(420px, 92vw); }
+    .cpk-merge-card { width: min(520px, 94vw); }
 </style>
 
 @code {
@@ -544,6 +637,17 @@
     private int _tempSeq;
     private CustomsAndPackingLineDto? _splitLine;
     private double _splitQty;
+    private bool _selectAll;
+    private bool _mergeOpen;
+    private List<CustomsAndPackingLineDto> _mergeCandidates = [];
+    private int _mergePrimaryTempId;
+    private string? _mergePalletCode;
+    private string? _mergeTailSize;
+
+    private bool CanConfirmMerge
+        => _mergePrimaryTempId > 0
+           && !string.IsNullOrWhiteSpace(_mergePalletCode)
+           && !string.IsNullOrWhiteSpace(_mergeTailSize);
 
     private string Title => _isCreate ? "新建装箱单" : "编辑装箱单";
 
@@ -661,6 +765,239 @@
         _splitQty = 0;
     }
 
+    private void OnSelectAllChanged(bool value)
+    {
+        _selectAll = value;
+        foreach (var line in _lines)
+            line.Selected = value;
+    }
+
+    private void SyncSelectAll()
+        => _selectAll = _lines.Count > 0 && _lines.All(x => x.Selected);
+
+    private void OpenMergePallet()
+    {
+        _mergeCandidates = _lines.Where(x => x.Selected).ToList();
+        if (_mergeCandidates.Count < 2)
+        {
+            Notify.Show("请至少勾选 2 行再拼托", Severity.Warning);
+            return;
+        }
+        _mergePrimaryTempId = _mergeCandidates[0].TempId;
+        _mergePalletCode = _mergeCandidates
+            .Select(x => (x.Pallet_code ?? "").Trim())
+            .FirstOrDefault(x => x.Length > 0);
+        _mergeTailSize = _mergeCandidates
+            .Select(x => (x.var2 ?? "").Trim())
+            .FirstOrDefault(x => x.Length > 0);
+        _mergeOpen = true;
+    }
+
+    private void CloseMergePallet()
+    {
+        _mergeOpen = false;
+        _mergeCandidates = [];
+        _mergePrimaryTempId = 0;
+        _mergePalletCode = null;
+        _mergeTailSize = null;
+    }
+
+    private void ConfirmMergePallet()
+    {
+        var code = (_mergePalletCode ?? "").Trim();
+        var tail = (_mergeTailSize ?? "").Trim();
+        if (_mergePrimaryTempId <= 0)
+        {
+            Notify.Show("请选择托主物料", Severity.Warning);
+            return;
+        }
+        if (code.Length == 0)
+        {
+            Notify.Show("请填写托盘编号", Severity.Warning);
+            return;
+        }
+        if (tail.Length == 0)
+        {
+            Notify.Show("请填写尾托尺寸", Severity.Warning);
+            return;
+        }
+        var primary = _mergeCandidates.FirstOrDefault(x => x.TempId == _mergePrimaryTempId);
+        if (primary is null)
+        {
+            Notify.Show("请选择托主物料", Severity.Warning);
+            return;
+        }
+
+        // 若编号已被其它组占用，先拆开旧组
+        foreach (var line in _lines)
+        {
+            if (string.Equals((line.Pallet_code ?? "").Trim(), code, StringComparison.Ordinal)
+                && !_mergeCandidates.Contains(line))
+            {
+                line.Pallet_code = null;
+                line.var8 = null;
+                line.var2 = null;
+            }
+        }
+
+        foreach (var line in _mergeCandidates)
+        {
+            var isPrimary = line.TempId == primary.TempId;
+            line.Pallet_code = code;
+            line.var8 = isPrimary
+                ? CustomsAndPackingCalc.MergeRolePrimary
+                : CustomsAndPackingCalc.MergeRoleMember;
+            // 尾托尺寸只落在托主上（拼托余量尺寸）
+            line.var2 = isPrimary ? tail : null;
+            line.Selected = false;
+            CustomsAndPackingCalc.RecalcLine(line);
+        }
+
+        SyncSelectAll();
+        RefreshSummary();
+        CloseMergePallet();
+        Notify.Show($"已拼托：编号 {code}，托主 {primary.materialNo}", Severity.Success);
+    }
+
+    private void CancelMergePallet()
+    {
+        var selected = _lines.Where(x => x.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            Notify.Show("请勾选要取消拼托的行", Severity.Warning);
+            return;
+        }
+
+        var codes = selected
+            .Select(x => (x.Pallet_code ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (codes.Count == 0 && selected.All(x => string.IsNullOrWhiteSpace(x.var8)))
+        {
+            Notify.Show("勾选行未处于拼托状态", Severity.Warning);
+            return;
+        }
+
+        var n = 0;
+        foreach (var line in _lines)
+        {
+            var code = (line.Pallet_code ?? "").Trim();
+            var inGroup = codes.Contains(code)
+                          || (selected.Contains(line) && !string.IsNullOrWhiteSpace(line.var8));
+            if (!inGroup) continue;
+            line.Pallet_code = null;
+            line.var8 = null;
+            line.var2 = null;
+            line.Selected = false;
+            CustomsAndPackingCalc.RecalcLine(line);
+            n++;
+        }
+
+        SyncSelectAll();
+        RefreshSummary();
+        Notify.Show(n > 0 ? $"已取消 {n} 行拼托" : "没有可取消的拼托行", Severity.Success);
+    }
+
+    /// <summary>
+    /// 合并勾选行（拆分的逆操作）：须同一物料号，数量加总到保留行，删除其余行。
+    /// </summary>
+    private void MergeSelectedLines()
+    {
+        var selected = _lines.Where(x => x.Selected).ToList();
+        if (selected.Count < 2)
+        {
+            Notify.Show("请至少勾选 2 行再合并", Severity.Warning);
+            return;
+        }
+
+        var keys = selected
+            .Select(LineMergeKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (keys.Count > 1 || keys[0].Length == 0)
+        {
+            Notify.Show("只能合并同一物料号的行", Severity.Warning);
+            return;
+        }
+
+        var packingKeys = selected
+            .Select(x => (x.Packing_method ?? "").Trim() + "|" + (x.palletizing_method ?? "").Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (packingKeys.Count > 1)
+        {
+            Notify.Show("勾选行的打包/打托方式不一致，无法合并", Severity.Warning);
+            return;
+        }
+
+        // 优先保留「原始行」，否则保留勾选中的第一行
+        var keep = selected.FirstOrDefault(x =>
+                       string.Equals(x.var7, "原始行", StringComparison.Ordinal)
+                       || string.IsNullOrWhiteSpace(x.var7))
+                   ?? selected[0];
+        var others = selected.Where(x => x.TempId != keep.TempId).ToList();
+
+        // 合并前解除这些行所在的拼托组，避免残留托主/挂靠
+        var mergeCodes = selected
+            .Select(x => (x.Pallet_code ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
+        if (mergeCodes.Count > 0 || selected.Any(x => !string.IsNullOrWhiteSpace(x.var8)))
+        {
+            foreach (var line in _lines)
+            {
+                var code = (line.Pallet_code ?? "").Trim();
+                if (mergeCodes.Contains(code)
+                    || (selected.Contains(line) && !string.IsNullOrWhiteSpace(line.var8)))
+                {
+                    line.Pallet_code = null;
+                    line.var8 = null;
+                    line.var2 = null;
+                }
+            }
+        }
+
+        keep.qty = selected.Sum(x => x.qty);
+        keep.emit = FormatMergedEmit(selected);
+        keep.var7 = "原始行";
+        keep.Pallet_code = null;
+        keep.var8 = null;
+        keep.var2 = null;
+        keep.Selected = false;
+        CustomsAndPackingCalc.RecalcLine(keep);
+
+        foreach (var line in others)
+            _lines.Remove(line);
+
+        SyncSelectAll();
+        RefreshSummary();
+        Notify.Show($"已合并为 1 行，数量 {keep.qty.ToString("0.##")}（{keep.materialNo}）", Severity.Success);
+    }
+
+    private static string LineMergeKey(CustomsAndPackingLineDto line)
+    {
+        var no = (line.materialNo ?? "").Trim();
+        if (no.Length > 0) return no;
+        return ((line.materialName ?? "").Trim() + "|" + (line.materialModel ?? "").Trim()).Trim('|');
+    }
+
+    private static string? FormatMergedEmit(IReadOnlyList<CustomsAndPackingLineDto> lines)
+    {
+        double sum = 0;
+        var any = false;
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.emit)) continue;
+            if (!double.TryParse(line.emit.Trim(), out var n)) continue;
+            sum += n;
+            any = true;
+        }
+        return any ? sum.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : lines[0].emit;
+    }
+
     private void ConfirmSplit()
     {
         if (_splitLine is null) return;
@@ -695,6 +1032,25 @@
             Notify.Show("请至少保留一行明细", Severity.Warning);
             return;
         }
+
+        foreach (var line in _lines.Where(x => CustomsAndPackingCalc.IsMergePrimary(x.var8)
+                                               || CustomsAndPackingCalc.IsMergeMember(x.var8)))
+        {
+            if (string.IsNullOrWhiteSpace(line.Pallet_code))
+            {
+                Notify.Show($"物料 {line.materialNo} 已拼托但未填托盘编号，请补全后再保存", Severity.Warning);
+                return;
+            }
+        }
+        foreach (var primary in _lines.Where(x => CustomsAndPackingCalc.IsMergePrimary(x.var8)))
+        {
+            if (string.IsNullOrWhiteSpace(primary.var2))
+            {
+                Notify.Show($"托主 {primary.materialNo} 未填尾托尺寸，请补全后再保存", Severity.Warning);
+                return;
+            }
+        }
+
         CustomsAndPackingCalc.RecalcAllLines(_lines);
         RefreshSummary();
         _busy = true;

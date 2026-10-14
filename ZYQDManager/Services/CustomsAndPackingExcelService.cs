@@ -223,11 +223,14 @@ public class CustomsAndPackingExcelService
             Set(ws, r, 17, Num(item.Pallet_qty));
             Set(ws, r, 18, item.var3);
 
-            if (!string.IsNullOrWhiteSpace(item.var2))
+            Set(ws, r, 14, Num(ExportDisplayPalletQty(item)));
+            Set(ws, r, 16, ExportPalletSizeText(item));
+            if (CustomsAndPackingCalc.IsMergeMember(item.var8))
             {
-                Set(ws, r, 14, Num(item.Pallet_qty + 1));
-                var size = item.Pallet_qty == 0 ? item.var2 : item.Pallet_Size + "\n" + item.var2;
-                Set(ws, r, 16, size);
+                Set(ws, r, 19, "");
+            }
+            else if (!string.IsNullOrWhiteSpace(item.var2))
+            {
                 var full = item.Pallet_qty == 0
                     ? ""
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
@@ -235,8 +238,6 @@ public class CustomsAndPackingExcelService
             }
             else
             {
-                Set(ws, r, 14, Num(item.Pallet_qty));
-                Set(ws, r, 16, item.Pallet_Size);
                 var dd = item.Pallet_qty == 0
                     ? ""
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
@@ -311,8 +312,8 @@ public class CustomsAndPackingExcelService
             Set(ws, r, 5, (item.Packing_method ?? "") + "PCS/CTN");
             Set(ws, r, 6, item.Carton_Size);
             Set(ws, r, 7, Num(item.box_qty));
-            Set(ws, r, 8, item.Pallet_Size);
-            Set(ws, r, 9, Num(CustomsAndPackingCalc.DisplayPalletQty(CustomsAndPackingService.ToLineDto(item, 0))));
+            Set(ws, r, 8, ExportPalletSizeText(item));
+            Set(ws, r, 9, Num(ExportDisplayPalletQty(item)));
             Set(ws, r, 10, Num(item.total_Net_weight));
             Set(ws, r, 11, Num(item.total_gross_weight));
             Set(ws, r, 12, item.Pallet_code);
@@ -375,11 +376,14 @@ public class CustomsAndPackingExcelService
             Set(ws, r, 13, Num(item.box_qty));
             Set(ws, r, 15, item.Carton_Size);
 
-            if (!string.IsNullOrWhiteSpace(item.var2))
+            Set(ws, r, 14, Num(ExportDisplayPalletQty(item)));
+            Set(ws, r, 16, ExportPalletSizeText(item));
+            if (CustomsAndPackingCalc.IsMergeMember(item.var8))
             {
-                Set(ws, r, 14, Num(item.Pallet_qty + 1));
-                var size = item.Pallet_qty == 0 ? item.var2 : item.Pallet_Size + "\n" + item.var2;
-                Set(ws, r, 16, size);
+                Set(ws, r, 17, "");
+            }
+            else if (!string.IsNullOrWhiteSpace(item.var2))
+            {
                 var full = item.Pallet_qty == 0
                     ? ""
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
@@ -387,8 +391,6 @@ public class CustomsAndPackingExcelService
             }
             else
             {
-                Set(ws, r, 14, Num(item.Pallet_qty));
-                Set(ws, r, 16, item.Pallet_Size);
                 var dd = item.Pallet_qty == 0
                     ? ""
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
@@ -487,6 +489,36 @@ public class CustomsAndPackingExcelService
             return baseText;
         return baseText + "\n" + item.var1 + item.Packing_method_unit;
     }
+
+    /// <summary>
+    /// 导出用托盘尺寸（尾托=拼托余量，尺寸由业务填写）：
+    /// 整托≠0：有尾托尺寸 → 托盘尺寸+尾托尺寸；无 → 托盘尺寸；
+    /// 整托=0：有尾托尺寸 → 只出尾托尺寸；无 → 都不显示。
+    /// 拼托挂靠行始终不显示。
+    /// </summary>
+    private static string? ExportPalletSizeText(ZyqdCustomsAndPackingModel item)
+    {
+        if (CustomsAndPackingCalc.IsMergeMember(item.var8))
+            return "";
+
+        var hasTail = !string.IsNullOrWhiteSpace(item.var2);
+        var hasFull = !string.IsNullOrWhiteSpace(item.Pallet_Size);
+
+        if (item.Pallet_qty != 0)
+        {
+            if (hasTail && hasFull)
+                return item.Pallet_Size + "\n" + item.var2;
+            if (hasTail)
+                return item.var2;
+            return item.Pallet_Size;
+        }
+
+        // 整托数 = 0
+        return hasTail ? item.var2 : "";
+    }
+
+    private static double ExportDisplayPalletQty(ZyqdCustomsAndPackingModel item)
+        => CustomsAndPackingCalc.DisplayPalletQty(CustomsAndPackingService.ToLineDto(item, 0));
 
     private static void EnsureRows(IXLWorksheet ws, int templateExcelRow, int count)
     {

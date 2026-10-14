@@ -128,7 +128,7 @@
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="currency_unit">货币单位</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price">单价</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price_unit">单价单位</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label">箱唛</MudTableSortLabel></MudTh>
+                <MudTh Class="cb-box-label-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label">箱唛</MudTableSortLabel></MudTh>
                 <MudTh>箱唛图例</MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label2">箱唛2</MudTableSortLabel></MudTh>
                 <MudTh>箱唛图例2</MudTh>
@@ -169,7 +169,18 @@
                 <MudTd>@context.currency_unit</MudTd>
                 <MudTd>@context.price</MudTd>
                 <MudTd>@context.price_unit</MudTd>
-                <MudTd>@context.Box_label</MudTd>
+                <MudTd Class="cb-box-label-cell">
+                    @if (string.IsNullOrWhiteSpace(context.Box_label))
+                    {
+                        <span>-</span>
+                    }
+                    else
+                    {
+                        <MudTooltip Text="@context.Box_label" Arrow="true">
+                            <div class="cb-box-label-text">@context.Box_label</div>
+                        </MudTooltip>
+                    }
+                </MudTd>
                 <MudTd><LegacyRemoteImg Path="@context.Box_label_url"/></MudTd>
                 <MudTd>@context.Box_label2</MudTd>
                 <MudTd><LegacyRemoteImg Path="@context.Box_label_url2"/></MudTd>
@@ -462,6 +473,22 @@
         display: block;
     }
 
+    .cotract-base-table .mud-table-cell.cb-box-label-cell {
+        max-width: 300px !important;
+        width: 300px;
+        min-width: 120px !important;
+        overflow: hidden;
+        vertical-align: middle !important;
+    }
+    .cb-box-label-text {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: block;
+        cursor: default;
+    }
+
     .cotract-base-table .mud-table-cell.cb-manager-cell {
         white-space: normal !important;
         min-width: 180px;
@@ -537,14 +564,7 @@
     private int RowNo(ZyqdCotractBaseModel row) => _skip + _rows.IndexOf(row) + 1;
 
     private static List<string> SplitManagers(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return [];
-        return raw
-            .Split(['/', ',', ';', '|', ' ', '、', '，'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(x => x.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
+        => CustomerManagerText.Split(raw);
 
     private async Task OnKeyUp(KeyboardEventArgs e)
     {

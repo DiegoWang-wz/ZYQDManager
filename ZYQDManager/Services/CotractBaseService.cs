@@ -188,8 +188,7 @@ public class CotractBaseService
 
         var empNo = (query.ViewerEmpNo ?? "").Trim();
         if (empNo.Length > 0
-            && !string.IsNullOrWhiteSpace(row.Customer_Manager)
-            && row.Customer_Manager.Contains(empNo, StringComparison.OrdinalIgnoreCase))
+            && CustomerManagerText.ContainsEmpNo(row.Customer_Manager, empNo))
             return true;
 
         var clientNo = (row.ClientNo ?? "").Trim();

@@ -9,6 +9,20 @@ namespace ZYQDManager.Services;
 public static class CustomsAndPackingCalc
 {
     public const double KgPerPallet = 15;
+    public const string MergeRolePrimary = "拼托主";
+    public const string MergeRoleMember = "拼托";
+
+    public static bool IsMergePrimary(string? var8)
+        => string.Equals(var8, MergeRolePrimary, StringComparison.Ordinal);
+
+    public static bool IsMergeMember(string? var8)
+        => string.Equals(var8, MergeRoleMember, StringComparison.Ordinal);
+
+    /// <summary>拼托主且无整托、无尾托时，由本行承担拼成的那 1 托。</summary>
+    public static bool NeedsSharedPalletSlot(CustomsAndPackingLineDto line)
+        => IsMergePrimary(line.var8)
+           && line.Pallet_qty <= 0
+           && string.IsNullOrWhiteSpace(line.var2);
 
     /// <summary>
     /// 按数量/打包/打托/尺寸重算箱数、尾箱、整托、不足托、托重、净毛重合计、体积。
@@ -19,6 +33,7 @@ public static class CustomsAndPackingCalc
         var packing = ParsePositive(line.Packing_method, 1);
         var palletizing = ParsePositive(line.palletizing_method, 1);
         var hasTailPallet = !string.IsNullOrWhiteSpace(line.var2);
+        var mergeMember = IsMergeMember(line.var8);
 
         if (packing > 0)
         {
@@ -36,14 +51,25 @@ public static class CustomsAndPackingCalc
         }
 
         var palletWeight = line.Pallet_qty * KgPerPallet;
-        if (hasTailPallet)
-            palletWeight += KgPerPallet;
+        if (!mergeMember)
+        {
+            if (hasTailPallet)
+                palletWeight += KgPerPallet;
+            else if (NeedsSharedPalletSlot(line))
+                palletWeight += KgPerPallet;
+        }
         line.Pallet_weight = palletWeight;
 
         if (packing > 0)
             line.total_gross_weight = Round2(qty / packing * line.gross_weight + palletWeight);
 
-        line.volume = RoundCeil2(CalcVolume(line.Pallet_qty, line.Pallet_Size, line.var2, line.Carton_Size, line.emit));
+        line.volume = RoundCeil2(CalcVolume(
+            line.Pallet_qty,
+            mergeMember ? null : line.Pallet_Size,
+            mergeMember ? null : line.var2,
+            line.Carton_Size,
+            line.emit,
+            NeedsSharedPalletSlot(line)));
     }
 
     public static void RecalcLine(ZyqdCustomsAndPackingModel row)
@@ -63,9 +89,8 @@ public static class CustomsAndPackingCalc
     {
         header.all_qty = lines.Sum(x => x.qty);
         header.all_box_qty = lines.Sum(x => x.box_qty);
-        // 整托 + 有尾托尺寸的行各 +1（对齐导出时的托盘数量）
-        header.all_Pallet_qty = lines.Sum(x => x.Pallet_qty)
-            + lines.Count(x => !string.IsNullOrWhiteSpace(x.var2));
+        // 整托 + 尾托 + 拼托主承担的那 1 托（挂靠行不计）
+        header.all_Pallet_qty = lines.Sum(DisplayPalletQty);
         header.all_total_Net_weight = Round2(lines.Sum(x => x.total_Net_weight));
         header.all_total_gross_weight = Round2(lines.Sum(x => x.total_gross_weight));
         header.all_Net_weight = header.all_total_Net_weight;
@@ -103,7 +128,8 @@ public static class CustomsAndPackingCalc
             gross_weight = src.gross_weight,
             var2 = src.var2,
             var4 = src.var4,
-            Pallet_code = src.Pallet_code,
+            Pallet_code = null,
+            var8 = null,
             emit = src.emit,
             packing_unit = src.packing_unit,
             sample_type = src.sample_type,
@@ -127,7 +153,14 @@ public static class CustomsAndPackingCalc
     }
 
     public static double DisplayPalletQty(CustomsAndPackingLineDto line)
-        => line.Pallet_qty + (string.IsNullOrWhiteSpace(line.var2) ? 0 : 1);
+    {
+        if (IsMergeMember(line.var8))
+            return 0;
+        var n = line.Pallet_qty + (string.IsNullOrWhiteSpace(line.var2) ? 0 : 1);
+        if (n <= 0 && NeedsSharedPalletSlot(line))
+            return 1;
+        return n;
+    }
 
     private static void ApplyDtoToModel(CustomsAndPackingLineDto dto, ZyqdCustomsAndPackingModel row)
     {
@@ -142,15 +175,21 @@ public static class CustomsAndPackingCalc
     }
 
     private static double CalcVolume(
-        double palletQty, string? palletSize, string? tailSize, string? cartonSize, string? emit)
+        double palletQty,
+        string? palletSize,
+        string? tailSize,
+        string? cartonSize,
+        string? emit,
+        bool sharedPalletSlot = false)
     {
         var hasTail = !string.IsNullOrWhiteSpace(tailSize);
-        if (palletQty <= 0 && !hasTail)
+        if (palletQty <= 0 && !hasTail && !sharedPalletSlot)
             return 0;
 
         double volume = 0;
-        if (TryParseSize(palletSize, out var pw, out var ph, out var pd) && palletQty > 0)
-            volume += palletQty * pw * ph * pd / 1_000_000_000d;
+        var fullQty = palletQty > 0 ? palletQty : (sharedPalletSlot ? 1 : 0);
+        if (TryParseSize(palletSize, out var pw, out var ph, out var pd) && fullQty > 0)
+            volume += fullQty * pw * ph * pd / 1_000_000_000d;
 
         if (hasTail && TryParseSize(tailSize, out var tw, out var th, out var td))
             volume += tw * th * td / 1_000_000_000d;

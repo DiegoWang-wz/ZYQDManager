@@ -123,6 +123,13 @@ public class UserCustomerAssignService
         var existing = await _db.UserCustomerAssigns.Where(x => x.EmpNo == empNo).ToListAsync(ct);
         var now = DateTime.Now;
 
+        var oldCodes = existing
+            .Select(x => (x.CustomerCode ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var addedCodes = incoming.Keys.Where(c => !oldCodes.Contains(c)).ToList();
+        var removedCodes = oldCodes.Where(c => !incoming.ContainsKey(c)).ToList();
+
         foreach (var row in existing.Where(x => !incoming.ContainsKey(x.CustomerCode)).ToList())
             _db.UserCustomerAssigns.Remove(row);
 
@@ -146,8 +153,45 @@ public class UserCustomerAssignService
             }
         }
 
+        await SyncCotractBaseManagersAsync(empNo, addedCodes, removedCodes, ct);
         await _db.SaveChangesAsync(ct);
         return ApiResponse<bool>.Ok(true, "客户分配已保存");
+    }
+
+    /// <summary>
+    /// 客户分配变更时，同步合同基础数据负责人：新增客户追加工号，取消客户删除工号。
+    /// </summary>
+    private async Task SyncCotractBaseManagersAsync(
+        string empNo,
+        IReadOnlyList<string> addedClientNos,
+        IReadOnlyList<string> removedClientNos,
+        CancellationToken ct)
+    {
+        if (addedClientNos.Count == 0 && removedClientNos.Count == 0)
+            return;
+
+        var touchCodes = addedClientNos.Concat(removedClientNos)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var rows = await _db.CotractBases
+            .Where(x => x.ClientNo != null
+                        && touchCodes.Contains(x.ClientNo)
+                        && (x.deleteSigh == null || x.deleteSigh != "X"))
+            .ToListAsync(ct);
+
+        var addSet = addedClientNos.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var removeSet = removedClientNos.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            var client = (row.ClientNo ?? "").Trim();
+            if (addSet.Contains(client))
+                row.Customer_Manager = CustomerManagerText.AddEmpNo(row.Customer_Manager, empNo);
+            if (removeSet.Contains(client))
+                row.Customer_Manager = CustomerManagerText.RemoveEmpNo(row.Customer_Manager, empNo);
+            row.UpdateTime = DateTime.Now;
+        }
     }
 
     private static CustomerOptionDto ToOption(ZyqdUserCustomerAssignModel x) => new()
