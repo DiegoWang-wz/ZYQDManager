@@ -61,6 +61,8 @@ public sealed class CustomsAndPackingLineDto
     public string? var7 { get; set; }
     /// <summary>拼托角色：拼托主 / 拼托（挂靠）；空=未拼托</summary>
     public string? var8 { get; set; }
+    /// <summary>拆分行来源 TempId（仅编辑态，不落库；删除拆分行时加回原行）</summary>
+    public int? SplitFromTempId { get; set; }
     /// <summary>编辑页勾选，不落库</summary>
     public bool Selected { get; set; }
     public string? Customer_outer_box_logo { get; set; }

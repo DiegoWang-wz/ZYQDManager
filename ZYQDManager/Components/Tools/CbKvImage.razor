@@ -235,19 +235,14 @@
 
     private bool _uploading;
     private bool IsNa => string.Equals(Value?.Trim(), "N/A", StringComparison.OrdinalIgnoreCase);
-    private bool HasImage => !string.IsNullOrWhiteSpace(Value) && !IsNa && !LegacyFileUrl.IsBlankOrPlaceholder(Value);
+    private bool HasImage => !IsNa && !LegacyFileUrl.IsBlankOrPlaceholder(Value)
+                             && LegacyFileUrl.Resolve(Value).Length > 0;
 
     private async Task SetNa()
-    {
-        Value = "N/A";
-        await ValueChanged.InvokeAsync(Value);
-    }
+        => await ValueChanged.InvokeAsync("N/A");
 
     private async Task ClearAsync()
-    {
-        Value = null;
-        await ValueChanged.InvokeAsync(null);
-    }
+        => await ValueChanged.InvokeAsync(null);
 
     private async Task DeleteAsync()
     {
@@ -276,7 +271,6 @@
         {
             await using var stream = file.OpenReadStream(MaxBytes);
             var path = await CotractBase.UploadImageAsync(stream, file.Name);
-            Value = path;
             await ValueChanged.InvokeAsync(path);
             Notify.Show("图片已上传", Severity.Success);
         }

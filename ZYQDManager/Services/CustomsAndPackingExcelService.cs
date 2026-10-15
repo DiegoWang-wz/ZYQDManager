@@ -19,6 +19,13 @@ public class CustomsAndPackingExcelService
 {
     private const string LegacyHttpClient = "LegacyFiles";
 
+    /// <summary>有铭牌图但合同基础未维护类型，阻止报关/生产导出。</summary>
+    public sealed record NameplateTypeExportIssue(
+        string ClientNo,
+        string MaterialNo,
+        string MissingField,
+        int? BaseId);
+
     private readonly IWebHostEnvironment _env;
     private readonly IHttpClientFactory _httpFactory;
     private readonly SqlServerDbContext _db;
@@ -45,6 +52,13 @@ public class CustomsAndPackingExcelService
             .ToListAsync(ct);
         if (lists.Count == 0)
             throw new InvalidOperationException("装箱单无数据，请先保存");
+
+        if (type is "报关" or "生产")
+        {
+            var issues = await FindMissingNameplateTypesAsync(lists, ct);
+            if (issues.Count > 0)
+                throw new InvalidOperationException(FormatNameplateTypeIssues(issues));
+        }
 
         foreach (var row in lists)
             CustomsAndPackingCalc.RecalcLine(row);
@@ -194,6 +208,7 @@ public class CustomsAndPackingExcelService
         Set(ws, 1, 29, main.Shipping_method);
 
         var title = BuildTitle(main, lists);
+        var typeMap = await LoadNameplateTypeMapAsync(lists, ct);
 
         for (var i = 0; i < lists.Count; i++)
         {
@@ -211,30 +226,32 @@ public class CustomsAndPackingExcelService
 
             SetText(ws, r, 4, item.Client_poNo);
             Set(ws, r, 5, item.materialModel);
-            TryPicture(ws, images, item.nameplate_url, r, 6);
-            TryPicture(ws, images, item.nameplate_url2, r, 7);
-            Set(ws, r, 8, item.SAP_order_NO);
-            Set(ws, r, 9, item.materialNo);
-            Set(ws, r, 10, item.materialName);
-            Set(ws, r, 11, Num(item.qty));
-            Set(ws, r, 12, FormatPacking(item));
-            Set(ws, r, 13, Num(item.box_qty));
-            Set(ws, r, 15, item.Carton_Size);
-            Set(ws, r, 17, Num(item.Pallet_qty));
-            Set(ws, r, 18, item.var3);
+            // G/H/I/J：铭牌1、类型1、铭牌2、类型2；其后列整体 +2
+            var (npType1, npType2) = LookupNameplateTypes(typeMap, item);
+            PutNameplate(ws, images, item.nameplate_url, r, 6, npType1, 7);
+            PutNameplate(ws, images, item.nameplate_url2, r, 8, npType2, 9);
+            Set(ws, r, 10, item.SAP_order_NO);
+            Set(ws, r, 11, item.materialNo);
+            Set(ws, r, 12, item.materialName);
+            Set(ws, r, 13, Num(item.qty));
+            Set(ws, r, 14, FormatPacking(item));
+            Set(ws, r, 15, Num(item.box_qty));
+            Set(ws, r, 17, item.Carton_Size);
+            Set(ws, r, 19, Num(item.Pallet_qty));
+            Set(ws, r, 20, item.var3);
 
-            Set(ws, r, 14, Num(ExportDisplayPalletQty(item)));
-            Set(ws, r, 16, ExportPalletSizeText(item));
+            Set(ws, r, 16, Num(ExportDisplayPalletQty(item)));
+            Set(ws, r, 18, ExportPalletSizeText(item));
             if (CustomsAndPackingCalc.IsMergeMember(item.var8))
             {
-                Set(ws, r, 19, "");
+                Set(ws, r, 21, "");
             }
             else if (!string.IsNullOrWhiteSpace(item.var2))
             {
                 var full = item.Pallet_qty == 0
                     ? ""
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
-                Set(ws, r, 19, full + item.var4 + item.palletizing_method_unit + " 1托");
+                Set(ws, r, 21, full + item.var4 + item.palletizing_method_unit + " 1托");
             }
             else
             {
@@ -243,43 +260,43 @@ public class CustomsAndPackingExcelService
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
                 if (!string.IsNullOrWhiteSpace(item.var4))
                     dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
-                Set(ws, r, 19, dd);
+                Set(ws, r, 21, dd);
             }
 
-            Set(ws, r, 20, Num(item.Pallet_weight));
-            Set(ws, r, 21, Num(item.Net_weight));
-            Set(ws, r, 22, Num(item.gross_weight));
-            Set(ws, r, 23, Num(item.total_Net_weight));
-            Set(ws, r, 24, Num(item.total_gross_weight));
-            Set(ws, r, 25, Num(item.volume));
-            Set(ws, r, 26, item.Pallet_code);
-            Set(ws, r, 27, item.emit);
-            Set(ws, r, 29, item.packing_unit);
-            Set(ws, r, 30, item.Shipping_heads_up);
-            Set(ws, r, 31, item.PIcotract_code);
-            Set(ws, r, 32, item.PI_Material_Name);
-            Set(ws, r, 33, item.sample_type);
+            Set(ws, r, 22, Num(item.Pallet_weight));
+            Set(ws, r, 23, Num(item.Net_weight));
+            Set(ws, r, 24, Num(item.gross_weight));
+            Set(ws, r, 25, Num(item.total_Net_weight));
+            Set(ws, r, 26, Num(item.total_gross_weight));
+            Set(ws, r, 27, Num(item.volume));
+            Set(ws, r, 28, item.Pallet_code);
+            Set(ws, r, 29, item.emit);
+            Set(ws, r, 31, item.packing_unit);
+            Set(ws, r, 32, item.Shipping_heads_up);
+            Set(ws, r, 33, item.PIcotract_code);
+            Set(ws, r, 34, item.PI_Material_Name);
+            Set(ws, r, 35, item.sample_type);
         }
 
         var totalRow = dataNpoi + lists.Count;
-        Set(ws, totalRow, 11, Num(main.all_qty));
-        Set(ws, totalRow, 13, Num(main.all_box_qty));
-        Set(ws, totalRow, 14, Num(main.all_Pallet_qty));
-        Set(ws, totalRow, 23, Num(main.all_total_Net_weight));
-        Set(ws, totalRow, 24, Num(main.all_total_gross_weight));
-        Set(ws, totalRow, 25, Num(main.all_volume));
-        Set(ws, totalRow, 27, main.all_emit);
+        Set(ws, totalRow, 13, Num(main.all_qty));
+        Set(ws, totalRow, 15, Num(main.all_box_qty));
+        Set(ws, totalRow, 16, Num(main.all_Pallet_qty));
+        Set(ws, totalRow, 25, Num(main.all_total_Net_weight));
+        Set(ws, totalRow, 26, Num(main.all_total_gross_weight));
+        Set(ws, totalRow, 27, Num(main.all_volume));
+        Set(ws, totalRow, 29, main.all_emit);
 
         var desc =
             $"总计:{Num(main.all_box_qty)}箱/{Num(main.all_Pallet_qty)}托/{main.all_emit}箱散发/{Num(main.all_total_gross_weight)}KG/{Num(main.all_volume)}m³{main.Shipping_method}出运";
-        Set(ws, totalRow + 1, 9, desc);
+        Set(ws, totalRow + 1, 11, desc);
         Set(ws, 0, 0, title);
 
         MergeSame(ws, lists.Select(x => x.ClientNo).ToList(), [1], dataNpoi + 1);
         MergeSame(ws, lists.Select(x => x.Client_poNo).ToList(), [4], dataNpoi + 1);
-        MergeSame(ws, lists.Select(x => x.packing_unit).ToList(), [29], dataNpoi + 1);
-        MergeSame(ws, lists.Select(x => x.Shipping_heads_up).ToList(), [30], dataNpoi + 1);
-        MergeSame(ws, lists.Select(x => x.PIcotract_code).ToList(), [31], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.packing_unit).ToList(), [31], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.Shipping_heads_up).ToList(), [32], dataNpoi + 1);
+        MergeSame(ws, lists.Select(x => x.PIcotract_code).ToList(), [33], dataNpoi + 1);
 
         if (HasUrl(lists[0].Customer_outer_box_logo))
             TryPicture(ws, images, lists[0].Customer_outer_box_logo, dataNpoi + lists.Count / 2, 1);
@@ -350,6 +367,7 @@ public class CustomsAndPackingExcelService
         EnsureRows(ws, dataNpoi + 1, lists.Count);
 
         var title = BuildTitle(main, lists);
+        var typeMap = await LoadNameplateTypeMapAsync(lists, ct);
         for (var i = 0; i < lists.Count; i++)
         {
             var item = lists[i];
@@ -367,27 +385,29 @@ public class CustomsAndPackingExcelService
             Set(ws, r, 4, item.Client_poNo);
             Set(ws, r, 5, item.materialModel);
             Set(ws, r, 6, item.SAP_order_NO);
-            TryPicture(ws, images, item.nameplate_url, r, 7);
-            TryPicture(ws, images, item.nameplate_url2, r, 8);
-            Set(ws, r, 9, item.materialNo);
-            Set(ws, r, 10, item.materialName);
-            Set(ws, r, 11, Num(item.qty));
-            Set(ws, r, 12, FormatPacking(item));
-            Set(ws, r, 13, Num(item.box_qty));
-            Set(ws, r, 15, item.Carton_Size);
+            // H/I/J/K：铭牌1、类型1、铭牌2、类型2；其后物料列整体 +2
+            var (npType1, npType2) = LookupNameplateTypes(typeMap, item);
+            PutNameplate(ws, images, item.nameplate_url, r, 7, npType1, 8);
+            PutNameplate(ws, images, item.nameplate_url2, r, 9, npType2, 10);
+            Set(ws, r, 11, item.materialNo);
+            Set(ws, r, 12, item.materialName);
+            Set(ws, r, 13, Num(item.qty));
+            Set(ws, r, 14, FormatPacking(item));
+            Set(ws, r, 15, Num(item.box_qty));
+            Set(ws, r, 17, item.Carton_Size);
 
-            Set(ws, r, 14, Num(ExportDisplayPalletQty(item)));
-            Set(ws, r, 16, ExportPalletSizeText(item));
+            Set(ws, r, 16, Num(ExportDisplayPalletQty(item)));
+            Set(ws, r, 18, ExportPalletSizeText(item));
             if (CustomsAndPackingCalc.IsMergeMember(item.var8))
             {
-                Set(ws, r, 17, "");
+                Set(ws, r, 19, "");
             }
             else if (!string.IsNullOrWhiteSpace(item.var2))
             {
                 var full = item.Pallet_qty == 0
                     ? ""
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
-                Set(ws, r, 17, full + item.var4 + item.palletizing_method_unit + " 1托");
+                Set(ws, r, 19, full + item.var4 + item.palletizing_method_unit + " 1托");
             }
             else
             {
@@ -396,27 +416,27 @@ public class CustomsAndPackingExcelService
                     : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
                 if (!string.IsNullOrWhiteSpace(item.var4))
                     dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
-                Set(ws, r, 17, dd);
+                Set(ws, r, 19, dd);
             }
 
-            Set(ws, r, 18, Num(item.Pallet_weight));
-            Set(ws, r, 19, Num(item.Net_weight));
-            Set(ws, r, 20, Num(item.gross_weight));
-            Set(ws, r, 21, Num(item.total_Net_weight));
-            Set(ws, r, 22, Num(item.total_gross_weight));
-            Set(ws, r, 23, Num(item.volume));
-            Set(ws, r, 24, item.Pallet_code);
-            Set(ws, r, 25, item.emit);
+            Set(ws, r, 20, Num(item.Pallet_weight));
+            Set(ws, r, 21, Num(item.Net_weight));
+            Set(ws, r, 22, Num(item.gross_weight));
+            Set(ws, r, 23, Num(item.total_Net_weight));
+            Set(ws, r, 24, Num(item.total_gross_weight));
+            Set(ws, r, 25, Num(item.volume));
+            Set(ws, r, 26, item.Pallet_code);
+            Set(ws, r, 27, item.emit);
         }
 
         var totalRow = dataNpoi + lists.Count;
-        Set(ws, totalRow, 11, Num(main.all_qty));
-        Set(ws, totalRow, 13, Num(main.all_box_qty));
-        Set(ws, totalRow, 14, Num(main.all_Pallet_qty));
-        Set(ws, totalRow, 21, Num(main.all_total_Net_weight));
-        Set(ws, totalRow, 22, Num(main.all_total_gross_weight));
-        Set(ws, totalRow, 23, Num(main.all_volume));
-        Set(ws, totalRow, 25, main.all_emit);
+        Set(ws, totalRow, 13, Num(main.all_qty));
+        Set(ws, totalRow, 15, Num(main.all_box_qty));
+        Set(ws, totalRow, 16, Num(main.all_Pallet_qty));
+        Set(ws, totalRow, 23, Num(main.all_total_Net_weight));
+        Set(ws, totalRow, 24, Num(main.all_total_gross_weight));
+        Set(ws, totalRow, 25, Num(main.all_volume));
+        Set(ws, totalRow, 27, main.all_emit);
         Set(ws, 0, 0, title);
 
         if (lists.Count > 1)
@@ -454,6 +474,118 @@ public class CustomsAndPackingExcelService
         if (bas is null) return stored;
         var raw = prefer2 ? bas.Box_label2 : bas.Box_label;
         return string.IsNullOrWhiteSpace(raw) ? stored : raw;
+    }
+
+    /// <summary>报关/生产导出前：有铭牌图但合同基础缺类型的行。</summary>
+    public async Task<IReadOnlyList<NameplateTypeExportIssue>> FindMissingNameplateTypesAsync(
+        string? documentGuid, CancellationToken ct = default)
+    {
+        var lists = await _db.CustomsAndPackings.AsNoTracking()
+            .Where(x => x.DocumentGuid == documentGuid && x.deleteSigh != "X")
+            .OrderBy(x => x.Id)
+            .ToListAsync(ct);
+        return await FindMissingNameplateTypesAsync(lists, ct);
+    }
+
+    public async Task<IReadOnlyList<NameplateTypeExportIssue>> FindMissingNameplateTypesAsync(
+        List<ZyqdCustomsAndPackingModel> lists, CancellationToken ct = default)
+    {
+        var map = await LoadNameplateTypeMapAsync(lists, ct);
+        var issues = new List<NameplateTypeExportIssue>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in lists)
+        {
+            var key = NameplateTypeKey(item.ClientNo, item.materialNo);
+            map.TryGetValue(key, out var info);
+            var client = (item.ClientNo ?? "").Trim();
+            var mat = (item.materialNo ?? "").Trim();
+
+            if (HasUrl(item.nameplate_url) && string.IsNullOrWhiteSpace(info.Type1))
+            {
+                var sig = key + "|1";
+                if (seen.Add(sig))
+                    issues.Add(new NameplateTypeExportIssue(client, mat, "铭牌1类型", info.BaseId));
+            }
+
+            if (HasUrl(item.nameplate_url2) && string.IsNullOrWhiteSpace(info.Type2))
+            {
+                var sig = key + "|2";
+                if (seen.Add(sig))
+                    issues.Add(new NameplateTypeExportIssue(client, mat, "铭牌2类型", info.BaseId));
+            }
+        }
+
+        return issues;
+    }
+
+    public static string FormatNameplateTypeIssues(IReadOnlyList<NameplateTypeExportIssue> issues)
+    {
+        if (issues.Count == 0) return "";
+        var lines = issues.Take(8)
+            .Select(x => $"客户 {x.ClientNo} / 物料 {x.MaterialNo}：缺{x.MissingField}")
+            .ToList();
+        if (issues.Count > 8)
+            lines.Add($"…等共 {issues.Count} 处");
+        return "有铭牌图片但未维护铭牌类型，请先到合同基础数据补全：\n" + string.Join("\n", lines);
+    }
+
+    /// <summary>按客户+物料从合同基础批量取铭牌类型。</summary>
+    private async Task<Dictionary<string, (int? BaseId, string? Type1, string? Type2)>> LoadNameplateTypeMapAsync(
+        List<ZyqdCustomsAndPackingModel> lists, CancellationToken ct)
+    {
+        var clientNos = lists.Select(x => (x.ClientNo ?? "").Trim()).Where(x => x.Length > 0).Distinct().ToList();
+        var matNos = lists.Select(x => (x.materialNo ?? "").Trim()).Where(x => x.Length > 0).Distinct().ToList();
+        if (clientNos.Count == 0 || matNos.Count == 0)
+            return new Dictionary<string, (int?, string?, string?)>(StringComparer.OrdinalIgnoreCase);
+
+        var rows = await _db.CotractBases.AsNoTracking()
+            .Where(x => x.ClientNo != null && x.materialNo != null
+                        && clientNos.Contains(x.ClientNo) && matNos.Contains(x.materialNo))
+            .Select(x => new { x.Id, x.ClientNo, x.materialNo, x.nameplate_type, x.nameplate_type2 })
+            .ToListAsync(ct);
+
+        var map = new Dictionary<string, (int?, string?, string?)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = NameplateTypeKey(r.ClientNo, r.materialNo);
+            if (key.Length == 0 || map.ContainsKey(key)) continue;
+            map[key] = (r.Id, NameplateTypes.Normalize(r.nameplate_type), NameplateTypes.Normalize(r.nameplate_type2));
+        }
+
+        return map;
+    }
+
+    private static string NameplateTypeKey(string? clientNo, string? materialNo)
+    {
+        var c = (clientNo ?? "").Trim();
+        var m = (materialNo ?? "").Trim();
+        return c.Length == 0 || m.Length == 0 ? "" : c + "\u001f" + m;
+    }
+
+    private static (string? Type1, string? Type2) LookupNameplateTypes(
+        Dictionary<string, (int? BaseId, string? Type1, string? Type2)> map, ZyqdCustomsAndPackingModel item)
+    {
+        var key = NameplateTypeKey(item.ClientNo, item.materialNo);
+        if (key.Length > 0 && map.TryGetValue(key, out var t))
+            return (t.Type1, t.Type2);
+        return (null, null);
+    }
+
+    /// <summary>写铭牌图（无图写「无」）及对应类型（无图不写类型）。</summary>
+    private void PutNameplate(
+        IXLWorksheet ws,
+        Dictionary<string, byte[]> images,
+        string? url,
+        int npoiRow,
+        int imgCol,
+        string? type,
+        int typeCol)
+    {
+        var hasImg = TryPicture(ws, images, url, npoiRow, imgCol);
+        if (!hasImg)
+            Set(ws, npoiRow, imgCol, "无");
+        Set(ws, npoiRow, typeCol, hasImg ? type : null);
     }
 
     private async Task<string?> ResolveTuoMarkAsync(ZyqdCustomsAndPackingModel item, CancellationToken ct)

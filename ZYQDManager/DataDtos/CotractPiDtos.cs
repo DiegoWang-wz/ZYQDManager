@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using ZYQDManager.Utilities;
 
 namespace ZYQDManager.DataDtos;
 
@@ -41,13 +42,9 @@ public static class CotractPiTypes
         }
     }
 
+    /// <summary>客户编号规范化（短号补 10000000，见 <see cref="ClientCodeHelper"/>）。</summary>
     public static string NormalizeClientNo(string? clientNo)
-    {
-        var s = (clientNo ?? "").Trim();
-        if (s.Length == 4 && s.All(char.IsDigit))
-            return "1000" + s;
-        return s;
-    }
+        => ClientCodeHelper.Expand(clientNo);
 
     public static string ResolveTemplateType(string? orderType, string? clientNo)
     {

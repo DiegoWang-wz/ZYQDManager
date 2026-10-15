@@ -33,7 +33,11 @@ public class ZyqdCotractBaseModel
     public string? Client_poNo { get; set; }
     public string? Client_Model { get; set; }
     public string? nameplate_url { get; set; }
+    /// <summary>铭牌1类型：镭雕铭牌 / 打印贴纸 / 外购铭牌</summary>
+    public string? nameplate_type { get; set; }
     public string? nameplate_url2 { get; set; }
+    /// <summary>铭牌2类型：镭雕铭牌 / 打印贴纸 / 外购铭牌</summary>
+    public string? nameplate_type2 { get; set; }
     public string? SAP_order_NO { get; set; }
     public string? SAP_Material_NO { get; set; }
     public string? SAP_Material_Name { get; set; }

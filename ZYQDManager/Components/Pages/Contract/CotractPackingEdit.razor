@@ -77,6 +77,7 @@
                     </MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
                                StartIcon="@Icons.Material.Filled.CallMerge"
+                               Class="cpk-icon-dir-right"
                                OnClick="MergeSelectedLines" Disabled="_busy">
                         合并
                     </MudButton>
@@ -119,27 +120,27 @@
                                       OnKeyUp="OnProductKey"
                                       OnBlur="@(() => LoadProductsAsync(showNotify: false))"
                                       Placeholder="回车查询"/>
-                        <MudSelect T="int"
-                                   @bind-Value="_productId"
-                                   Label="选择产品"
-                                   Variant="Variant.Outlined"
-                                   Margin="Margin.Dense"
-                                   Dense="true"
-                                   Class="cpk-picker-product"
-                                   Disabled="_busy">
-                            <MudSelectItem Value="0">@(_products.Count == 0 ? "先填客户号回车" : "未选择")</MudSelectItem>
-                            @foreach (var p in _products)
-                            {
-                                <MudSelectItem Value="@p.Id">@ProductLabel(p)</MudSelectItem>
-                            }
-                        </MudSelect>
+                        <MudAutocomplete T="ZyqdCotractBaseModel"
+                                         @bind-Value="_selectedProduct"
+                                         Label="选择产品"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Dense="true"
+                                         Class="cpk-picker-product"
+                                         Disabled="_busy"
+                                         Clearable="true"
+                                         ResetValueOnEmptyText="true"
+                                         MaxItems="80"
+                                         SearchFunc="SearchProductsAsync"
+                                         ToStringFunc="@(p => p is null ? "" : ProductLabel(p))"
+                                         Placeholder="@(_products.Count == 0 ? "先填客户号回车" : "输入物料号/名称/型号筛选")"/>
                     </div>
                 </MudItem>
                 <MudItem xs="4" lg="6" Class="cpk-picker-right">
                     <div class="cpk-picker-right-inner">
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                    StartIcon="@Icons.Material.Filled.Add"
-                                   Disabled="_busy || _productId == 0"
+                                   Disabled="_busy || _selectedProduct is null"
                                    OnClick="AddLineFromBaseAsync">
                             添加
                         </MudButton>
@@ -353,6 +354,7 @@
                                 @if (string.Equals(line.var7, "原始行", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line.var7))
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.CallSplit" Size="Size.Small" Color="Color.Primary"
+                                                   Class="cpk-icon-dir-right"
                                                    Title="拆分此行" Disabled="_busy || line.qty <= 1"
                                                    OnClick="@(() => OpenSplit(line))"/>
                                 }
@@ -411,8 +413,8 @@
         <MudPaper Class="pa-4 cpk-split-card" Elevation="8">
             <MudText Typo="Typo.h6" Class="mb-2">拆分此行</MudText>
             <MudText Class="mb-3">原数量：@_splitLine.qty.ToString("0.##")</MudText>
-            <MudNumericField T="double" @bind-Value="_splitQty" Label="拆出数量（须小于原数量）"
-                             Margin="Margin.Dense" Variant="Variant.Outlined" Min="1" HideSpinButtons="true"/>
+            <MudNumericField T="double" @bind-Value="_splitQty" Label="拆出数量（须大于0且小于原数量）"
+                             Margin="Margin.Dense" Variant="Variant.Outlined" HideSpinButtons="true"/>
             <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1" Class="mt-3">
                 <MudButton OnClick="CloseSplit" Disabled="_busy">取消</MudButton>
                 <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmSplit" Disabled="_busy">确认拆分</MudButton>
@@ -423,33 +425,41 @@
 
 @if (_mergeOpen)
 {
-    <div class="cpk-split-mask">
-        <MudPaper Class="pa-4 cpk-merge-card" Elevation="8">
-            <MudText Typo="Typo.h6" Class="mb-3">拼托</MudText>
-            <MudSelect T="int" @bind-Value="_mergePrimaryTempId" Label="拼入（托主物料）*"
-                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3">
-                @foreach (var c in _mergeCandidates)
-                {
-                    <MudSelectItem Value="@c.TempId">
-                        @(c.materialNo) / @(c.materialName) × @c.qty.ToString("0.##")
-                        @if (!string.IsNullOrWhiteSpace(c.Pallet_Size))
-                        {
-                            <text> （@c.Pallet_Size）</text>
-                        }
-                    </MudSelectItem>
-                }
-            </MudSelect>
-            <MudTextField @bind-Value="_mergePalletCode" Label="托盘编号*" Variant="Variant.Outlined"
-                          Margin="Margin.Dense" Class="mb-3" Required="true"/>
-            <MudTextField @bind-Value="_mergeTailSize" Label="尾托尺寸*" Variant="Variant.Outlined"
-                          Margin="Margin.Dense" Class="mb-3" Required="true" Placeholder="长*宽*高"/>
-            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1">
-                <MudButton OnClick="CloseMergePallet" Disabled="_busy">取消</MudButton>
-                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmMergePallet"
-                           Disabled="_busy || !CanConfirmMerge">确认拼托</MudButton>
-            </MudStack>
-        </MudPaper>
-    </div>
+    <div class="cpk-float-mask @(_mergeDragging ? "cpk-float-mask-drag" : null)"
+         @onpointermove="OnMergePointerMove"
+         @onpointerup="EndMergeDrag"
+         @onpointercancel="EndMergeDrag"></div>
+    <MudPaper Class="pa-4 cpk-merge-card cpk-float-card" Elevation="8" Style="@MergeCardStyle">
+        <div class="cpk-float-title"
+             @onpointerdown="BeginMergeDrag"
+             @onpointermove="OnMergePointerMove"
+             @onpointerup="EndMergeDrag">
+            <MudText Typo="Typo.h6">拼托</MudText>
+            <MudText Typo="Typo.caption" Class="cpk-float-tip">按住标题拖动，可对照表格尺寸</MudText>
+        </div>
+        <MudSelect T="int" @bind-Value="_mergePrimaryTempId" Label="拼入（托主物料）*"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3">
+            @foreach (var c in _mergeCandidates)
+            {
+                <MudSelectItem Value="@c.TempId">
+                    @(c.materialNo) / @(c.materialName) × @c.qty.ToString("0.##")
+                    @if (!string.IsNullOrWhiteSpace(c.Pallet_Size))
+                    {
+                        <text> （@c.Pallet_Size）</text>
+                    }
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="_mergePalletCode" Label="托盘编号*" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Class="mb-3" Required="true" Immediate="true"/>
+        <MudTextField @bind-Value="_mergeTailSize" Label="尾托尺寸*" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Class="mb-3" Required="true" Immediate="true" Placeholder="长*宽*高"/>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1">
+            <MudButton OnClick="CloseMergePallet" Disabled="_busy">取消</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmMergePallet"
+                       Disabled="_busy || !CanConfirmMerge">确认拼托</MudButton>
+        </MudStack>
+    </MudPaper>
 }
 
 <style>
@@ -703,6 +713,37 @@
     }
     .cpk-split-card { width: min(420px, 92vw); }
     .cpk-merge-card { width: min(520px, 94vw); }
+    /* 拼托浮层：默认不拦截表格操作，拖动时可捕获指针 */
+    .cpk-float-mask {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.12);
+        z-index: 1300;
+        pointer-events: none;
+    }
+    .cpk-float-mask-drag { pointer-events: auto; cursor: grabbing; }
+    .cpk-float-card {
+        position: fixed;
+        z-index: 1301;
+        pointer-events: auto;
+        max-height: min(80vh, 640px);
+        overflow: auto;
+    }
+    .cpk-float-title {
+        cursor: grab;
+        user-select: none;
+        margin-bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .cpk-float-title:active { cursor: grabbing; }
+    .cpk-float-tip { color: var(--mud-palette-text-secondary); }
+    /* 合并/拆分 Material 图标默认朝上，旋转 90° 改为朝右更直观 */
+    .cpk-icon-dir-right .mud-icon-root,
+    .cpk-icon-dir-right .mud-svg-icon {
+        transform: rotate(90deg);
+    }
 </style>
 
 @code {
@@ -723,8 +764,18 @@
     private int _mergePrimaryTempId;
     private string? _mergePalletCode;
     private string? _mergeTailSize;
+    private double _mergeOffsetX;
+    private double _mergeOffsetY;
+    private bool _mergeDragging;
+    private double _mergeDragStartX;
+    private double _mergeDragStartY;
+    private double _mergeDragOriginX;
+    private double _mergeDragOriginY;
+
+    private string MergeCardStyle
+        => $"left:50%;top:18vh;transform:translate(calc(-50% + {_mergeOffsetX.ToString(System.Globalization.CultureInfo.InvariantCulture)}px), {_mergeOffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture)}px);";
     private string? _productClientNo;
-    private int _productId;
+    private ZyqdCotractBaseModel? _selectedProduct;
     private List<ZyqdCotractBaseModel> _products = [];
 
     private bool CanConfirmMerge
@@ -778,7 +829,7 @@
         _lines = [];
         _tempSeq = 0;
         _productClientNo = "";
-        _productId = 0;
+        _selectedProduct = null;
         _products = [];
         RefreshSummary();
     }
@@ -870,7 +921,7 @@
         var no = CotractPiTypes.NormalizeClientNo(
             string.IsNullOrWhiteSpace(_productClientNo) ? _header.ClientNo : _productClientNo);
         _productClientNo = no;
-        _productId = 0;
+        _selectedProduct = null;
         if (no.Length == 0)
         {
             _products = [];
@@ -888,6 +939,31 @@
             Notify.Show($"已查到客户 {no} 的合同基础信息，共 {_products.Count} 条", Severity.Success);
     }
 
+    private Task<IEnumerable<ZyqdCotractBaseModel>> SearchProductsAsync(string? text, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (_products.Count == 0)
+            return Task.FromResult(Enumerable.Empty<ZyqdCotractBaseModel>());
+
+        var k = (text ?? "").Trim();
+        IEnumerable<ZyqdCotractBaseModel> q = _products;
+        if (k.Length > 0)
+        {
+            q = _products.Where(p =>
+                ContainsIgnoreCase(p.materialNo, k)
+                || ContainsIgnoreCase(p.materialName, k)
+                || ContainsIgnoreCase(p.materiaCust, k)
+                || ContainsIgnoreCase(p.materialModel, k)
+                || ProductLabel(p).Contains(k, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Task.FromResult(q.Take(80));
+    }
+
+    private static bool ContainsIgnoreCase(string? source, string keyword)
+        => !string.IsNullOrWhiteSpace(source)
+           && source.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+
     private static string ProductLabel(ZyqdCotractBaseModel p)
     {
         var no = (p.materialNo ?? "").Trim();
@@ -900,9 +976,9 @@
 
     private async Task AddLineFromBaseAsync()
     {
-        if (_productId == 0) return;
+        if (_selectedProduct is null || _selectedProduct.Id <= 0) return;
         // ListByClientNo 仅投影下拉展示字段，打包/打托等需按 Id 取完整基础数据
-        var row = await CotractBase.GetAsync(_productId);
+        var row = await CotractBase.GetAsync(_selectedProduct.Id);
         if (row is null)
         {
             Notify.Show("产品不存在", Severity.Warning);
@@ -929,7 +1005,7 @@
             materiaColor = row.materiaColor,
             materiaCust = row.materiaCust,
             price = row.price,
-            qty = 1,
+            qty = 0,
             currency_unit = row.currency_unit,
             Packing_method = row.Packing_method,
             Packing_method_unit = row.Packing_method_unit,
@@ -972,6 +1048,27 @@
 
     private void RemoveLine(CustomsAndPackingLineDto line)
     {
+        // 删除拆分行：数量加回原行（本会话有 SplitFromTempId；否则同物料「原始行」）
+        if (string.Equals(line.var7, "拆分行", StringComparison.Ordinal))
+        {
+            var origin = line.SplitFromTempId is int fromId and > 0
+                ? _lines.FirstOrDefault(x => x.TempId == fromId && !ReferenceEquals(x, line))
+                : null;
+            origin ??= _lines.FirstOrDefault(x =>
+                !ReferenceEquals(x, line)
+                && string.Equals(LineMergeKey(x), LineMergeKey(line), StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(x.var7, "原始行", StringComparison.Ordinal)
+                    || string.IsNullOrWhiteSpace(x.var7)));
+
+            if (origin is not null)
+            {
+                var back = line.qty;
+                origin.qty += back;
+                CustomsAndPackingCalc.RecalcLine(origin);
+                Notify.Show($"已删除拆分行，数量 {back.ToString("0.##")} 已加回原行", Severity.Success);
+            }
+        }
+
         _lines.Remove(line);
         RefreshSummary();
     }
@@ -989,8 +1086,7 @@
     private void OpenSplit(CustomsAndPackingLineDto line)
     {
         _splitLine = line;
-        _splitQty = Math.Floor(line.qty / 2);
-        if (_splitQty < 1) _splitQty = 1;
+        _splitQty = 0; // 不自动填，由用户输入
     }
 
     private void CloseSplit()
@@ -1024,17 +1120,41 @@
         _mergeTailSize = _mergeCandidates
             .Select(x => (x.var2 ?? "").Trim())
             .FirstOrDefault(x => x.Length > 0);
+        _mergeOffsetX = 0;
+        _mergeOffsetY = 0;
+        _mergeDragging = false;
         _mergeOpen = true;
     }
 
     private void CloseMergePallet()
     {
         _mergeOpen = false;
+        _mergeDragging = false;
         _mergeCandidates = [];
         _mergePrimaryTempId = 0;
         _mergePalletCode = null;
         _mergeTailSize = null;
+        _mergeOffsetX = 0;
+        _mergeOffsetY = 0;
     }
+
+    private void BeginMergeDrag(PointerEventArgs e)
+    {
+        _mergeDragging = true;
+        _mergeDragStartX = e.ClientX;
+        _mergeDragStartY = e.ClientY;
+        _mergeDragOriginX = _mergeOffsetX;
+        _mergeDragOriginY = _mergeOffsetY;
+    }
+
+    private void OnMergePointerMove(PointerEventArgs e)
+    {
+        if (!_mergeDragging) return;
+        _mergeOffsetX = _mergeDragOriginX + (e.ClientX - _mergeDragStartX);
+        _mergeOffsetY = _mergeDragOriginY + (e.ClientY - _mergeDragStartY);
+    }
+
+    private void EndMergeDrag(PointerEventArgs e) => _mergeDragging = false;
 
     private void ConfirmMergePallet()
     {
@@ -1317,6 +1437,31 @@
             Notify.Show("请先保存再导出", Severity.Warning);
             return;
         }
+
+        if (type is "报关" or "生产")
+        {
+            var issues = await PackingExcel.FindMissingNameplateTypesAsync(_header.DocumentGuid);
+            if (issues.Count > 0)
+            {
+                var go = await DialogService.ShowMessageBoxAsync(
+                    "无法导出",
+                    CustomsAndPackingExcelService.FormatNameplateTypeIssues(issues)
+                    + "\n\n点击「去维护」打开对应合同基础数据。",
+                    yesText: "去维护",
+                    cancelText: "关闭");
+                if (go == true)
+                {
+                    var first = issues[0];
+                    if (first.BaseId is int id and > 0)
+                        NavManager.NavigateTo($"/contract-base/{id}?edit=true");
+                    else
+                        NavManager.NavigateTo("/contract-base");
+                }
+
+                return;
+            }
+        }
+
         _busy = true;
         Notify.Show($"正在生成 Excel（{type}）…", Severity.Info);
         await InvokeAsync(StateHasChanged);

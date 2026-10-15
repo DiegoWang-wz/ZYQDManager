@@ -13,7 +13,8 @@ public static class LegacyFileUrl
         return p.Length == 0
                || p.Equals("N/A", StringComparison.OrdinalIgnoreCase)
                || p.Equals("-", StringComparison.OrdinalIgnoreCase)
-               || p.Equals("NULL", StringComparison.OrdinalIgnoreCase);
+               || p.Equals("NULL", StringComparison.OrdinalIgnoreCase)
+               || p.Equals("无", StringComparison.Ordinal); // 导出空图占位，不当图片路径
     }
 
     public static string Resolve(string? path, string? baseUrl = null)

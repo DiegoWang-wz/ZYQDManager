@@ -64,7 +64,7 @@
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cb-toolbar-right">
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_selected.Count == 0 || _busy">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy">
                     @(_selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
                 </MudButton>
                 <label class="cb-file-label">
@@ -134,7 +134,9 @@
                 <MudTh>箱唛图例2</MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Client_poNo">客户po号</MudTableSortLabel></MudTh>
                 <MudTh>铭牌图片</MudTh>
+                <MudTh>铭牌1类型</MudTh>
                 <MudTh>铭牌图片2</MudTh>
+                <MudTh>铭牌2类型</MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="SAP_order_NO">sap单号</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method">打包方式</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method_unit">打包方式单位</MudTableSortLabel></MudTh>
@@ -186,7 +188,9 @@
                 <MudTd><LegacyRemoteImg Path="@context.Box_label_url2"/></MudTd>
                 <MudTd>@context.Client_poNo</MudTd>
                 <MudTd><LegacyRemoteImg Path="@context.nameplate_url"/></MudTd>
+                <MudTd>@context.nameplate_type</MudTd>
                 <MudTd><LegacyRemoteImg Path="@context.nameplate_url2"/></MudTd>
+                <MudTd>@context.nameplate_type2</MudTd>
                 <MudTd>@context.SAP_order_NO</MudTd>
                 <MudTd>@context.Packing_method</MudTd>
                 <MudTd>@context.Packing_method_unit</MudTd>
@@ -700,14 +704,28 @@
 
     private async Task ExportAsync()
     {
-        if (_selected.Count == 0) return;
+        var selectedIds = _selected.Count > 0 ? _selected.Select(x => x.Id).ToList() : null;
+        if (selectedIds is null)
+        {
+            if (_filteredTotal <= 0)
+            {
+                Notify.Show("没有可导出的数据", Severity.Warning);
+                return;
+            }
+
+            var ok = await DialogService.ShowMessageBoxAsync(
+                "确认导出",
+                $"未勾选记录，将按当前筛选条件导出全部数据，共 {_filteredTotal} 条，是否继续？",
+                yesText: "导出全部", cancelText: "取消");
+            if (ok != true) return;
+        }
+
         _busy = true;
         try
         {
             var query = await BuildQueryAsync();
             query.SortLabel = _sortLabel;
             query.SortDescending = _sortDescending;
-            var selectedIds = _selected.Count > 0 ? _selected.Select(x => x.Id).ToList() : null;
             var bytes = await CotractBase.ExportAsync(query, ImageBase, selectedIds);
             if (bytes.Length == 0)
             {
@@ -721,7 +739,7 @@
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 Convert.ToBase64String(bytes));
             Notify.Show(
-                selectedIds is { Count: > 0 } ? $"已导出选中的 {selectedIds.Count} 条" : "已按当前条件导出全部",
+                selectedIds is { Count: > 0 } ? $"已导出选中的 {selectedIds.Count} 条" : $"已按当前条件导出全部 {_filteredTotal} 条",
                 Severity.Success);
         }
         catch (Exception ex)

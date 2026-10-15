@@ -214,12 +214,70 @@
                     <span>标识图片</span>
                 </div>
                 <div class="cb-img-grid">
-                    <CbKvImage Label="客户外箱标志" @bind-Value="_model.Customer_outer_box_logo" ReadOnly="IsReadOnly" AllowNa="true" Required="true"/>
+                    <CbKvImage Label="客户外箱标志" @bind-Value="_model.Customer_outer_box_logo" ReadOnly="IsReadOnly" AllowNa="true"/>
                     <CbKvImage Label="托唛图" @bind-Value="_model.Tuo_Mark_url" ReadOnly="IsReadOnly" Required="true"/>
                     <CbKvImage Label="箱唛图例1" @bind-Value="_model.Box_label_url" ReadOnly="IsReadOnly" Required="true"/>
                     <CbKvImage Label="箱唛图例2" @bind-Value="_model.Box_label_url2" ReadOnly="IsReadOnly"/>
-                    <CbKvImage Label="铭牌图片" @bind-Value="_model.nameplate_url" ReadOnly="IsReadOnly" Required="true"/>
-                    <CbKvImage Label="铭牌图片2" @bind-Value="_model.nameplate_url2" ReadOnly="IsReadOnly" Required="true"/>
+                    <div class="cb-img-with-type">
+                        <CbKvImage Label="铭牌图片" Value="@_model.nameplate_url"
+                                   ValueChanged="OnNameplate1Changed" ReadOnly="IsReadOnly"/>
+                        @if (IsReadOnly)
+                        {
+                            <div class="cb-nameplate-type-ro">
+                                <span class="cb-nameplate-type-label">铭牌类型</span>
+                                <span>@(string.IsNullOrWhiteSpace(_model.nameplate_type) ? "—" : _model.nameplate_type)</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudSelect T="string"
+                                       Value="@(_model.nameplate_type ?? "")"
+                                       ValueChanged="v => _model.nameplate_type = string.IsNullOrWhiteSpace(v) ? null : v"
+                                       Label="铭牌类型"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Clearable="true"
+                                       Required="@HasNameplate1"
+                                       Disabled="_busy"
+                                       Class="cb-nameplate-type-select">
+                                @foreach (var opt in NameplateTypes.All)
+                                {
+                                    <MudSelectItem T="string" Value="@opt">@opt</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                    </div>
+                    <div class="cb-img-with-type">
+                        <CbKvImage Label="铭牌图片2" Value="@_model.nameplate_url2"
+                                   ValueChanged="OnNameplate2Changed" ReadOnly="IsReadOnly"/>
+                        @if (IsReadOnly)
+                        {
+                            <div class="cb-nameplate-type-ro">
+                                <span class="cb-nameplate-type-label">铭牌类型</span>
+                                <span>@(string.IsNullOrWhiteSpace(_model.nameplate_type2) ? "—" : _model.nameplate_type2)</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudSelect T="string"
+                                       Value="@(_model.nameplate_type2 ?? "")"
+                                       ValueChanged="v => _model.nameplate_type2 = string.IsNullOrWhiteSpace(v) ? null : v"
+                                       Label="铭牌类型"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       Dense="true"
+                                       Clearable="true"
+                                       Required="@HasNameplate2"
+                                       Disabled="_busy"
+                                       Class="cb-nameplate-type-select">
+                                @foreach (var opt in NameplateTypes.All)
+                                {
+                                    <MudSelectItem T="string" Value="@opt">@opt</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                    </div>
                 </div>
             </MudPaper>
 
@@ -579,6 +637,30 @@
         gap: 12px;
     }
 
+    .cb-img-with-type {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .cb-nameplate-type-select {
+        max-width: 180px;
+    }
+
+    .cb-nameplate-type-ro {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 14px;
+        max-width: 180px;
+    }
+
+    .cb-nameplate-type-label {
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary);
+    }
+
     .cb-detail-notes {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -652,8 +734,36 @@
             _model.Box_label_url);
 
     private bool HasHeroImage => !LegacyFileUrl.IsBlankOrPlaceholder(HeroImagePath);
+    private bool HasNameplate1 => !LegacyFileUrl.IsBlankOrPlaceholder(_model.nameplate_url);
+    private bool HasNameplate2 => !LegacyFileUrl.IsBlankOrPlaceholder(_model.nameplate_url2);
 
-    /// <summary>铭牌 1/2 选择性必填：有图时优先 1，底部标注当前显示哪张。</summary>
+    private void OnNameplate1Changed(string? path)
+    {
+        if (LegacyFileUrl.IsBlankOrPlaceholder(path))
+        {
+            _model.nameplate_url = null;
+            _model.nameplate_type = null;
+        }
+        else
+        {
+            _model.nameplate_url = path;
+        }
+    }
+
+    private void OnNameplate2Changed(string? path)
+    {
+        if (LegacyFileUrl.IsBlankOrPlaceholder(path))
+        {
+            _model.nameplate_url2 = null;
+            _model.nameplate_type2 = null;
+        }
+        else
+        {
+            _model.nameplate_url2 = path;
+        }
+    }
+
+    /// <summary>铭牌 1/2 有图时优先显示 1，底部标注当前显示哪张。</summary>
     private string? HeroNameplateCaption
     {
         get
@@ -705,6 +815,7 @@
         }
 
         _model = row;
+        SanitizeNameplates();
         if (IsCopy)
         {
             _model.Id = 0;
@@ -714,6 +825,22 @@
         else
         {
             _editing = enterEdit;
+        }
+    }
+
+    /// <summary>「无」等占位清成空；无图则清类型。</summary>
+    private void SanitizeNameplates()
+    {
+        if (LegacyFileUrl.IsBlankOrPlaceholder(_model.nameplate_url))
+        {
+            _model.nameplate_url = null;
+            _model.nameplate_type = null;
+        }
+
+        if (LegacyFileUrl.IsBlankOrPlaceholder(_model.nameplate_url2))
+        {
+            _model.nameplate_url2 = null;
+            _model.nameplate_type2 = null;
         }
     }
 

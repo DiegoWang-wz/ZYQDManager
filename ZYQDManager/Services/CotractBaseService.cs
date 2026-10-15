@@ -40,27 +40,19 @@ public class CotractBaseService
     private const int ColBoxLabelUrl2 = 22;
     private const int ColPoNo = 23;
     private const int ColNameplate = 24;
-    private const int ColNameplate2 = 25;
-    private const int ColSapNo = 26;
-    private const int ColPacking = 27;
-    private const int ColPackingUnit = 28;
-    private const int ColCarton = 29;
-    private const int ColPallet = 30;
-    private const int ColPalletizing = 31;
-    private const int ColPalletizingUnit = 32;
-    private const int ColNetWeight = 33;
-    private const int ColGrossWeight = 34;
-    private const int ColManager = 35;
-
-    private static readonly string[] TemplateHeaders =
-    [
-        "客户外箱标志", "托唛", "托唛(图)", "客户目的国", "客户编号", "客户名称",
-        "物料号", "物料名", "物料类型", "物料model", "物料specs", "物料Powered", "物料Cust",
-        "备注Notes", "数量单位", "货币单位", "单价", "单价单位",
-        "箱唛", "箱唛2", "箱唛图例", "箱唛图例2", "客户po号",
-        "铭牌图片", "铭牌图片2", "sap单号", "打包方式", "打包方式单位",
-        "纸箱尺寸", "托盘尺寸", "打托方式", "打托方式单位", "净重", "毛重", "客户负责人"
-    ];
+    private const int ColNameplateType = 25;
+    private const int ColNameplate2 = 26;
+    private const int ColNameplateType2 = 27;
+    private const int ColSapNo = 28;
+    private const int ColPacking = 29;
+    private const int ColPackingUnit = 30;
+    private const int ColCarton = 31;
+    private const int ColPallet = 32;
+    private const int ColPalletizing = 33;
+    private const int ColPalletizingUnit = 34;
+    private const int ColNetWeight = 35;
+    private const int ColGrossWeight = 36;
+    private const int ColManager = 37;
 
     private const string LegacyImgUploadPath = "/T_ZYQD_Cotract_Base/Add_Cotract_Base_img";
 
@@ -125,7 +117,9 @@ public class CotractBaseService
                 Box_label_url2 = x.Box_label_url2,
                 Client_poNo = x.Client_poNo,
                 nameplate_url = x.nameplate_url,
+                nameplate_type = x.nameplate_type,
                 nameplate_url2 = x.nameplate_url2,
+                nameplate_type2 = x.nameplate_type2,
                 SAP_order_NO = x.SAP_order_NO,
                 Packing_method = x.Packing_method,
                 Packing_method_unit = x.Packing_method_unit,
@@ -268,7 +262,7 @@ public class CotractBaseService
             return [];
 
         var images = await DownloadImagesAsync(rows, imageBase, ct);
-        var templateBytes = await LoadShareTemplateBytesAsync(ct);
+        var templateBytes = await LoadTemplateBytesAsync(ct);
 
         using var input = new MemoryStream(templateBytes);
         using var wb = new XLWorkbook(input);
@@ -288,7 +282,7 @@ public class CotractBaseService
     }
 
     public Task<byte[]> GetTemplateBytesAsync(CancellationToken ct = default)
-        => LoadShareTemplateBytesAsync(ct);
+        => LoadTemplateBytesAsync(ct);
 
     public async Task<CotractBaseImportResult> ImportAsync(
         Stream excelStream,
@@ -468,30 +462,6 @@ public class CotractBaseService
     private static string ImportKey(string? clientNo, string? materialNo)
         => $"{(clientNo ?? "").Trim()}\u001f{(materialNo ?? "").Trim()}";
 
-    private string EnsureTemplate()
-    {
-        var path = ResolveTemplatePath(createDir: true);
-        if (File.Exists(path))
-            return path;
-
-        using var wb = new XLWorkbook();
-        var ws = wb.Worksheets.Add("Sheet1");
-        for (var i = 0; i < TemplateHeaders.Length; i++)
-        {
-            var cell = ws.Cell(1, i + 1);
-            cell.Value = TemplateHeaders[i];
-            cell.Style.Font.Bold = true;
-            cell.Style.Alignment.WrapText = true;
-        }
-
-        ws.SheetView.FreezeRows(1);
-        ws.Row(1).Height = 22;
-        ws.Columns(1, TemplateHeaders.Length).Width = 14;
-        ws.Cell(2, 1).Value = "";
-        wb.SaveAs(path);
-        return path;
-    }
-
     private string ResolveTemplatePath(bool createDir = false)
     {
         var webRoot = _env.WebRootPath;
@@ -509,19 +479,11 @@ public class CotractBaseService
         return path;
     }
 
-    private async Task<byte[]> LoadShareTemplateBytesAsync(CancellationToken ct)
+    /// <summary>统一从 wwwroot/Templates 读取模板（不再走共享盘）。</summary>
+    private Task<byte[]> LoadTemplateBytesAsync(CancellationToken ct)
     {
-        var sharePath = _fileOp.Options.TemplateFullPath();
-        if (File.Exists(sharePath))
-        {
-            await _fileOp.DecodeFileAsync(sharePath, ct);
-            var bytes = await File.ReadAllBytesAsync(sharePath, ct);
-            await _fileOp.EncodeFileAsync(sharePath, ct);
-            if (bytes.Length > 0)
-                return bytes;
-        }
-
-        return await File.ReadAllBytesAsync(EnsureTemplate(), ct);
+        var path = ResolveTemplatePath(createDir: false);
+        return File.ReadAllBytesAsync(path, ct);
     }
 
     private async Task<string> SaveImportToShareAsync(Stream excelStream, CancellationToken ct)
@@ -572,8 +534,10 @@ public class CotractBaseService
         PutImageOrText(ws, row, ColBoxLabelUrl, r.Box_label_url, imageBase, images, pending);
         PutImageOrText(ws, row, ColBoxLabelUrl2, r.Box_label_url2, imageBase, images, pending);
         ws.Cell(row, ColPoNo).Value = r.Client_poNo;
-        PutImageOrText(ws, row, ColNameplate, r.nameplate_url, imageBase, images, pending);
-        PutImageOrText(ws, row, ColNameplate2, r.nameplate_url2, imageBase, images, pending);
+        PutImageOrText(ws, row, ColNameplate, r.nameplate_url, imageBase, images, pending, emptyFallback: "无");
+        ws.Cell(row, ColNameplateType).Value = r.nameplate_type;
+        PutImageOrText(ws, row, ColNameplate2, r.nameplate_url2, imageBase, images, pending, emptyFallback: "无");
+        ws.Cell(row, ColNameplateType2).Value = r.nameplate_type2;
         ws.Cell(row, ColSapNo).Value = r.SAP_order_NO;
         ws.Cell(row, ColPacking).Value = r.Packing_method;
         ws.Cell(row, ColPackingUnit).Value = r.Packing_method_unit;
@@ -670,13 +634,16 @@ public class CotractBaseService
 
     private static void PutImageOrText(
         IXLWorksheet ws, int row, int col, string? path, string imageBase,
-        Dictionary<string, byte[]> images, List<PendingPicture> pending)
+        Dictionary<string, byte[]> images, List<PendingPicture> pending,
+        string? emptyFallback = null)
     {
         var raw = (path ?? "").Trim();
         if (LegacyFileUrl.IsBlankOrPlaceholder(raw))
         {
             if (raw.Length > 0)
                 ws.Cell(row, col).Value = raw;
+            else if (!string.IsNullOrEmpty(emptyFallback))
+                ws.Cell(row, col).Value = emptyFallback;
             return;
         }
 
@@ -851,6 +818,8 @@ public class CotractBaseService
             model.Box_label = GetCellText(ws.Cell(excelRow, ColBoxLabel));
             model.Box_label2 = GetCellText(ws.Cell(excelRow, ColBoxLabel2));
             model.Client_poNo = GetCellText(ws.Cell(excelRow, ColPoNo));
+            model.nameplate_type = NameplateTypes.Normalize(GetCellText(ws.Cell(excelRow, ColNameplateType)));
+            model.nameplate_type2 = NameplateTypes.Normalize(GetCellText(ws.Cell(excelRow, ColNameplateType2)));
             model.SAP_order_NO = GetCellText(ws.Cell(excelRow, ColSapNo));
             model.Packing_method = GetCellText(ws.Cell(excelRow, ColPacking));
             model.Packing_method_unit = GetCellText(ws.Cell(excelRow, ColPackingUnit));
@@ -884,6 +853,25 @@ public class CotractBaseService
                 ws, excelRow, ColNameplate, pictures, allowPlainText: true, ct);
             model.nameplate_url2 = await ResolveImageOrTextAsync(
                 ws, excelRow, ColNameplate2, pictures, allowPlainText: true, ct);
+
+            // 导入：占位「无」等视为空图
+            if (LegacyFileUrl.IsBlankOrPlaceholder(model.nameplate_url))
+                model.nameplate_url = null;
+            if (LegacyFileUrl.IsBlankOrPlaceholder(model.nameplate_url2))
+                model.nameplate_url2 = null;
+
+            var hasNp1 = !LegacyFileUrl.IsBlankOrPlaceholder(model.nameplate_url);
+            var hasNp2 = !LegacyFileUrl.IsBlankOrPlaceholder(model.nameplate_url2);
+            if (!hasNp1) model.nameplate_type = null;
+            if (!hasNp2) model.nameplate_type2 = null;
+            if (hasNp1 && string.IsNullOrWhiteSpace(model.nameplate_type))
+                return ParsedImportRow.Fail($"第{excelRow}行，已有铭牌图片1，请填写铭牌1类型");
+            if (hasNp2 && string.IsNullOrWhiteSpace(model.nameplate_type2))
+                return ParsedImportRow.Fail($"第{excelRow}行，已有铭牌图片2，请填写铭牌2类型");
+            if (!NameplateTypes.IsAllowedOrEmpty(model.nameplate_type))
+                return ParsedImportRow.Fail($"第{excelRow}行，铭牌1类型只能为空或：{string.Join(" / ", NameplateTypes.All)}");
+            if (!NameplateTypes.IsAllowedOrEmpty(model.nameplate_type2))
+                return ParsedImportRow.Fail($"第{excelRow}行，铭牌2类型只能为空或：{string.Join(" / ", NameplateTypes.All)}");
 
             return ParsedImportRow.Success(model);
         }
@@ -1060,9 +1048,6 @@ public class CotractBaseService
 
     public static string? Validate(ZyqdCotractBaseModel item)
     {
-        if (string.IsNullOrWhiteSpace(item.Customer_outer_box_logo))
-            return "外箱标志为空且不为 N/A";
-
         if (string.IsNullOrWhiteSpace(item.Tuo_Mark) && string.IsNullOrWhiteSpace(item.Tuo_Mark_url))
             return "托唛文字或图片其一必填";
         if (string.IsNullOrWhiteSpace(item.Customer_destination_country))
@@ -1091,8 +1076,17 @@ public class CotractBaseService
             return "单价单位必填";
         if (string.IsNullOrWhiteSpace(item.Box_label) && string.IsNullOrWhiteSpace(item.Box_label_url))
             return "箱唛文字或图片其一必填";
-        if (string.IsNullOrWhiteSpace(item.nameplate_url) && string.IsNullOrWhiteSpace(item.nameplate_url2))
-            return "铭牌图片其一必填";
+        // 铭牌可都空；有图则对应类型必填
+        var hasNp1 = !LegacyFileUrl.IsBlankOrPlaceholder(item.nameplate_url);
+        var hasNp2 = !LegacyFileUrl.IsBlankOrPlaceholder(item.nameplate_url2);
+        if (hasNp1 && string.IsNullOrWhiteSpace(item.nameplate_type))
+            return "已上传铭牌图片1，请选择铭牌1类型";
+        if (hasNp2 && string.IsNullOrWhiteSpace(item.nameplate_type2))
+            return "已上传铭牌图片2，请选择铭牌2类型";
+        if (!NameplateTypes.IsAllowedOrEmpty(item.nameplate_type))
+            return "铭牌1类型只能为空或：镭雕铭牌 / 打印贴纸 / 外购铭牌";
+        if (!NameplateTypes.IsAllowedOrEmpty(item.nameplate_type2))
+            return "铭牌2类型只能为空或：镭雕铭牌 / 打印贴纸 / 外购铭牌";
         if (string.IsNullOrWhiteSpace(item.Packing_method))
             return "打包方式必填";
         if (string.IsNullOrWhiteSpace(item.Packing_method_unit))
@@ -1256,6 +1250,20 @@ public class CotractBaseService
         m.materialNo = m.materialNo?.Trim();
         m.materialName = m.materialName?.Trim();
         m.Customer_Manager = m.Customer_Manager?.Trim();
+        m.nameplate_type = NameplateTypes.Normalize(m.nameplate_type);
+        m.nameplate_type2 = NameplateTypes.Normalize(m.nameplate_type2);
+        // 「无」/空 不当图片；无图则清类型
+        if (LegacyFileUrl.IsBlankOrPlaceholder(m.nameplate_url))
+        {
+            m.nameplate_url = null;
+            m.nameplate_type = null;
+        }
+
+        if (LegacyFileUrl.IsBlankOrPlaceholder(m.nameplate_url2))
+        {
+            m.nameplate_url2 = null;
+            m.nameplate_type2 = null;
+        }
     }
 
     private async Task<bool> ExistsSameClientMaterialAsync(ZyqdCotractBaseModel model, CancellationToken ct)
@@ -1306,7 +1314,9 @@ public class CotractBaseService
         to.Client_poNo = from.Client_poNo;
         to.Client_Model = from.Client_Model;
         to.nameplate_url = from.nameplate_url;
+        to.nameplate_type = from.nameplate_type;
         to.nameplate_url2 = from.nameplate_url2;
+        to.nameplate_type2 = from.nameplate_type2;
         to.SAP_order_NO = from.SAP_order_NO;
         to.SAP_Material_NO = from.SAP_Material_NO;
         to.SAP_Material_Name = from.SAP_Material_Name;

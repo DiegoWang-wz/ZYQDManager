@@ -137,6 +137,7 @@ public static class CustomsAndPackingCalc
             Client_poNo = src.Client_poNo,
             PI_Material_Name = src.PI_Material_Name,
             var7 = "拆分行",
+            SplitFromTempId = src.TempId,
             Customer_outer_box_logo = src.Customer_outer_box_logo,
             Tuo_Mark = src.Tuo_Mark,
             Tuo_Mark_url = src.Tuo_Mark_url,

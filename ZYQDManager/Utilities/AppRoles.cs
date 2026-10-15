@@ -29,7 +29,6 @@ public static class AppRoles
         return "业务员";
     }
 
-    /// <summary>登录后默认首页。</summary>
-    public static string HomePath(string? role)
-        => IsInspector(role) ? "/sir" : "/contract-base";
+    /// <summary>登录后默认首页（门户入口页）。</summary>
+    public static string HomePath(string? role) => "/";
 }

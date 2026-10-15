@@ -1,9 +1,124 @@
 @page "/"
+@page "/home"
 @rendermode InteractiveServer
+@inject CentralAuthService Auth
+
+<PageTitle>首页</PageTitle>
+
+<div class="portal-page">
+    <div class="portal-hero">
+        <MudText Typo="Typo.h5" Class="portal-title">遮阳管理系统</MudText>
+        <MudText Typo="Typo.body2" Class="portal-sub">选择要进入的功能模块</MudText>
+    </div>
+
+    @if (!_ready)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4"/>
+    }
+    else if (_entries.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">当前账号暂无可访问模块，请联系管理员。</MudAlert>
+    }
+    else
+    {
+        <div class="portal-grid">
+            @foreach (var e in _entries)
+            {
+                <button type="button" class="portal-card" @onclick="@(() => Go(e.Href))">
+                    <span class="portal-card-icon" style="@($"background:{e.Color}22;color:{e.Color}")">
+                        <MudIcon Icon="@e.Icon" Size="Size.Large"/>
+                    </span>
+                    <span class="portal-card-title">@e.Title</span>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .portal-page {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+        padding: 8px 4px 24px;
+        background:
+            radial-gradient(1200px 400px at 10% -10%, #e3f2fd 0%, transparent 55%),
+            radial-gradient(900px 360px at 90% 0%, #e8f5e9 0%, transparent 50%),
+            #f7f8fa;
+        border-radius: 8px;
+    }
+    .portal-hero { margin: 8px 4px 20px; }
+    .portal-title { font-weight: 700; color: #1a237e; letter-spacing: 0.02em; }
+    .portal-sub { color: #607d8b; margin-top: 4px; }
+    .portal-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        padding: 0 4px;
+    }
+    @@media (max-width: 1100px) {
+        .portal-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @@media (max-width: 800px) {
+        .portal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @@media (max-width: 520px) {
+        .portal-grid { grid-template-columns: 1fr; }
+    }
+    .portal-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 76px;
+        padding: 14px 16px;
+        border: 1px solid #e0e4ea;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+        cursor: pointer;
+        text-align: left;
+        transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+    }
+    .portal-card:hover {
+        border-color: #90caf9;
+        box-shadow: 0 4px 14px rgba(25, 118, 210, 0.12);
+        transform: translateY(-1px);
+    }
+    .portal-card:focus-visible {
+        outline: 2px solid #1976d2;
+        outline-offset: 2px;
+    }
+    .portal-card-icon {
+        flex: 0 0 48px;
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .portal-card-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #263238;
+        line-height: 1.3;
+    }
+</style>
 
 @code {
-    protected override void OnInitialized()
+    private bool _ready;
+    private List<PortalEntry> _entries = [];
+
+    protected override async Task OnInitializedAsync()
     {
-        NavManager.NavigateTo("/contract-base", replace: true);
+        var auth = await Auth.GetStoredAsync();
+        var isInspector = AppRoles.IsInspector(auth?.Role);
+        var canSeeBusiness = !isInspector;
+        var canInvoice = canSeeBusiness && Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
+        var canUsers = Auth.CanManageUsers(auth);
+        _entries = PortalEntries.FilterForUser(canSeeBusiness, canInvoice, canUsers).ToList();
+        _ready = true;
     }
+
+    private void Go(string href) => NavManager.NavigateTo(href);
 }

@@ -5,6 +5,7 @@
        size="@FitSize"
        disabled="@Disabled"
        readonly="@ReadOnly"
+       @onfocus="OnFocus"
        @oninput="OnInput"
        @onblur="OnBlur"/>
 
@@ -68,21 +69,67 @@
 
     private static string Format(double v) => v.ToString("0.##");
 
-    private void OnInput(ChangeEventArgs e)
+    private void OnFocus()
+    {
+        if (ReadOnly || Disabled) return;
+        _editing = true;
+        // 值为 0 时聚焦清空，避免输入变成 01、05
+        var f = Format(Value);
+        _edit = f == "0" ? "" : f;
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
     {
         _editing = true;
-        _edit = e.Value?.ToString() ?? "";
+        var raw = e.Value?.ToString() ?? "";
+        // 若浏览器仍拼出 01/05（光标在末尾敲数字），只保留末位有效数字
+        if (raw.Length >= 2
+            && raw[0] == '0'
+            && raw[1] != '.'
+            && raw.Skip(1).All(char.IsDigit))
+        {
+            raw = raw.TrimStart('0');
+            if (raw.Length == 0) raw = "0";
+        }
+
+        _edit = raw;
+        // 输入过程中可解析则立刻回写，驱动箱数/汇总等即时计算
+        if (TryParseNum(_edit, out var n))
+        {
+            Value = n;
+            await ValueChanged.InvokeAsync(n);
+        }
+        else if (string.IsNullOrWhiteSpace(_edit))
+        {
+            Value = 0;
+            await ValueChanged.InvokeAsync(0);
+        }
     }
 
     private async Task OnBlur()
     {
         if (!_editing) return;
         _editing = false;
-        if (double.TryParse(_edit.Trim(), out var n))
+        if (TryParseNum(_edit, out var n))
         {
             Value = n;
             await ValueChanged.InvokeAsync(n);
         }
         _edit = Format(Value);
+    }
+
+    private static bool TryParseNum(string? text, out double n)
+    {
+        var s = (text ?? "").Trim();
+        if (s.Length == 0)
+        {
+            n = 0;
+            return false;
+        }
+
+        return double.TryParse(s, System.Globalization.NumberStyles.Float,
+                   System.Globalization.CultureInfo.InvariantCulture, out n)
+               || double.TryParse(s, System.Globalization.NumberStyles.Float,
+                   System.Globalization.CultureInfo.CurrentCulture, out n);
     }
 }

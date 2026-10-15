@@ -717,25 +717,7 @@
 
     /// <summary>8888→10008888；12696→10012696；已是 10006111 这类则保留。</summary>
     private static bool TryNormalizeCustomerCode(string? token, out string code)
-    {
-        code = "";
-        var t = (token ?? "").Trim();
-        if (t.Length == 0) return false;
-        if (!long.TryParse(t, out var n) || n <= 0)
-            return false;
-
-        const long baseNo = 10_000_000L;
-        long full;
-        if (n < baseNo)
-            full = baseNo + n;
-        else if (n <= 99_999_999L)
-            full = n;
-        else
-            return false;
-
-        code = full.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return code.Length <= 50;
-    }
+        => ClientCodeHelper.TryExpand(token, out code);
 
     private void ClearSignature()
     {

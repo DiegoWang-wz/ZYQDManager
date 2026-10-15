@@ -19,6 +19,10 @@ else
     <MudLayout>
         <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
             <div class="zyqd-nav">
+                <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/"))">
+                    <span>首页</span>
+                </button>
+
                 @if (_canSeeBusinessModules)
                 {
                     <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/project"))">
@@ -296,7 +300,7 @@ else
     private bool _canViewInvoiceKp;
     private bool _canSeeBusinessModules = true;
     private bool _isInspector;
-    private string _homePath = "/contract-base";
+    private string _homePath = "/";
 
     protected override void OnInitialized()
     {
@@ -380,7 +384,8 @@ else
 
     private static bool IsInspectorAllowedPath(string path)
     {
-        if (path.Length == 0) return false;
+        if (path.Length == 0) return true; // 门户首页 /
+        if (Starts(path, "home")) return true;
         if (Starts(path, "sir")) return true;
         if (Starts(path, "Profile")) return true;
         if (Starts(path, "login")) return true;
@@ -405,7 +410,7 @@ else
         get
         {
             var path = CurrentPath;
-            if (path.Length == 0) return "首页";
+            if (path.Length == 0 || Starts(path, "home")) return "首页";
 
             if (Starts(path, "quotation-base")) return path is "quotation-base" ? "报价基础数据" : "报价基础数据详情";
             if (Starts(path, "quotation")) return path is "quotation" ? "报价列表" : "报价详情";
