@@ -143,6 +143,14 @@
                                            Disabled="_busy"
                                            OnClick="@(() => OpenGenerateAsync(context))">生成</MudButton>
                             }
+                            else if (IsCustomsPi)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Secondary"
+                                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                                           Class="cpi-ops-btn"
+                                           Disabled="_busy"
+                                           OnClick="@(() => GeneratePackingFromCustomsPi(context))">生成</MudButton>
+                            }
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
                                        StartIcon="@Icons.Material.Filled.Delete"
                                        Class="cpi-ops-btn"
@@ -434,13 +442,19 @@
     private bool IsCustomerPi => _documentType == "客户PI";
     private bool IsCustomsPi => _documentType == "报关PI";
     private bool IsPackingList => _documentType == "装箱单";
-    private string OpsCellClass => IsCustomerPi ? "cpi-ops-cell" : "cpi-ops-cell cpi-ops-cell--compact";
-    private string OpsGridClass => IsCustomerPi ? "cpi-ops-grid" : "cpi-ops-grid cpi-ops-grid--compact";
+    private string OpsCellClass => IsCustomerPi || IsCustomsPi
+        ? "cpi-ops-cell"
+        : "cpi-ops-cell cpi-ops-cell--compact";
+    private string OpsGridClass => IsCustomerPi || IsCustomsPi
+        ? "cpi-ops-grid"
+        : "cpi-ops-grid cpi-ops-grid--compact";
     private string EmptyText => _busy
         ? "加载中…"
         : IsPackingList
             ? "装箱单列表功能开发中"
-            : "暂无可见数据";
+            : IsCustomsPi
+                ? "暂无报关PI，可从客户PI「生成」"
+                : "暂无可见数据";
 
     private static string DocKindCss(string? kind) => kind switch
     {
@@ -508,7 +522,11 @@
         _pendingGenerateHint = false;
 
         if (showHint)
-            Notify.Show("请选择客户PI来生成", Severity.Info);
+        {
+            Notify.Show(
+                IsCustomsPi ? "请选择报关PI来生成装箱单" : "请选择客户PI来生成",
+                Severity.Info);
+        }
 
         await ReloadTableAsync(resetPage: true);
     }
@@ -660,13 +678,19 @@
             return;
         }
 
-        if (kind == "装箱单")
+        Notify.Show("未知的生成类型", Severity.Warning);
+    }
+
+    private void GeneratePackingFromCustomsPi(ZyqdCotractPiModel row)
+    {
+        var guid = (row.DocumentGuid ?? "").Trim();
+        if (guid.Length == 0)
         {
-            NavManager.NavigateTo($"/contract-pk/new?from={Uri.EscapeDataString(guid)}");
+            Notify.Show("单据缺少编号，无法生成装箱单", Severity.Warning);
             return;
         }
 
-        Notify.Show("未知的生成类型", Severity.Warning);
+        NavManager.NavigateTo($"/contract-pk/new?from={Uri.EscapeDataString(guid)}");
     }
 
     private async Task ReloadTableAsync(bool resetPage)

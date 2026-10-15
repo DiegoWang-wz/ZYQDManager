@@ -172,32 +172,47 @@ public class SirService
             _db.SirDetails.Add(d);
         }
 
+        // 留样：按 Id 增删改（T_ZYQD_SIR_datail_SampleForFiling），不再整表删插
         var oldSamples = await _db.SirSamples
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
             .ToListAsync(ct);
-        _db.SirSamples.RemoveRange(oldSamples);
-
-        foreach (var s in doc.Samples ?? [])
-        {
-            s.Id = 0;
-            s.main_guid = guid;
-            s.Report_type = reportType;
-            s.createTime ??= DateTime.Now;
-            _db.SirSamples.Add(s);
-        }
+        MergeSamples(oldSamples, guid, reportType, doc.Samples ?? [], createPersonOverride: null);
 
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
 
+    /// <summary>CreatePerson 格式：工号-姓名（如 116186-王哲）；兼容历史仅工号。</summary>
+    public static string FormatSampleCreatePerson(string? empNo, string? displayName)
+    {
+        empNo = (empNo ?? "").Trim();
+        displayName = (displayName ?? "").Trim();
+        if (empNo.Length == 0) return displayName;
+        if (displayName.Length == 0) return empNo;
+        return $"{empNo}-{displayName}";
+    }
+
+    public static bool IsSampleOwnedBy(string? createPerson, string? empNo)
+    {
+        empNo = (empNo ?? "").Trim();
+        if (empNo.Length == 0) return false;
+        var p = (createPerson ?? "").Trim();
+        if (p.Length == 0) return false;
+        if (string.Equals(p, empNo, StringComparison.OrdinalIgnoreCase)) return true;
+        return p.StartsWith(empNo + "-", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
-    /// 业务员专用：仅增改删自己创建的样品留样行（CreatePerson=工号），不改他人行与报告主表/明细。
+    /// 业务员专用：仅增改删自己创建的样品留样行（CreatePerson=工号-姓名），不改他人行与报告主表/明细。
     /// </summary>
-    public async Task<(bool Ok, string? Message)> SaveSamplesOnlyAsync(SirDocumentDto doc, string empNo, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Message)> SaveSamplesOnlyAsync(
+        SirDocumentDto doc, string empNo, string? displayName = null, CancellationToken ct = default)
     {
         empNo = (empNo ?? "").Trim();
         if (empNo.Length == 0)
             return (false, "未登录或工号无效");
+
+        var createPersonLabel = FormatSampleCreatePerson(empNo, displayName);
 
         if (doc.Main is null)
             return (false, "主表为空");
@@ -217,44 +232,66 @@ public class SirService
         if (!NeedsSampleFiling(reportType))
             return (false, "当前报告类型无需留样记录");
 
+        // 仅合并本人行：他人行不删不改
         var oldSamples = await _db.SirSamples
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
             .ToListAsync(ct);
+        var oldOwnedIds = oldSamples
+            .Where(x => IsSampleOwnedBy(x.CreatePerson, empNo))
+            .Select(x => x.Id)
+            .ToHashSet();
 
-        static bool Owned(ZyqdSirSampleForFilingModel x, string who) =>
-            string.Equals((x.CreatePerson ?? "").Trim(), who, StringComparison.OrdinalIgnoreCase);
-
-        var oldOwned = oldSamples.Where(x => Owned(x, empNo)).ToList();
-        var oldOwnedIds = oldOwned.Select(x => x.Id).ToHashSet();
-
-        // 仅接受：新建行，或库中已属本人的行；忽略他人行（防篡改）
         var clientOwned = (doc.Samples ?? [])
             .Where(x => x.Id == 0 || oldOwnedIds.Contains(x.Id))
             .ToList();
-        var clientOwnedIds = clientOwned.Where(x => x.Id > 0).Select(x => x.Id).ToHashSet();
 
-        foreach (var old in oldOwned.Where(x => !clientOwnedIds.Contains(x.Id)))
-            _db.SirSamples.Remove(old);
+        MergeSamples(
+            oldSamples,
+            guid,
+            reportType,
+            clientOwned,
+            createPersonOverride: createPersonLabel,
+            deleteScopeIds: oldOwnedIds);
 
-        foreach (var s in clientOwned)
+        await _db.SaveChangesAsync(ct);
+        return (true, null);
+    }
+
+    /// <summary>
+    /// 样品留样按 Id 同步：有 Id 则更新，无 Id 则新增；库中多出的行删除。
+    /// <paramref name="deleteScopeIds"/> 非空时仅删除该范围内的遗留行（业务员只删自己的）。
+    /// </summary>
+    private void MergeSamples(
+        List<ZyqdSirSampleForFilingModel> oldSamples,
+        string guid,
+        string reportType,
+        IReadOnlyList<ZyqdSirSampleForFilingModel> incoming,
+        string? createPersonOverride,
+        HashSet<int>? deleteScopeIds = null)
+    {
+        var incomingIds = incoming.Where(x => x.Id > 0).Select(x => x.Id).ToHashSet();
+        var toRemove = oldSamples.Where(x =>
         {
-            s.CreatePerson = empNo;
+            if (incomingIds.Contains(x.Id)) return false;
+            if (deleteScopeIds is null) return true;
+            return deleteScopeIds.Contains(x.Id);
+        }).ToList();
+        if (toRemove.Count > 0)
+            _db.SirSamples.RemoveRange(toRemove);
+
+        var oldById = oldSamples.ToDictionary(x => x.Id);
+        foreach (var s in incoming)
+        {
             s.main_guid = guid;
             s.Report_type = reportType;
-            if (s.Id > 0)
+            if (!string.IsNullOrWhiteSpace(createPersonOverride))
+                s.CreatePerson = createPersonOverride;
+
+            if (s.Id > 0 && oldById.TryGetValue(s.Id, out var track))
             {
-                var track = oldOwned.First(x => x.Id == s.Id);
-                track.materialNo = s.materialNo;
-                track.materialName = s.materialName;
-                track.manufacturer = s.manufacturer;
-                track.materialModel = s.materialModel;
-                track.materiaSpecs = s.materiaSpecs;
-                track.Note = s.Note;
-                track.Note1 = s.Note1;
-                track.ImageUrls = s.ImageUrls;
-                track.Specification_type = s.Specification_type;
-                track.code = s.code;
-                track.CreatePerson = empNo;
+                ApplySampleFields(track, s);
+                if (!string.IsNullOrWhiteSpace(createPersonOverride))
+                    track.CreatePerson = createPersonOverride;
             }
             else
             {
@@ -263,9 +300,23 @@ public class SirService
                 _db.SirSamples.Add(s);
             }
         }
+    }
 
-        await _db.SaveChangesAsync(ct);
-        return (true, null);
+    private static void ApplySampleFields(ZyqdSirSampleForFilingModel target, ZyqdSirSampleForFilingModel source)
+    {
+        target.code = source.code;
+        target.Specification_type = source.Specification_type;
+        target.materialNo = source.materialNo;
+        target.materialName = source.materialName;
+        target.manufacturer = source.manufacturer;
+        target.materialModel = source.materialModel;
+        target.materiaSpecs = source.materiaSpecs;
+        target.Note = source.Note;
+        target.Note1 = source.Note1;
+        target.ImageUrls = source.ImageUrls;
+        target.CreatePerson = source.CreatePerson;
+        target.main_guid = source.main_guid;
+        target.Report_type = source.Report_type;
     }
 
     private static IQueryable<ZyqdSirMainModel> ApplyFilter(IQueryable<ZyqdSirMainModel> q, SirQueryDto query)

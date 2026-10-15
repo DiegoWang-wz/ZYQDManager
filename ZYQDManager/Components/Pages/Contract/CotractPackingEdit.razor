@@ -3,6 +3,8 @@
 @rendermode InteractiveServer
 @inject CustomsAndPackingService Packing
 @inject CustomsAndPackingExcelService PackingExcel
+@inject CotractBaseService CotractBase
+@inject CrmCustomerService Crm
 @inject CentralAuthService Auth
 @inject IJSRuntime JS
 
@@ -17,10 +19,18 @@
     {
         <MudPaper Class="pa-3 cpk-header-panel" Outlined="true">
             <div class="cpk-form-grid">
-                <MudTextField @bind-Value="_header.ClientNo" Label="客户编号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.ClientNo"
+                              Label="客户编号"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Disabled="_busy"
+                              Immediate="true"
+                              OnKeyUp="OnHeaderClientKey"
+                              OnBlur="OnHeaderClientBlurAsync"/>
                 <MudTextField @bind-Value="_header.ClientName" Label="客户名称" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
                 <MudTextField @bind-Value="_header.Customer_destination_country" Label="目的国" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
-                <MudTextField @bind-Value="_header.PIcotract_code" Label="PI合同号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"/>
+                <MudTextField @bind-Value="_header.PIcotract_code" Label="PI合同号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy"
+                              Placeholder="@(IsDirectCreate ? "可选（直接制作可不填）" : null)"/>
                 <MudTextField @bind-Value="_header.CreatePerson" Label="创建人" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy" ReadOnly="true"/>
                 <MudSelect T="string" @bind-Value="_header.Shipping_heads_up" Label="出运抬头" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Disabled="_busy">
                     @foreach (var o in ShippingHeadsOptions)
@@ -94,6 +104,56 @@
             </div>
         </MudPaper>
 
+        <MudPaper Class="pa-2 cpk-picker-panel" Outlined="true">
+            <MudGrid Spacing="2" Class="cpk-picker-grid align-center">
+                <MudItem xs="8" lg="6" Class="cpk-picker-left">
+                    <div class="cpk-picker-left-inner">
+                        <MudTextField @bind-Value="_productClientNo"
+                                      Label="产品客户号"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Dense="true"
+                                      Immediate="true"
+                                      Class="cpk-picker-client"
+                                      Disabled="_busy"
+                                      OnKeyUp="OnProductKey"
+                                      OnBlur="@(() => LoadProductsAsync(showNotify: false))"
+                                      Placeholder="回车查询"/>
+                        <MudSelect T="int"
+                                   @bind-Value="_productId"
+                                   Label="选择产品"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Dense="true"
+                                   Class="cpk-picker-product"
+                                   Disabled="_busy">
+                            <MudSelectItem Value="0">@(_products.Count == 0 ? "先填客户号回车" : "未选择")</MudSelectItem>
+                            @foreach (var p in _products)
+                            {
+                                <MudSelectItem Value="@p.Id">@ProductLabel(p)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+                </MudItem>
+                <MudItem xs="4" lg="6" Class="cpk-picker-right">
+                    <div class="cpk-picker-right-inner">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   Disabled="_busy || _productId == 0"
+                                   OnClick="AddLineFromBaseAsync">
+                            添加
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                                   Disabled="_busy"
+                                   OnClick="AddLine">
+                            空白行
+                        </MudButton>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
         <MudPaper Class="pa-1 cpk-lines-panel" Outlined="true">
             <MudTable T="CustomsAndPackingLineDto" Items="_lines" Dense="true" Hover="true" Bordered="true"
                       Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table"
@@ -116,14 +176,14 @@
                     <MudTh>打包单位</MudTh>
                     <MudTh>箱数</MudTh>
                     <MudTh>尾箱量</MudTh>
+                    <MudTh>纸箱尺寸</MudTh>
+                    <MudTh>托盘尺寸</MudTh>
                     <MudTh>打托方式</MudTh>
                     <MudTh>打托单位</MudTh>
                     <MudTh>整托数</MudTh>
                     <MudTh>不足托箱</MudTh>
                     <MudTh>尾托尺寸</MudTh>
                     <MudTh>尾托打托</MudTh>
-                    <MudTh>纸箱尺寸</MudTh>
-                    <MudTh>托盘尺寸</MudTh>
                     <MudTh>净重</MudTh>
                     <MudTh>毛重</MudTh>
                     <MudTh>总净重</MudTh>
@@ -204,6 +264,23 @@
                         <CpkFitText Value="@(line.var1 ?? "0")" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
+                        <CpkFitText Value="@line.Carton_Size"
+                                    ValueChanged="v => OnLineChanged(line, () => line.Carton_Size = v)"
+                                    Disabled="_busy"/>
+                    </MudTd>
+                    <MudTd>
+                        @if (mergeMember)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">拼托（见主行）</MudText>
+                        }
+                        else
+                        {
+                            <CpkFitText Value="@line.Pallet_Size"
+                                        ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
+                                        Disabled="_busy"/>
+                        }
+                    </MudTd>
+                    <MudTd>
                         <CpkFitText Value="@line.palletizing_method"
                                     ValueChanged="v => OnLineChanged(line, () => line.palletizing_method = v)"
                                     Disabled="_busy"/>
@@ -233,23 +310,6 @@
                     </MudTd>
                     <MudTd>
                         <CpkFitText Value="@line.var4" ValueChanged="v => line.var4 = v" Disabled="_busy"/>
-                    </MudTd>
-                    <MudTd>
-                        <CpkFitText Value="@line.Carton_Size"
-                                    ValueChanged="v => OnLineChanged(line, () => line.Carton_Size = v)"
-                                    Disabled="_busy"/>
-                    </MudTd>
-                    <MudTd>
-                        @if (mergeMember)
-                        {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">拼托（见主行）</MudText>
-                        }
-                        else
-                        {
-                            <CpkFitText Value="@line.Pallet_Size"
-                                        ValueChanged="v => OnLineChanged(line, () => line.Pallet_Size = v)"
-                                        Disabled="_busy"/>
-                        }
                     </MudTd>
                     <MudTd>
                         <CpkFitNum Value="line.Net_weight" ValueChanged="v => OnLineChanged(line, () => line.Net_weight = v)" Disabled="_busy"/>
@@ -323,10 +383,10 @@
                     <MudTd></MudTd>
                     <MudTd></MudTd>
                     <MudTd></MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
                     <MudTd><CpkFitNum Value="_header.all_Pallet_qty" ReadOnly="true"/></MudTd>
                     <MudTd><CpkFitText Value="@(_header.var5 ?? "0")" ReadOnly="true"/></MudTd>
-                    <MudTd></MudTd>
-                    <MudTd></MudTd>
                     <MudTd></MudTd>
                     <MudTd></MudTd>
                     <MudTd></MudTd>
@@ -404,6 +464,26 @@
     }
     .cpk-header-panel {
         flex: 0 0 auto;
+    }
+    .cpk-picker-panel { flex: 0 0 auto; }
+    .cpk-picker-grid { width: 100%; margin: 0 !important; }
+    .cpk-picker-left { display: flex; align-items: center; min-width: 0; }
+    .cpk-picker-left-inner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+    }
+    .cpk-picker-client { width: 120px; max-width: 120px; flex: 0 0 120px; }
+    .cpk-picker-product { flex: 1 1 auto; min-width: 0; }
+    .cpk-picker-right { display: flex !important; justify-content: flex-end; align-items: center; }
+    .cpk-picker-right-inner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
     }
     /* 汇总行钉在滚动区底部，纵向滚动时始终可见 */
     .cpk-line-table .mud-table-foot .mud-table-cell {
@@ -643,13 +723,19 @@
     private int _mergePrimaryTempId;
     private string? _mergePalletCode;
     private string? _mergeTailSize;
+    private string? _productClientNo;
+    private int _productId;
+    private List<ZyqdCotractBaseModel> _products = [];
 
     private bool CanConfirmMerge
         => _mergePrimaryTempId > 0
            && !string.IsNullOrWhiteSpace(_mergePalletCode)
            && !string.IsNullOrWhiteSpace(_mergeTailSize);
 
-    private string Title => _isCreate ? "新建装箱单" : "编辑装箱单";
+    private bool IsDirectCreate => _isCreate && string.IsNullOrWhiteSpace(FromPiGuid);
+    private string Title => _isCreate
+        ? (IsDirectCreate ? "新建装箱单（直接制作）" : "新建装箱单（来自报关PI）")
+        : "编辑装箱单";
 
     private static readonly string[] TradeTermOptions = ["EXW", "FOB", "CIF", "DDP", "DAP", "DDU", "C&F"];
     private static readonly string[] EncasementMethodOptions = ["整箱", "拼箱"];
@@ -674,11 +760,7 @@
                 if (from.Length > 0)
                     await LoadFromPiAsync(from);
                 else
-                {
-                    Notify.Show("请先从客户PI列表选择要生成装箱单的单据", Severity.Warning);
-                    NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("客户PI")}&hint=generate");
-                    return;
-                }
+                    await LoadBlankAsync();
             }
             else
             {
@@ -689,6 +771,18 @@
         finally { _loading = false; }
     }
 
+    private async Task LoadBlankAsync()
+    {
+        var empNo = await Auth.GetCurrentEmpNoAsync() ?? "";
+        _header = Packing.CreateBlankHeader(empNo);
+        _lines = [];
+        _tempSeq = 0;
+        _productClientNo = "";
+        _productId = 0;
+        _products = [];
+        RefreshSummary();
+    }
+
     private async Task LoadFromPiAsync(string piGuid)
     {
         var rows = await Packing.LoadDraftFromCustomsPiAsync(piGuid);
@@ -697,9 +791,12 @@
             Notify.Show("未找到 PI 或明细为空", Severity.Warning);
             _header = new ZyqdCustomsAndPackingModel { var6 = "报关PI", packing_list_type = "总箱单" };
             _lines = [];
+            _tempSeq = 0;
+            SyncProductClientFromHeader();
             return;
         }
         ApplyRows(rows);
+        SyncProductClientFromHeader();
     }
 
     private async Task LoadExistingAsync(string guid)
@@ -722,6 +819,143 @@
         _tempSeq = 0;
         _lines = rows.Select(x => CustomsAndPackingService.ToLineDto(x, ++_tempSeq)).ToList();
         CustomsAndPackingCalc.RecalcAllLines(_lines);
+        RefreshSummary();
+        SyncProductClientFromHeader();
+    }
+
+    private void SyncProductClientFromHeader()
+    {
+        var no = CotractPiTypes.NormalizeClientNo(_header.ClientNo);
+        if (no.Length > 0)
+            _productClientNo = no;
+    }
+
+    private Task OnHeaderClientKey(KeyboardEventArgs e)
+        => e.Key is "Enter" or "NumpadEnter" ? OnHeaderClientBlurAsync() : Task.CompletedTask;
+
+    private async Task OnHeaderClientBlurAsync()
+    {
+        var no = CotractPiTypes.NormalizeClientNo(_header.ClientNo);
+        _header.ClientNo = no;
+        if (no.Length == 0) return;
+
+        if (string.IsNullOrWhiteSpace(_productClientNo))
+            _productClientNo = no;
+
+        try
+        {
+            var bill = await Crm.GetBillToAsync(no);
+            if (bill is not null)
+            {
+                if (string.IsNullOrWhiteSpace(_header.ClientName))
+                    _header.ClientName = bill.ClientName;
+                if (string.IsNullOrWhiteSpace(_header.Customer_destination_country)
+                    && !string.IsNullOrWhiteSpace(bill.Country))
+                    _header.Customer_destination_country = bill.Country;
+            }
+        }
+        catch (Exception ex)
+        {
+            Notify.Show(ex.Message, Severity.Warning);
+        }
+
+        await LoadProductsAsync(showNotify: false);
+    }
+
+    private Task OnProductKey(KeyboardEventArgs e)
+        => e.Key is "Enter" or "NumpadEnter" ? LoadProductsAsync(showNotify: true) : Task.CompletedTask;
+
+    private async Task LoadProductsAsync(bool showNotify = true)
+    {
+        var no = CotractPiTypes.NormalizeClientNo(
+            string.IsNullOrWhiteSpace(_productClientNo) ? _header.ClientNo : _productClientNo);
+        _productClientNo = no;
+        _productId = 0;
+        if (no.Length == 0)
+        {
+            _products = [];
+            if (showNotify)
+                Notify.Show("请先填写产品客户号", Severity.Warning);
+            return;
+        }
+
+        _products = await CotractBase.ListByClientNoAsync(no);
+        if (!showNotify) return;
+
+        if (_products.Count == 0)
+            Notify.Show($"未查到客户 {no} 的合同基础信息", Severity.Warning);
+        else
+            Notify.Show($"已查到客户 {no} 的合同基础信息，共 {_products.Count} 条", Severity.Success);
+    }
+
+    private static string ProductLabel(ZyqdCotractBaseModel p)
+    {
+        var no = (p.materialNo ?? "").Trim();
+        var name = (p.materialName ?? "").Trim();
+        var cust = (p.materiaCust ?? "").Trim();
+        if (cust.Length > 0)
+            return $"{no} / {name} / {cust}";
+        return $"{no} / {name}";
+    }
+
+    private async Task AddLineFromBaseAsync()
+    {
+        if (_productId == 0) return;
+        // ListByClientNo 仅投影下拉展示字段，打包/打托等需按 Id 取完整基础数据
+        var row = await CotractBase.GetAsync(_productId);
+        if (row is null)
+        {
+            Notify.Show("产品不存在", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_header.ClientNo))
+            _header.ClientNo = CotractPiTypes.NormalizeClientNo(row.ClientNo);
+        if (string.IsNullOrWhiteSpace(_header.ClientName))
+            _header.ClientName = row.ClientName;
+        if (string.IsNullOrWhiteSpace(_header.Customer_destination_country))
+            _header.Customer_destination_country = row.Customer_destination_country;
+
+        var line = new CustomsAndPackingLineDto
+        {
+            TempId = ++_tempSeq,
+            var7 = "原始行",
+            materialNo = row.materialNo,
+            materialName = row.materialName,
+            materialType = row.materialType,
+            materialModel = row.materiaCust,
+            materiaSpecs = row.materiaSpecs,
+            materiaPowered = row.materiaPowered,
+            materiaColor = row.materiaColor,
+            materiaCust = row.materiaCust,
+            price = row.price,
+            qty = 1,
+            currency_unit = row.currency_unit,
+            Packing_method = row.Packing_method,
+            Packing_method_unit = row.Packing_method_unit,
+            Carton_Size = row.Carton_Size,
+            Pallet_Size = row.Pallet_Size,
+            palletizing_method = row.palletizing_method,
+            palletizing_method_unit = row.palletizing_method_unit,
+            Net_weight = row.Net_weight,
+            gross_weight = row.gross_weight,
+            var4 = row.var4,
+            SAP_order_NO = row.SAP_order_NO,
+            Client_poNo = row.Client_poNo,
+            PI_Material_Name = row.materialName,
+            Customer_outer_box_logo = row.Customer_outer_box_logo,
+            Tuo_Mark = row.Tuo_Mark,
+            Tuo_Mark_url = row.Tuo_Mark_url,
+            Box_label = row.Box_label,
+            Box_label_url = row.Box_label_url,
+            Box_label2 = row.Box_label2,
+            Box_label_url2 = row.Box_label_url2,
+            nameplate_url = row.nameplate_url,
+            nameplate_url2 = row.nameplate_url2,
+            Customer_destination_country = _header.Customer_destination_country
+        };
+        CustomsAndPackingCalc.RecalcLine(line);
+        _lines.Add(line);
         RefreshSummary();
     }
 

@@ -342,6 +342,7 @@
                                 <th class="sir-sample-img-col">图片留底（最多5张，JPG/PNG，单张≤5MB）</th>
                                 <th class="sir-sample-eq-col">样品部件</th>
                                 <th class="sir-sample-eq-col">备注/要求</th>
+                                <th class="sir-sample-person-col">创建人</th>
                                 <th class="sir-sample-op-col">操作</th>
                             </tr>
                             </thead>
@@ -395,6 +396,7 @@
                                         <MudTextField @bind-Value="s.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="样品部件" ReadOnly="@(!rowEditable)"/>
                                     </td>
                                     <td><MudTextField @bind-Value="s.Note1" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="留底要求" ReadOnly="@(!rowEditable)"/></td>
+                                    <td class="center sir-sample-person-col">@SampleCreatePersonText(s)</td>
                                     <td class="center">
                                         @if (rowEditable)
                                         {
@@ -828,6 +830,7 @@
     }
     .sir-sample-table { table-layout: fixed; width: 100%; }
     .sir-sample-idx-col { width: 48px; }
+    .sir-sample-person-col { width: 128px; white-space: nowrap; font-size: 13px; color: #555; }
     .sir-sample-op-col { width: 72px; }
     .sir-sample-mat-col { width: 200px; min-width: 200px; max-width: 200px; }
     /* 72px × 5 + gap 10px × 4 ≈ 400；样品部件/备注平分剩余宽度 */
@@ -938,17 +941,32 @@
     /// <summary>业务员：报告只读，仅可维护自己加的样品留样。</summary>
     private bool _reportReadOnly;
     private string _empNo = "";
+    private string _displayName = "";
     private bool ShowRemoteImages => SirService.IsRemoteWithoutSample(_reportType);
     private bool ShowSampleFiling => SirService.NeedsSampleFiling(_reportType);
+    private string CurrentCreatePersonLabel => SirService.FormatSampleCreatePerson(_empNo, _displayName);
 
     private bool CanEditSample(ZyqdSirSampleForFilingModel s) =>
-        !_reportReadOnly
-        || string.Equals((s.CreatePerson ?? "").Trim(), _empNo, StringComparison.OrdinalIgnoreCase);
+        !_reportReadOnly || SirService.IsSampleOwnedBy(s.CreatePerson, _empNo);
+
+    private static string SampleCreatePersonText(ZyqdSirSampleForFilingModel s)
+    {
+        var p = (s.CreatePerson ?? "").Trim();
+        return p.Length > 0 ? p : "—";
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         var auth = await Auth.GetStoredAsync();
         _empNo = (auth?.EmpNo ?? "").Trim();
+        _displayName = "";
+        if (_empNo.Length > 0)
+        {
+            var (ok, displayName, _, _) = await UserInfo.GetAsync(_empNo);
+            if (ok)
+                _displayName = (displayName ?? "").Trim();
+        }
+
         _reportReadOnly = AppRoles.IsOperator(auth?.Role) && !AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
 
         var guid = (DocumentGuid ?? "").Trim();
@@ -1084,11 +1102,15 @@
                 ? string.Join(",", _images.Where(x => !string.IsNullOrWhiteSpace(x)))
                 : (_main.ImageUrls ?? "");
 
-            // 留样行图片写回 ImageUrls(JSON)
+            // 留样行图片写回；新建行补齐创建人（工号-姓名）
             if (ShowSampleFiling)
             {
                 foreach (var s in _samples)
+                {
                     s.ImageUrls ??= "[]";
+                    if (s.Id == 0 && string.IsNullOrWhiteSpace(s.CreatePerson) && _empNo.Length > 0)
+                        s.CreatePerson = CurrentCreatePersonLabel;
+                }
             }
 
             var doc = new SirDocumentDto
@@ -1098,7 +1120,7 @@
                 Samples = ShowSampleFiling ? _samples : [],
             };
             var (ok, msg) = _reportReadOnly
-                ? await Sir.SaveSamplesOnlyAsync(doc, _empNo)
+                ? await Sir.SaveSamplesOnlyAsync(doc, _empNo, _displayName)
                 : await Sir.SaveAsync(doc);
             if (!ok)
             {
@@ -1369,7 +1391,8 @@
             code = code,
             createTime = DateTime.Now,
             ImageUrls = "[]",
-            CreatePerson = _reportReadOnly ? _empNo : null,
+            // 凡手动新增行均记「工号-姓名」；系统默认留样行仍为空
+            CreatePerson = CurrentCreatePersonLabel,
         });
     }
 

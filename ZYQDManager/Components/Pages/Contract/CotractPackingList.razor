@@ -72,8 +72,20 @@
             <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-right">
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="GoCustomerPiForCreate">新建</MudButton>
+                <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                                   OnClick="context.ToggleAsync">
+                            新建
+                        </MudButton>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Icon="@Icons.Material.Filled.EditNote" OnClick="GoBlankCreate">直接制作</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.LocalShipping" OnClick="GoCustomsPiForCreate">从报关PI生成</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
             </MudStack>
         </MudStack>
     </MudPaper>
@@ -130,7 +142,7 @@
                     </MudTd>
                 </RowTemplate>
                 <NoRecordsContent>
-                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无装箱单，请在客户PI列表中点击「生成」")</MudText>
+                    <MudText Class="pa-4">@(_busy ? "加载中…" : "暂无装箱单，可「直接制作」或从报关PI「生成装箱单」")</MudText>
                 </NoRecordsContent>
                 <PagerContent>
                     <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
@@ -314,8 +326,11 @@
     private static string EditHref(ZyqdCustomsAndPackingModel row)
         => $"/contract-pk/{Uri.EscapeDataString((row.DocumentGuid ?? "").Trim())}";
 
-    private void GoCustomerPiForCreate()
-        => NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("客户PI")}&hint=generate");
+    private void GoBlankCreate()
+        => NavManager.NavigateTo("/contract-pk/new");
+
+    private void GoCustomsPiForCreate()
+        => NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("报关PI")}&hint=generate");
 
     private void OnRowClick(TableRowClickEventArgs<ZyqdCustomsAndPackingModel> args)
     {

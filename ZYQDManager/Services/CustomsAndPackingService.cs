@@ -87,6 +87,25 @@ public class CustomsAndPackingService
             .ToListAsync(ct);
     }
 
+    /// <summary>直接制作：空白装箱单表头（不落库，保存时再写）。</summary>
+    public ZyqdCustomsAndPackingModel CreateBlankHeader(string? empNo)
+    {
+        empNo = (empNo ?? "").Trim();
+        var now = DateTime.Now;
+        return new ZyqdCustomsAndPackingModel
+        {
+            DocumentGuid = Guid.NewGuid().ToString("N"),
+            Person = empNo,
+            CreatePerson = empNo,
+            CreateTime = now,
+            UpdateTime = now,
+            packing_list_type = "总箱单",
+            var6 = "直接制作",
+            deleteSigh = "N",
+            Shipping_heads_up = "浙江捷昌线性驱动科技股份有限公司"
+        };
+    }
+
     /// <summary>从报关 PI 生成装箱单草稿（不落库，保存时再写）。</summary>
     public async Task<List<ZyqdCustomsAndPackingModel>> LoadDraftFromCustomsPiAsync(
         string? piGuid, CancellationToken ct = default)

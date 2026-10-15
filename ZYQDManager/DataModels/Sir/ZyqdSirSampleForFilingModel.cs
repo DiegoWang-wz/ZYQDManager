@@ -17,6 +17,6 @@ public class ZyqdSirSampleForFilingModel
     public string? Note1 { get; set; }
     public DateTime? createTime { get; set; }
     public string? ImageUrls { get; set; }
-    /// <summary>创建人工号；业务员仅可改删自己创建的留样行，空=检测员/系统默认行。</summary>
+    /// <summary>创建人，格式「工号-姓名」（如 116186-王哲）；业务员仅可改删自己创建的留样行，空=检测员/系统默认行。</summary>
     public string? CreatePerson { get; set; }
 }
