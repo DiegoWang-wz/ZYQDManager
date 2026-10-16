@@ -410,7 +410,7 @@
         {
             var (ok, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
             _infoFailed = !ok;
-            viewAll = Auth.CanViewAllCustomers(auth, info);
+            viewAll = Auth.CanViewAllPiCi(auth, info);
         }
 
         return new CotractPiQueryDto

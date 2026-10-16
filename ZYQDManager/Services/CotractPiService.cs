@@ -387,16 +387,40 @@ public class CotractPiService
         else if (query.RequireClientNo)
             return q.Where(x => false);
 
-        if (query.DateStart is { } from)
+        // 仅条件为日期/创建日期时按区间筛；否则走关键字
+        if (string.Equals(query.FilterColumn, "创建日期", StringComparison.Ordinal))
         {
-            var start = from.Date;
-            q = q.Where(x => x.CreateTime != null && x.CreateTime >= start);
+            if (query.DateStart is { } from)
+            {
+                var start = from.Date;
+                q = q.Where(x => x.CreateTime != null && x.CreateTime >= start);
+            }
+
+            if (query.DateEnd is { } to)
+            {
+                var end = to.Date.AddDays(1);
+                q = q.Where(x => x.CreateTime != null && x.CreateTime < end);
+            }
+
+            return q;
         }
 
-        if (query.DateEnd is { } to)
+        if (string.Equals(query.FilterColumn, "日期", StringComparison.Ordinal))
         {
-            var end = to.Date.AddDays(1);
-            q = q.Where(x => x.CreateTime != null && x.CreateTime < end);
+            // BILL_TO_DATE 存 yyyy-MM-dd，可用字符串比较
+            if (query.DateStart is { } from)
+            {
+                var start = from.Date.ToString("yyyy-MM-dd");
+                q = q.Where(x => x.BILL_TO_DATE != null && x.BILL_TO_DATE.CompareTo(start) >= 0);
+            }
+
+            if (query.DateEnd is { } to)
+            {
+                var end = to.Date.ToString("yyyy-MM-dd");
+                q = q.Where(x => x.BILL_TO_DATE != null && x.BILL_TO_DATE.CompareTo(end) <= 0);
+            }
+
+            return q;
         }
 
         var keyword = (query.Keyword ?? "").Trim();

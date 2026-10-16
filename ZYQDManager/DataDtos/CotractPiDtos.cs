@@ -307,7 +307,7 @@ public sealed class CotractPiCompanyInfo
 
 public static class CotractPiFilterFields
 {
-    /// <summary>与合同列表表头一一对应（不含日期列）。Key/Label 同为中文表头名。</summary>
+    /// <summary>与合同列表表头对应。Key/Label 同为中文表头名。</summary>
     public static readonly (string Key, string Label)[] All =
     [
         ("客户编号", "客户编号"),
@@ -315,6 +315,11 @@ public static class CotractPiFilterFields
         ("订单类型", "订单类型"),
         ("需求人", "需求人"),
         ("发票号", "发票号"),
-        ("PO号", "PO号")
+        ("PO号", "PO号"),
+        ("日期", "日期"),
+        ("创建日期", "创建日期")
     ];
+
+    public static bool IsDateFilter(string? filterColumn)
+        => filterColumn is "日期" or "创建日期";
 }

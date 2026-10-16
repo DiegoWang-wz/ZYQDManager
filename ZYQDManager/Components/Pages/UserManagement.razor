@@ -68,7 +68,11 @@
                 <MudTd DataLabel="工号">@context.EmpNo</MudTd>
                 <MudTd DataLabel="姓名">@Dash(context.DisplayName)</MudTd>
                 <MudTd DataLabel="角色">@RoleText(context.Role, context.EmpNo)</MudTd>
-                <MudTd DataLabel="数据范围">@(context.ViewAllCustomers ? "全部客户" : "已分配客户")</MudTd>
+                <MudTd DataLabel="数据范围" Style="max-width:220px">
+                    <MudTooltip Text="@context.DataScopeText">
+                        <MudText Typo="Typo.body2">@context.DataScopeText</MudText>
+                    </MudTooltip>
+                </MudTd>
                 <MudTd DataLabel="部门">@Dash(context.Department)</MudTd>
                 <MudTd DataLabel="邮箱">@Dash(context.Email)</MudTd>
                 <MudTd DataLabel="电话">@Dash(context.Phone)</MudTd>
@@ -123,12 +127,22 @@
                     {
                         <MudAlert Severity="Severity.Info" Dense="true">检测员仅可访问「检测报告管理」模块。</MudAlert>
                     }
-                    <MudSwitch @bind-Value="_edit.IsActive" Color="Color.Primary"
-                               Label="@(_edit.IsCreate ? "立即启用本系统（默认关闭，需管理员确认）" : "启用本系统权限")"/>
-                    <MudSwitch T="bool" @bind-Value="ViewAllSwitch"
-                               Color="Color.Primary"
-                               Disabled="@(IsAdminRole || IsInspectorRole)"
-                               Label="可查看全部客户"/>
+                    else
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-1">数据范围</MudText>
+                        <MudSwitch T="bool" @bind-Value="ViewAllCustomersSwitch"
+                                   Color="Color.Primary"
+                                   Disabled="@IsAdminRole"
+                                   Label="全部客户（合同基础数据等）"/>
+                        <MudSwitch T="bool" @bind-Value="ViewAllPiCiSwitch"
+                                   Color="Color.Primary"
+                                   Disabled="@IsAdminRole"
+                                   Label="全部 PI/CI"/>
+                        <MudSwitch T="bool" @bind-Value="ViewAllPackingSwitch"
+                                   Color="Color.Primary"
+                                   Disabled="@IsAdminRole"
+                                   Label="全部装箱单"/>
+                    }
                     <MudSwitch T="bool" @bind-Value="_edit.CanViewInvoiceKp"
                                Color="Color.Primary"
                                Disabled="@(IsAdminRole || IsInspectorRole)"
@@ -439,10 +453,34 @@
         set => OnRoleChanged(value);
     }
 
-    private bool ViewAllSwitch
+    private bool ViewAllCustomersSwitch
     {
-        get => EffectiveViewAll;
-        set => OnViewAllChanged(value);
+        get => IsAdminRole || _edit.ViewAllCustomers;
+        set
+        {
+            if (IsAdminRole) { _edit.ViewAllCustomers = true; return; }
+            _edit.ViewAllCustomers = value;
+        }
+    }
+
+    private bool ViewAllPiCiSwitch
+    {
+        get => IsAdminRole || _edit.ViewAllPiCi;
+        set
+        {
+            if (IsAdminRole) { _edit.ViewAllPiCi = true; return; }
+            _edit.ViewAllPiCi = value;
+        }
+    }
+
+    private bool ViewAllPackingSwitch
+    {
+        get => IsAdminRole || _edit.ViewAllPacking;
+        set
+        {
+            if (IsAdminRole) { _edit.ViewAllPacking = true; return; }
+            _edit.ViewAllPacking = value;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -501,13 +539,16 @@
                              || string.Equals(u.EmpNo, "JcAdmin", StringComparison.OrdinalIgnoreCase);
                 // 本系统 Enabled；并兼容旧数据用全局 IsActive=0 表示待审/停用
                 var appEnabled = appPerm is not null && appPerm.Enabled && u.IsActive;
+                var legacyAll = p?.ViewAllCustomers == true;
                 rows.Add(new ManagedUserRowDto
                 {
                     EmpNo = u.EmpNo,
                     DisplayName = u.DisplayName,
                     IsActive = appEnabled,
                     Role = role,
-                    ViewAllCustomers = isAdmin || p?.ViewAllCustomers == true,
+                    ViewAllCustomers = isAdmin || legacyAll,
+                    ViewAllPiCi = isAdmin || (p?.ViewAllPiCi ?? legacyAll),
+                    ViewAllPacking = isAdmin || (p?.ViewAllPacking ?? legacyAll),
                     CanViewInvoiceKp = isAdmin || HasInvoiceKpVisible(appPerm),
                     Department = p?.Department,
                     Email = p?.Email,
@@ -562,6 +603,8 @@
             Role = string.IsNullOrWhiteSpace(row.Role) ? "operator" : row.Role,
             IsActive = row.IsActive,
             ViewAllCustomers = row.ViewAllCustomers,
+            ViewAllPiCi = row.ViewAllPiCi,
+            ViewAllPacking = row.ViewAllPacking,
             CanViewInvoiceKp = row.CanViewInvoiceKp,
             Department = row.Department,
             Email = row.Email,
@@ -585,24 +628,17 @@
         if (AppRoles.IsAdmin(role))
         {
             _edit.ViewAllCustomers = true;
+            _edit.ViewAllPiCi = true;
+            _edit.ViewAllPacking = true;
             _edit.CanViewInvoiceKp = true;
         }
         else if (AppRoles.IsInspector(role))
         {
             _edit.ViewAllCustomers = false;
+            _edit.ViewAllPiCi = false;
+            _edit.ViewAllPacking = false;
             _edit.CanViewInvoiceKp = false;
         }
-    }
-
-    private void OnViewAllChanged(bool value)
-    {
-        if (IsAdminRole)
-        {
-            _edit.ViewAllCustomers = true;
-            return;
-        }
-
-        _edit.ViewAllCustomers = value;
     }
 
     private Task<IEnumerable<CustomerOptionDto>> SearchCustomers(string value, CancellationToken ct)
@@ -805,7 +841,9 @@
             var role = string.IsNullOrWhiteSpace(_edit.Role) ? AppRoles.Operator : _edit.Role.Trim();
             var isAdminRole = AppRoles.IsAdmin(role);
             var isInspectorRole = AppRoles.IsInspector(role);
-            var viewAll = isAdminRole || (!isInspectorRole && _edit.ViewAllCustomers);
+            var viewAllCustomers = isAdminRole || (!isInspectorRole && _edit.ViewAllCustomers);
+            var viewAllPiCi = isAdminRole || (!isInspectorRole && _edit.ViewAllPiCi);
+            var viewAllPacking = isAdminRole || (!isInspectorRole && _edit.ViewAllPacking);
             var canInvoice = isAdminRole || (!isInspectorRole && _edit.CanViewInvoiceKp);
             var controls = BuildAppControls(role, canInvoice, _existingControls);
             var created = _edit.IsCreate;
@@ -866,7 +904,9 @@
                 Email = email,
                 Phone = _edit.Phone,
                 EnglishName = string.IsNullOrWhiteSpace(_edit.EnglishName) ? null : _edit.EnglishName.Trim(),
-                ViewAllCustomers = viewAll,
+                ViewAllCustomers = viewAllCustomers,
+                ViewAllPiCi = viewAllPiCi,
+                ViewAllPacking = viewAllPacking,
                 Signature = string.IsNullOrWhiteSpace(_edit.Signature) ? null : _edit.Signature.Trim(),
                 SignatureUrl = string.IsNullOrWhiteSpace(_edit.SignatureUrl) ? null : _edit.SignatureUrl.Trim(),
                 SignatureEn = string.IsNullOrWhiteSpace(_edit.SignatureEn) ? null : _edit.SignatureEn.Trim(),
@@ -1003,7 +1043,7 @@
         {
             "DisplayName" => Contains(row.DisplayName, keyword),
             "Role" => Contains(RoleText(row.Role, row.EmpNo), keyword) || Contains(row.Role, keyword),
-            "ViewAllCustomers" => Contains(row.ViewAllCustomers ? "全部客户" : "已分配客户", keyword),
+            "ViewAllCustomers" => Contains(row.DataScopeText, keyword),
             "Department" => Contains(row.Department, keyword),
             "Email" => Contains(row.Email, keyword),
             "Phone" => Contains(row.Phone, keyword),

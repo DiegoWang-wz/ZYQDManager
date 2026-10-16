@@ -204,7 +204,7 @@
                                 }
                                 <MudTd Class="qe-part-col">
                                     <MudAutocomplete T="QuotationPartOptionDto"
-                                                     Value="@FindPart(itemType, row.BaseId)"
+                                                     Value="@FindPart(itemType, row)"
                                                      ValueChanged="p => OnPartOptionChangedAsync(row, p)"
                                                      SearchFunc="(text, ct) => SearchPartsAsync(itemType, text, ct)"
                                                      ToStringFunc="@(p => p?.Part_No ?? "")"
@@ -629,6 +629,7 @@
     private QuotationDocumentDto _doc = new();
     private ZyqdQuotationMainModel _main = new();
     private readonly Dictionary<string, List<QuotationPartOptionDto>> _parts = new();
+    private readonly Dictionary<string, QuotationPartOptionDto> _partFallback = new();
     private List<QuotationSignatureOptionDto> _sigOptions = [];
     private string _sigKey = "";
 
@@ -822,10 +823,38 @@
     private List<QuotationPartOptionDto> PartsOf(string itemType)
         => _parts.TryGetValue(itemType, out var list) ? list : [];
 
-    private QuotationPartOptionDto? FindPart(string itemType, int? baseId)
+    private QuotationPartOptionDto? FindPart(string itemType, QuotationDetailLineDto row)
     {
-        if (baseId is null or <= 0) return null;
-        return PartsOf(itemType).FirstOrDefault(x => x.Id == baseId.Value);
+        var list = PartsOf(itemType);
+        if (row.BaseId is > 0)
+        {
+            var byId = list.FirstOrDefault(x => x.Id == row.BaseId.Value);
+            if (byId is not null) return byId;
+        }
+
+        var partNo = (row.Part_No ?? "").Trim();
+        if (partNo.Length > 0)
+        {
+            var byNo = list.FirstOrDefault(x =>
+                string.Equals(x.Part_No, partNo, StringComparison.OrdinalIgnoreCase));
+            if (byNo is not null) return byNo;
+        }
+
+        if (partNo.Length == 0 && row.BaseId is null or <= 0) return null;
+
+        var key = itemType + "|" + (row.BaseId?.ToString(CultureInfo.InvariantCulture) ?? "") + "|" + partNo;
+        if (!_partFallback.TryGetValue(key, out var opt))
+        {
+            opt = new QuotationPartOptionDto
+            {
+                Id = row.BaseId ?? 0,
+                Part_No = partNo,
+                Label = partNo,
+            };
+            _partFallback[key] = opt;
+        }
+
+        return opt;
     }
 
     private Task<IEnumerable<QuotationPartOptionDto>> SearchPartsAsync(
@@ -843,8 +872,24 @@
                     && x.Label.Contains(k, StringComparison.OrdinalIgnoreCase)));
         }
 
-        return Task.FromResult(result.Take(50));
+        var top = result.Take(50).ToList();
+        if (k.Length == 0)
+        {
+            foreach (var line in _doc.Details.Where(x => QuotationBaseTypes.Normalize(x.ItemType) == itemType))
+            {
+                var current = FindPart(itemType, line);
+                if (current is null || top.Any(x => SamePart(x, current))) continue;
+                top.Insert(0, current);
+            }
+        }
+
+        return Task.FromResult<IEnumerable<QuotationPartOptionDto>>(top);
     }
+
+    private static bool SamePart(QuotationPartOptionDto a, QuotationPartOptionDto b)
+        => a.Id > 0 && a.Id == b.Id
+           || (a.Id <= 0 && b.Id <= 0
+               && string.Equals(a.Part_No, b.Part_No, StringComparison.OrdinalIgnoreCase));
 
     private void AddLine(string itemType)
     {

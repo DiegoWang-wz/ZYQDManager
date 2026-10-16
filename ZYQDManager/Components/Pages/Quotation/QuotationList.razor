@@ -9,8 +9,8 @@
 
 <div class="qe-list-page">
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="qe-toolbar">
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qe-toolbar-left">
+        <div class="qe-toolbar-grid">
+            <div class="qe-toolbar-left">
                 <MudSelect T="string"
                            @bind-Value="_filterColumn"
                            Label="条件"
@@ -32,14 +32,13 @@
                               OnKeyUp="OnKeyUp"/>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
-            </MudStack>
-            <div class="qe-toolbar-spacer"></div>
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qe-toolbar-right">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/quotation/new">新建</MudButton>
+            </div>
+            <div class="qe-toolbar-right">
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/quotation/new">新建</MudButton>
-            </MudStack>
-        </MudStack>
+            </div>
+        </div>
     </MudPaper>
 
     <MudPaper Class="qe-table-wrap pa-0" Outlined="true">
@@ -130,12 +129,34 @@
         gap: 12px;
     }
 
-    .qe-toolbar { width: 100%; }
-    .qe-toolbar-left, .qe-toolbar-right { flex: 0 0 auto; }
-    .qe-toolbar-right { margin-left: auto; }
-    .qe-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
-    .qe-filter-select { width: 140px; min-width: 140px; }
-    .qe-filter-input { width: 200px; min-width: 200px; }
+    .qe-toolbar-grid {
+        display: grid;
+        grid-template-columns: 7fr 5fr;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+    }
+    .qe-toolbar-left,
+    .qe-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    .qe-toolbar-left { justify-content: flex-start; }
+    .qe-toolbar-right { justify-content: flex-end; }
+    .qe-toolbar-left > *,
+    .qe-toolbar-right > * {
+        flex: 0 0 auto;
+    }
+    .qe-filter-select { width: 140px; }
+    .qe-filter-input { width: 200px; }
+    @@media (max-width: 960px) {
+        .qe-toolbar-grid { grid-template-columns: 1fr; }
+        .qe-toolbar-right { justify-content: flex-start; }
+    }
 
     .qe-table-wrap {
         flex: 1 1 0;

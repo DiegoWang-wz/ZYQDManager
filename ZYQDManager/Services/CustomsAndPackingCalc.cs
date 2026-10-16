@@ -146,7 +146,9 @@ public static class CustomsAndPackingCalc
             Box_label2 = src.Box_label2,
             Box_label_url2 = src.Box_label_url2,
             nameplate_url = src.nameplate_url,
+            nameplate_type = src.nameplate_type,
             nameplate_url2 = src.nameplate_url2,
+            nameplate_type2 = src.nameplate_type2,
             Customer_destination_country = src.Customer_destination_country,
         };
         RecalcLine(clone);

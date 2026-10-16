@@ -96,12 +96,13 @@ public class QuotationService
         foreach (var d in details)
         {
             var line = MapDetail(d);
-            if (d.BaseId is > 0)
-            {
-                var b = await _base.GetAsync(d.ItemType, d.BaseId.Value, ct);
-                if (b is not null)
-                    line.ApplyBase(b);
-            }
+            var b = d.BaseId is > 0
+                ? await _base.GetAsync(d.ItemType, d.BaseId.Value, ct)
+                : null;
+            if (b is null && !string.IsNullOrWhiteSpace(d.Part_No))
+                b = await _base.FindByPartNoAsync(d.ItemType, d.Part_No, ct);
+            if (b is not null)
+                line.ApplyBase(b);
 
             doc.Details.Add(line);
         }

@@ -151,8 +151,14 @@ public sealed class ZyqdUserInformationDto
     /// <summary>英文名（个人信息页左侧展示等）</summary>
     public string? EnglishName { get; set; }
 
-    /// <summary>操作员也可查看全部客户；管理员始终为 true。</summary>
+    /// <summary>可查看全部客户（合同基础数据 / 项目等按客户过滤的数据）；管理员始终为 true。</summary>
     public bool ViewAllCustomers { get; set; }
+
+    /// <summary>可查看全部 PI/CI。null 表示旧数据，回退到 <see cref="ViewAllCustomers"/>。</summary>
+    public bool? ViewAllPiCi { get; set; }
+
+    /// <summary>可查看全部装箱单。null 表示旧数据，回退到 <see cref="ViewAllCustomers"/>。</summary>
+    public bool? ViewAllPacking { get; set; }
 
     /// <summary>中文报价签名名称（替代旧表 T_ZYQD_Quotation_signature.signature）</summary>
     public string? Signature { get; set; }
@@ -231,6 +237,8 @@ public sealed class ManagedUserRowDto
     public bool IsActive { get; set; }
     public string Role { get; set; } = "";
     public bool ViewAllCustomers { get; set; }
+    public bool ViewAllPiCi { get; set; }
+    public bool ViewAllPacking { get; set; }
     public bool CanViewInvoiceKp { get; set; }
     public string? Department { get; set; }
     public string? Email { get; set; }
@@ -241,9 +249,20 @@ public sealed class ManagedUserRowDto
     public string? SignatureEn { get; set; }
     public string? SignatureUrlEn { get; set; }
     public List<CustomerOptionDto> Customers { get; set; } = new();
+    public string DataScopeText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (ViewAllCustomers) parts.Add("全部客户");
+            if (ViewAllPiCi) parts.Add("全部PI/CI");
+            if (ViewAllPacking) parts.Add("全部装箱");
+            return parts.Count == 0 ? "已分配/本人" : string.Join("、", parts);
+        }
+    }
     public string CustomersText =>
         ViewAllCustomers
-            ? "全部客户"
+            ? "全部"
             : Customers.Count == 0
                 ? "未分配"
                 : string.Join("、", Customers.Select(x => x.Code));
@@ -271,6 +290,8 @@ public sealed class SaveManagedUserDto
     public string Role { get; set; } = "operator";
     public bool IsActive { get; set; }
     public bool ViewAllCustomers { get; set; }
+    public bool ViewAllPiCi { get; set; }
+    public bool ViewAllPacking { get; set; }
     public bool CanViewInvoiceKp { get; set; }
     public string? Department { get; set; }
     public string? Email { get; set; }

@@ -8,8 +8,8 @@
 
 <div class="sir-list-page">
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="sir-toolbar">
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-left">
+        <div class="sir-toolbar-grid">
+            <div class="sir-toolbar-left">
                 <MudSelect T="string"
                            Value="_reportType"
                            ValueChanged="OnReportTypeChanged"
@@ -71,17 +71,19 @@
                 }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
-            </MudStack>
-            <div class="sir-toolbar-spacer"></div>
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="sir-toolbar-right">
+                @if (_canManageReports)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
+                }
+            </div>
+            <div class="sir-toolbar-right">
                 @if (_canManageReports)
                 {
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
                 }
-            </MudStack>
-        </MudStack>
+            </div>
+        </div>
     </MudPaper>
 
     <MudPaper Class="sir-table-wrap pa-0" Outlined="true">
@@ -134,7 +136,7 @@
                     <MudTd Class="sir-ops-cell">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Edit"
-                                   OnClick="@(() => GoEditAsync(context))">@(_canManageReports ? "编辑" : "打开")</MudButton>
+                                   OnClick="@(() => GoEditAsync(context))">编辑</MudButton>
                         @if (_canManageReports)
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
@@ -166,14 +168,36 @@
         min-height: 0;
         gap: 12px;
     }
-    .sir-toolbar { width: 100%; }
-    .sir-toolbar-left, .sir-toolbar-right { flex: 0 0 auto; }
-    .sir-toolbar-right { margin-left: auto; }
-    .sir-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
-    .sir-filter-report-type { width: 170px; min-width: 170px; }
-    .sir-filter-select { width: 140px; min-width: 140px; }
-    .sir-filter-input { width: 200px; min-width: 200px; }
-    .sir-filter-date { width: 180px; min-width: 180px; flex: 0 0 180px; }
+    .sir-toolbar-grid {
+        display: grid;
+        grid-template-columns: 7fr 5fr;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+    }
+    .sir-toolbar-left,
+    .sir-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    .sir-toolbar-left { justify-content: flex-start; }
+    .sir-toolbar-right { justify-content: flex-end; }
+    .sir-toolbar-left > *,
+    .sir-toolbar-right > * {
+        flex: 0 0 auto;
+    }
+    .sir-filter-report-type { width: 170px; }
+    .sir-filter-select { width: 140px; }
+    .sir-filter-input { width: 200px; }
+    .sir-filter-date { width: 140px; }
+    @@media (max-width: 960px) {
+        .sir-toolbar-grid { grid-template-columns: 1fr; }
+        .sir-toolbar-right { justify-content: flex-start; }
+    }
     .sir-table-wrap {
         flex: 1 1 0;
         min-height: 0;
@@ -309,7 +333,7 @@
         if (!firstRender || _ready) return;
 
         var auth = await Auth.GetStoredAsync();
-        // 业务员只能打开维护样品；检测员/管理员可新增删除
+        // 业务员可编辑已有报告；新增、删除仍仅检测员/管理员
         _canManageReports = !AppRoles.IsOperator(auth?.Role) || AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
 
         // 仅顶栏「返回」时恢复上一次筛选/分页

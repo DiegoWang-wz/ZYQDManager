@@ -212,10 +212,27 @@ public class CentralAuthService
                || string.Equals(auth.EmpNo, "JcAdmin", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>全部客户：合同基础数据、项目等按客户过滤的模块。</summary>
     public bool CanViewAllCustomers(StoredCentralAuth? auth, ZyqdUserInformationDto? info)
     {
         if (CanManageUsers(auth)) return true;
         return info?.ViewAllCustomers == true;
+    }
+
+    /// <summary>全部 PI/CI。旧数据未写新字段时，回退到 ViewAllCustomers。</summary>
+    public bool CanViewAllPiCi(StoredCentralAuth? auth, ZyqdUserInformationDto? info)
+    {
+        if (CanManageUsers(auth)) return true;
+        if (info is null) return false;
+        return info.ViewAllPiCi ?? info.ViewAllCustomers;
+    }
+
+    /// <summary>全部装箱单。旧数据未写新字段时，回退到 ViewAllCustomers。</summary>
+    public bool CanViewAllPacking(StoredCentralAuth? auth, ZyqdUserInformationDto? info)
+    {
+        if (CanManageUsers(auth)) return true;
+        if (info is null) return false;
+        return info.ViewAllPacking ?? info.ViewAllCustomers;
     }
 
     /// <summary>

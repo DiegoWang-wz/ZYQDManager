@@ -73,7 +73,9 @@ public sealed class CustomsAndPackingLineDto
     public string? Box_label2 { get; set; }
     public string? Box_label_url2 { get; set; }
     public string? nameplate_url { get; set; }
+    public string? nameplate_type { get; set; }
     public string? nameplate_url2 { get; set; }
+    public string? nameplate_type2 { get; set; }
     public string? Customer_destination_country { get; set; }
 }
 
@@ -86,5 +88,9 @@ public static class CustomsAndPackingFilterFields
         ("PI合同", "PI合同"),
         ("SAP订单号", "SAP订单号"),
         ("创建人", "创建人"),
+        ("创建时间", "创建时间"),
     ];
+
+    public static bool IsDateFilter(string? filterColumn)
+        => string.Equals(filterColumn, "创建时间", StringComparison.Ordinal);
 }

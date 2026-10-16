@@ -28,26 +28,9 @@
                         </MudSelectItem>
                     }
                 </MudSelect>
-                <MudDatePicker @bind-Date="_dateStart"
-                               Label="开始"
-                               DateFormat="yyyy-MM-dd"
-                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Editable="true"
-                               Clearable="true"
-                               Class="cpk-filter-date"/>
-                <MudDatePicker @bind-Date="_dateEnd"
-                               Label="结束"
-                               DateFormat="yyyy-MM-dd"
-                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Editable="true"
-                               Clearable="true"
-                               Class="cpk-filter-date"/>
                 <MudSelect T="string"
-                           @bind-Value="_filterColumn"
+                           Value="_filterColumn"
+                           ValueChanged="OnFilterColumnChanged"
                            Label="条件"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
@@ -57,21 +40,40 @@
                         <MudSelectItem Value="@field.Key">@field.Label</MudSelectItem>
                     }
                 </MudSelect>
-                <MudTextField @bind-Value="_keyword"
-                              Label="内容"
-                              Placeholder="输入查询内容"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Immediate="true"
-                              Class="cpk-filter-input"
-                              OnKeyUp="OnKeyUp"/>
+                @if (IsDateFilter)
+                {
+                    <MudDatePicker @bind-Date="_dateStart"
+                                   Label="开始"
+                                   DateFormat="yyyy-MM-dd"
+                                   Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="cpk-filter-date"/>
+                    <MudDatePicker @bind-Date="_dateEnd"
+                                   Label="结束"
+                                   DateFormat="yyyy-MM-dd"
+                                   Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="cpk-filter-date"/>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_keyword"
+                                  Label="内容"
+                                  Placeholder="输入查询内容"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  Class="cpk-filter-input"
+                                  OnKeyUp="OnKeyUp"/>
+                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
-            </MudStack>
-            <div class="cpk-toolbar-spacer"></div>
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-right">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
                 <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                     <ActivatorContent>
                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -86,6 +88,11 @@
                         <MudMenuItem Icon="@Icons.Material.Filled.LocalShipping" OnClick="GoCustomsPiForCreate">从报关PI生成</MudMenuItem>
                     </ChildContent>
                 </MudMenu>
+            </MudStack>
+            <div class="cpk-toolbar-spacer"></div>
+            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpk-toolbar-right">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
             </MudStack>
         </MudStack>
     </MudPaper>
@@ -250,6 +257,7 @@
     private string? _keyword;
     private DateTime? _dateStart;
     private DateTime? _dateEnd;
+    private bool IsDateFilter => CustomsAndPackingFilterFields.IsDateFilter(_filterColumn);
     private List<ZyqdCustomsAndPackingModel> _rows = [];
     private HashSet<ZyqdCustomsAndPackingModel> _selected = new();
     private int _skip;
@@ -354,6 +362,16 @@
         await SearchAsync();
     }
 
+    private void OnFilterColumnChanged(string value)
+    {
+        var wasDate = IsDateFilter;
+        _filterColumn = value ?? "客户编码";
+        if (IsDateFilter)
+            _keyword = null;
+        else if (wasDate)
+            _dateStart = _dateEnd = null;
+    }
+
     private void ClearSelection() => _selected.Clear();
 
     private async Task DeleteAsync(ZyqdCustomsAndPackingModel row)
@@ -449,14 +467,14 @@
         if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
         {
             var (ok, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
-            if (ok) viewAll = Auth.CanViewAllCustomers(auth, info);
+            if (ok) viewAll = Auth.CanViewAllPacking(auth, info);
         }
         return new CustomsAndPackingQueryDto
         {
             FilterColumn = _filterColumn,
-            Keyword = _keyword,
-            DateStart = _dateStart,
-            DateEnd = _dateEnd,
+            Keyword = IsDateFilter ? null : _keyword,
+            DateStart = IsDateFilter ? _dateStart : null,
+            DateEnd = IsDateFilter ? _dateEnd : null,
             ViewAll = viewAll,
             ViewerEmpNo = auth?.EmpNo
         };

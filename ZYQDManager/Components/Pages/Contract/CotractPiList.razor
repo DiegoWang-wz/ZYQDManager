@@ -10,8 +10,8 @@
 
 <div class="cotract-pi-page">
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="cpi-toolbar">
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpi-toolbar-left">
+        <div class="cpi-toolbar-grid">
+            <div class="cpi-toolbar-left">
                 <MudSelect T="string"
                            Value="_documentType"
                            ValueChanged="OnDocumentTypeChanged"
@@ -29,26 +29,9 @@
                         </MudSelectItem>
                     }
                 </MudSelect>
-                <MudDatePicker @bind-Date="_dateStart"
-                               Label="开始"
-                               DateFormat="yyyy-MM-dd"
-                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Editable="true"
-                               Clearable="true"
-                               Class="cpi-filter-date"/>
-                <MudDatePicker @bind-Date="_dateEnd"
-                               Label="结束"
-                               DateFormat="yyyy-MM-dd"
-                               Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Editable="true"
-                               Clearable="true"
-                               Class="cpi-filter-date"/>
                 <MudSelect T="string"
-                           @bind-Value="_filterColumn"
+                           Value="_filterColumn"
+                           ValueChanged="OnFilterColumnChanged"
                            Label="条件"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
@@ -58,21 +41,40 @@
                         <MudSelectItem Value="@field.Label">@field.Label</MudSelectItem>
                     }
                 </MudSelect>
-                <MudTextField @bind-Value="_keyword"
-                              Label="内容"
-                              Placeholder="输入查询内容"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Immediate="true"
-                              Class="cpi-filter-input"
-                              OnKeyUp="OnKeyUp"/>
+                @if (IsDateFilter)
+                {
+                    <MudDatePicker @bind-Date="_dateStart"
+                                   Label="开始"
+                                   DateFormat="yyyy-MM-dd"
+                                   Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="cpi-filter-date"/>
+                    <MudDatePicker @bind-Date="_dateEnd"
+                                   Label="结束"
+                                   DateFormat="yyyy-MM-dd"
+                                   Culture="@(System.Globalization.CultureInfo.InvariantCulture)"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Class="cpi-filter-date"/>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_keyword"
+                                  Label="内容"
+                                  Placeholder="输入查询内容"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Immediate="true"
+                                  Class="cpi-filter-input"
+                                  OnKeyUp="OnKeyUp"/>
+                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
-            </MudStack>
-            <div class="cpi-toolbar-spacer"></div>
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="cpi-toolbar-right">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0 || IsPackingList">取消选择</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy || IsPackingList">删除</MudButton>
                 @if (IsCustomerPi)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-pi/new">新建</MudButton>
@@ -82,8 +84,12 @@
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                                OnClick="GoCustomerPiForCreateAsync">新建</MudButton>
                 }
-            </MudStack>
-        </MudStack>
+            </div>
+            <div class="cpi-toolbar-right">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0 || IsPackingList">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy || IsPackingList">删除</MudButton>
+            </div>
+        </div>
     </MudPaper>
 
     <MudPaper Class="cotract-pi-table-wrap pa-0" Outlined="true">
@@ -182,13 +188,45 @@
         gap: 12px;
     }
 
-    .cpi-toolbar { width: 100%; }
-    .cpi-toolbar-left, .cpi-toolbar-right { flex: 0 0 auto; }
-    .cpi-toolbar-right { margin-left: auto; }
-    .cpi-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
-    .cpi-filter-select { width: 160px; min-width: 160px; }
-    .cpi-filter-select-wide { width: 140px; min-width: 140px; }
-    .cpi-doc-type-select { width: 180px; min-width: 180px; }
+    .cpi-toolbar-grid {
+        display: grid;
+        grid-template-columns: 7fr 5fr;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+    }
+    .cpi-toolbar-left,
+    .cpi-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    .cpi-toolbar-left {
+        justify-content: flex-start;
+    }
+    .cpi-toolbar-right {
+        justify-content: flex-end;
+    }
+    .cpi-toolbar-left > *,
+    .cpi-toolbar-right > * {
+        flex: 0 0 auto;
+    }
+    .cpi-filter-select { width: 160px; }
+    .cpi-filter-select-wide { width: 140px; }
+    .cpi-doc-type-select { width: 160px; }
+    .cpi-filter-input { width: 200px; }
+    .cpi-filter-input .mud-input-control {
+        width: 100%;
+        margin-top: 0 !important;
+    }
+    .cpi-filter-date { width: 140px; }
+    @@media (max-width: 960px) {
+        .cpi-toolbar-grid { grid-template-columns: 1fr; }
+        .cpi-toolbar-right { justify-content: flex-start; }
+    }
     .cpi-doc-type-select .mud-input-slot,
     .cpi-doc-type-select input.mud-select-input {
         font-weight: 600;
@@ -217,18 +255,6 @@
     .cpi-doc-type-item.cpi-doc-type-bg { color: #ed6c02; }
     .cpi-doc-type-item.cpi-doc-type-ci { color: #7b1fa2; }
     .cpi-doc-type-item.cpi-doc-type-pk { color: #2e7d32; }
-    .cpi-filter-input { width: 220px; min-width: 220px; }
-    .cpi-date-label {
-        flex: 0 0 auto;
-        white-space: nowrap;
-        color: var(--mud-palette-text-secondary);
-        padding: 0 4px 0 0;
-    }
-    .cpi-filter-date {
-        width: 200px;
-        min-width: 200px;
-        flex: 0 0 200px;
-    }
     .cpi-filter-date .mud-input-control,
     .cpi-filter-date .mud-input {
         min-width: 0;
@@ -427,6 +453,7 @@
     private string? _keyword;
     private DateTime? _dateStart;
     private DateTime? _dateEnd;
+    private bool IsDateFilter => CotractPiFilterFields.IsDateFilter(_filterColumn);
     private List<ZyqdCotractPiModel> _rows = new();
     private HashSet<ZyqdCotractPiModel> _selected = new();
     private int _skip;
@@ -604,6 +631,16 @@
         _dateStart = null;
         _dateEnd = null;
         await SearchAsync();
+    }
+
+    private void OnFilterColumnChanged(string value)
+    {
+        var wasDate = IsDateFilter;
+        _filterColumn = value ?? "客户编号";
+        if (IsDateFilter)
+            _keyword = null;
+        else if (wasDate)
+            _dateStart = _dateEnd = null;
     }
 
     private async Task SearchAsync()
@@ -831,16 +868,16 @@
         {
             var (ok, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
             _infoFailed = !ok;
-            viewAll = Auth.CanViewAllCustomers(auth, info);
+            viewAll = Auth.CanViewAllPiCi(auth, info);
         }
 
         return new CotractPiQueryDto
         {
             DocumentType = _documentType,
             FilterColumn = _filterColumn,
-            Keyword = _keyword,
-            DateStart = _dateStart,
-            DateEnd = _dateEnd,
+            Keyword = IsDateFilter ? null : _keyword,
+            DateStart = IsDateFilter ? _dateStart : null,
+            DateEnd = IsDateFilter ? _dateEnd : null,
             ViewAll = viewAll,
             ViewerEmpNo = auth?.EmpNo
         };

@@ -426,15 +426,22 @@ public class CustomsAndPackingService
                 q = q.Where(_ => false);
         }
 
-        if (query.DateStart is { } ds)
+        // 仅条件为「创建时间」时按日期区间筛
+        if (CustomsAndPackingFilterFields.IsDateFilter(query.FilterColumn))
         {
-            var start = ds.Date;
-            q = q.Where(x => x.CreateTime != null && x.CreateTime.Value >= start);
-        }
-        if (query.DateEnd is { } de)
-        {
-            var end = de.Date.AddDays(1);
-            q = q.Where(x => x.CreateTime != null && x.CreateTime.Value < end);
+            if (query.DateStart is { } ds)
+            {
+                var start = ds.Date;
+                q = q.Where(x => x.CreateTime != null && x.CreateTime.Value >= start);
+            }
+
+            if (query.DateEnd is { } de)
+            {
+                var end = de.Date.AddDays(1);
+                q = q.Where(x => x.CreateTime != null && x.CreateTime.Value < end);
+            }
+
+            return q;
         }
 
         var kw = (query.Keyword ?? "").Trim();

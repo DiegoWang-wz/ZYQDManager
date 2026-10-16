@@ -11,8 +11,8 @@
 
 <div class="qb-list-page">
     <MudPaper Class="pa-3" Outlined="true">
-        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="qb-toolbar">
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qb-toolbar-left">
+        <div class="qb-toolbar-grid">
+            <div class="qb-toolbar-left">
                 <MudSelect T="string"
                            Value="_itemType"
                            ValueChanged="OnItemTypeChangedAsync"
@@ -55,9 +55,13 @@
                               Disabled="_batchEditMode"/>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy || _batchEditMode">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy || _batchEditMode">清空</MudButton>
-            </MudStack>
-            <div class="qb-toolbar-spacer"></div>
-            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="qb-toolbar-right">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           Href="@NewHref"
+                           Disabled="_batchEditMode">新建</MudButton>
+            </div>
+            <div class="qb-toolbar-right">
                 <MudButton Variant="Variant.Outlined"
                            StartIcon="@Icons.Material.Filled.Deselect"
                            OnClick="ClearSelection"
@@ -111,13 +115,8 @@
                            Disabled="_busy || _batchEditMode">
                     下载模板
                 </MudButton>
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           Href="@NewHref"
-                           Disabled="_batchEditMode">新建</MudButton>
-            </MudStack>
-        </MudStack>
+            </div>
+        </div>
     </MudPaper>
 
     <MudPaper Class="qb-table-wrap pa-0" Outlined="true">
@@ -289,10 +288,32 @@
         min-height: 0;
         gap: 12px;
     }
-    .qb-toolbar { width: 100%; }
-    .qb-toolbar-left, .qb-toolbar-right { flex: 0 0 auto; }
-    .qb-toolbar-right { margin-left: auto; }
-    .qb-toolbar-spacer { flex: 1 1 auto !important; min-width: 8px; }
+    .qb-toolbar-grid {
+        display: grid;
+        grid-template-columns: 7fr 5fr;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+    }
+    .qb-toolbar-left,
+    .qb-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    .qb-toolbar-left { justify-content: flex-start; }
+    .qb-toolbar-right { justify-content: flex-end; }
+    .qb-toolbar-left > *,
+    .qb-toolbar-right > * {
+        flex: 0 0 auto;
+    }
+    @@media (max-width: 960px) {
+        .qb-toolbar-grid { grid-template-columns: 1fr; }
+        .qb-toolbar-right { justify-content: flex-start; }
+    }
     .qb-file-label {
         position: relative;
         display: inline-flex;
@@ -336,7 +357,7 @@
     .qb-table.qb-batch-edit .qb-batch-input .mud-input-slot {
         background-color: #fffdf5 !important;
     }
-    .qb-type-select { width: 160px; min-width: 160px; }
+    .qb-type-select { width: 160px; }
     .qb-type-select .mud-input-slot,
     .qb-type-select input.mud-select-input {
         font-weight: 600;
@@ -370,8 +391,8 @@
     .qb-type-item.qb-type-cb { color: #ed6c02; }
     .qb-type-item.qb-type-pr { color: #2e7d32; }
     .qb-type-item.qb-type-accessory { color: #7b1fa2; }
-    .qb-filter-select { width: 140px; min-width: 140px; }
-    .qb-filter-input { width: 200px; min-width: 200px; }
+    .qb-filter-select { width: 140px; }
+    .qb-filter-input { width: 200px; }
     .qb-table-wrap {
         flex: 1 1 0;
         min-height: 0;

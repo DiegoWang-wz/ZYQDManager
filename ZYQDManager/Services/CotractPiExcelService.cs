@@ -42,6 +42,7 @@ public class CotractPiExcelService
 
         var extra = Math.Max(0, rows.Count - 1) * 6;
         ApplyTradeFeeLayout(ws, extra, english, main.BILL_TO_FOB);
+        WriteCompletion(ws, rows);
         ApplyPrintLayout(ws);
 
         using var ms = new MemoryStream();
@@ -96,25 +97,8 @@ public class CotractPiExcelService
         Set(ws, 7, 1, main.SHIP_TO_info1); Set(ws, 6, 10, main.BILL_TO_PO_REF);
         Set(ws, 8, 1, main.SHIP_TO_info3);
         Set(ws, 9, 1, main.SHIP_TO_info4); Set(ws, 9, 9, main.BILL_TO_FOB);
-        Set(ws, 17, 0, main.var4);
-        if (!string.IsNullOrWhiteSpace(main.var2))
-            Set(ws, 17, 5, "Estimated Time of Completion: " + CotractPiTypes.FormatDate(main.var2));
-        var fees = CotractPiTypes.ResolveFeeVisibility(main.BILL_TO_FOB);
-        if (fees.Ship)
-        {
-            Set(ws, 17, 10, main.Shipping_Fee);
-            Money(ws, 17, 12, ParseNum(main.var10), curr);
-        }
-        if (fees.Insure)
-            Money(ws, 18, 12, main.Insurance_premium, curr);
-        Money(ws, 19, 12, main.TOTAL, curr);
-        Set(ws, 20, 11, main.Payment_ratio.ToString("0.##") + "%");
-        Money(ws, 20, 12, main.Payment_ratio_Ext, curr);
-        Money(ws, 21, 12, main.balance_before_delivery, curr);
-        Set(ws, 21, 5, main.var3);
-        Set(ws, 25, 0, "NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP or SCREENSHOT TO " + main.email);
-        SetDate(ws, 28, 11, main.var5);
 
+        var extra = Math.Max(0, rows.Count - 1) * 6;
         EnsureBlocks(ws, 11, 16, 6, rows.Count);
         for (var i = 0; i < rows.Count; i++)
         {
@@ -134,6 +118,23 @@ public class CotractPiExcelService
             Set(ws, r + 4, 2, item.materiaPowered);
             Set(ws, r + 5, 2, item.Notes);
         }
+
+        Set(ws, 17 + extra, 0, main.var4);
+        var fees = CotractPiTypes.ResolveFeeVisibility(main.BILL_TO_FOB);
+        if (fees.Ship)
+        {
+            Set(ws, 17 + extra, 10, main.Shipping_Fee);
+            Money(ws, 17 + extra, 12, ParseNum(main.var10), curr);
+        }
+        if (fees.Insure)
+            Money(ws, 18 + extra, 12, main.Insurance_premium, curr);
+        Money(ws, 19 + extra, 12, main.TOTAL, curr);
+        Set(ws, 20 + extra, 11, main.Payment_ratio.ToString("0.##") + "%");
+        Money(ws, 20 + extra, 12, main.Payment_ratio_Ext, curr);
+        Money(ws, 21 + extra, 12, main.balance_before_delivery, curr);
+        Set(ws, 21 + extra, 5, main.var3);
+        Set(ws, 25 + extra, 0, "NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP or SCREENSHOT TO " + main.email);
+        SetDate(ws, 28 + extra, 11, main.var5);
     }
 
     private static void FillChinese(IXLWorksheet ws, ZyqdCotractPiModel main, List<ZyqdCotractPiModel> rows, string curr)
@@ -144,25 +145,8 @@ public class CotractPiExcelService
         Set(ws, 8, 1, main.SHIP_TO_info1); Set(ws, 7, 10, main.BILL_TO_PO_REF);
         Set(ws, 9, 1, main.SHIP_TO_info3);
         Set(ws, 10, 1, main.SHIP_TO_info4); Set(ws, 10, 9, main.BILL_TO_FOB);
-        Set(ws, 18, 0, main.var4);
-        if (!string.IsNullOrWhiteSpace(main.var2))
-            Set(ws, 18, 5, "Estimated Time of Completion: " + CotractPiTypes.FormatDate(main.var2));
-        var fees = CotractPiTypes.ResolveFeeVisibility(main.BILL_TO_FOB);
-        if (fees.Ship)
-        {
-            Set(ws, 18, 10, main.Shipping_Fee);
-            Money(ws, 18, 12, ParseNum(main.var10), curr);
-        }
-        if (fees.Insure)
-            Money(ws, 19, 12, main.Insurance_premium, curr);
-        Money(ws, 20, 12, main.TOTAL, curr);
-        Money(ws, 21, 12, main.Payment_ratio_Ext, curr);
-        Money(ws, 22, 12, main.balance_before_delivery, curr);
-        Set(ws, 21, 11, main.Payment_ratio.ToString("0.##") + "%");
-        Set(ws, 22, 5, main.var3);
-        Set(ws, 30, 0, "NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP OR SCREENSHOT TO " + main.email);
-        SetDate(ws, 31, 11, main.var5);
 
+        var extra = Math.Max(0, rows.Count - 1) * 6;
         EnsureBlocks(ws, 12, 17, 6, rows.Count);
         for (var i = 0; i < rows.Count; i++)
         {
@@ -183,6 +167,82 @@ public class CotractPiExcelService
             Set(ws, r + 4, 2, item.materiaPowered);
             Set(ws, r + 5, 2, item.Notes);
         }
+
+        Set(ws, 18 + extra, 0, main.var4);
+        var fees = CotractPiTypes.ResolveFeeVisibility(main.BILL_TO_FOB);
+        if (fees.Ship)
+        {
+            Set(ws, 18 + extra, 10, main.Shipping_Fee);
+            Money(ws, 18 + extra, 12, ParseNum(main.var10), curr);
+        }
+        if (fees.Insure)
+            Money(ws, 19 + extra, 12, main.Insurance_premium, curr);
+        Money(ws, 20 + extra, 12, main.TOTAL, curr);
+        Money(ws, 21 + extra, 12, main.Payment_ratio_Ext, curr);
+        Money(ws, 22 + extra, 12, main.balance_before_delivery, curr);
+        Set(ws, 21 + extra, 11, main.Payment_ratio.ToString("0.##") + "%");
+        Set(ws, 22 + extra, 5, main.var3);
+        Set(ws, 30 + extra, 0, "NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP OR SCREENSHOT TO " + main.email);
+        SetDate(ws, 31 + extra, 11, main.var5);
+    }
+
+    /// <summary>
+    /// 模板 F19:J19 为合并单元格，和 Shipping_Fee 同行；明细插入后整行下移。
+    /// 必须在清理运费之后写，否则清 J 列会把合并格内容一起清掉。
+    /// </summary>
+    private static void WriteCompletion(IXLWorksheet ws, IReadOnlyList<ZyqdCotractPiModel> rows)
+    {
+        var text = CompletionText(rows);
+        if (text.Length == 0) return;
+
+        var row = FindCompletionExcelRow(ws);
+        if (row <= 0) return;
+
+        var cell = ws.Cell(row, 6);
+        if (cell.IsMerged())
+            cell = cell.MergedRange().FirstCell();
+        cell.Style.NumberFormat.Format = "@";
+        cell.SetValue("Estimated Time of Completion: " + text);
+    }
+
+    private static int FindCompletionExcelRow(IXLWorksheet ws)
+    {
+        var last = ws.LastRowUsed()?.RowNumber() ?? 40;
+        if (last > 400) last = 400;
+        for (var r = 1; r <= last; r++)
+        {
+            for (var c = 1; c <= 14; c++)
+            {
+                var label = ws.Cell(r, c).GetString();
+                if (label.Contains("SUB-TOTAL", StringComparison.OrdinalIgnoreCase)
+                    || label.Contains("SUB TOTAL", StringComparison.OrdinalIgnoreCase))
+                    return r - 2;
+            }
+        }
+        return 19;
+    }
+
+    /// <summary>预计完成时间：优先 var2，旧数据回退 Estimated_TimeofCompletion。</summary>
+    private static string CompletionText(IEnumerable<ZyqdCotractPiModel> rows)
+    {
+        foreach (var row in rows)
+        {
+            var raw = FirstText(row.var2, row.Estimated_TimeofCompletion);
+            if (raw.Length > 0)
+                return CotractPiTypes.FormatDate(raw);
+        }
+        return "";
+    }
+
+    private static string FirstText(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            var text = (value ?? "").Trim();
+            if (text.Length > 0)
+                return text;
+        }
+        return "";
     }
 
     private static void ApplyPrintLayout(IXLWorksheet ws)
@@ -216,8 +276,14 @@ public class CotractPiExcelService
 
     private static void ClearFeeCells(IXLWorksheet ws, int excelRow)
     {
-        for (var c = 10; c <= 13; c++)
-            ws.Cell(excelRow, c).Clear(XLClearOptions.Contents);
+        // J 列（10）属于 F:J 预计完成时间合并格，不能清
+        for (var c = 11; c <= 13; c++)
+        {
+            var cell = ws.Cell(excelRow, c);
+            if (cell.IsMerged() && cell.MergedRange().FirstCell().Address.ColumnNumber <= 6)
+                continue;
+            cell.Clear(XLClearOptions.Contents);
+        }
     }
 
     private static void EnsureBlocks(IXLWorksheet ws, int srcStartNpoi, int srcEndNpoi, int rowsPer, int count)

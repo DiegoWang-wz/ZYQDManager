@@ -26,7 +26,7 @@
                            Margin="Margin.Dense"
                            Dense="true"
                            Class="sir-type-select"
-                           Disabled="_busy || _reportReadOnly">
+                           Disabled="_busy">
                     @foreach (var t in SirReportTypes.Tests)
                     {
                         <MudSelectItem Value="@t.Value">@t.Label</MudSelectItem>
@@ -40,16 +40,12 @@
                            Margin="Margin.Dense"
                            Dense="true"
                            Class="sir-product-select"
-                           Disabled="_busy || _reportReadOnly">
+                           Disabled="_busy">
                     @foreach (var p in _productOptions)
                     {
                         <MudSelectItem Value="@p">@p</MudSelectItem>
                     }
                 </MudSelect>
-                @if (_reportReadOnly)
-                {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">业务员：报告只读，可维护样品留样</MudChip>
-                }
             </div>
             <div class="sir-toolbar-right">
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
@@ -65,7 +61,7 @@
                            Class="zyqd-btn-save"
                            StartIcon="@Icons.Material.Filled.Save"
                            OnClick="SaveAsync" Disabled="_busy || !_loaded">
-                    @(_reportReadOnly ? "保存样品" : "保存")
+                    保存
                 </MudButton>
             </div>
         </div>
@@ -76,7 +72,7 @@
         }
         else
         {
-            <div class="sir-form-wrap @(_reportReadOnly ? "sir-operator-sample-only" : null)">
+            <div class="sir-form-wrap">
                 <table class="sir-form-table">
                     <colgroup>
                         <col style="width:7%"/><col style="width:8%"/><col style="width:12%"/><col style="width:8%"/>
@@ -907,15 +903,6 @@
     .sir-form-table .mud-input > input.mud-input-slot,
     .sir-form-table .mud-input > input { font-size: 13px; }
 
-    /* 业务员：报告区不可编辑，仅样品留样可操作 */
-    .sir-form-wrap.sir-operator-sample-only > *:not(.sir-sample-block) {
-        pointer-events: none;
-        opacity: 0.88;
-    }
-    .sir-form-wrap.sir-operator-sample-only > .sir-sample-block {
-        pointer-events: auto;
-        opacity: 1;
-    }
     .sir-sample-row-readonly td {
         background: #fafafa;
     }
@@ -938,8 +925,8 @@
     private bool _loaded;
     private bool _imgUploading;
     private string _guid = "";
-    /// <summary>业务员：报告只读，仅可维护自己加的样品留样。</summary>
-    private bool _reportReadOnly;
+    /// <summary>业务员不能新建报告；已有报告可直接改主表和明细。留样行仍只改自己创建的。</summary>
+    private bool _operator;
     private string _empNo = "";
     private string _displayName = "";
     private bool ShowRemoteImages => SirService.IsRemoteWithoutSample(_reportType);
@@ -947,7 +934,7 @@
     private string CurrentCreatePersonLabel => SirService.FormatSampleCreatePerson(_empNo, _displayName);
 
     private bool CanEditSample(ZyqdSirSampleForFilingModel s) =>
-        !_reportReadOnly || SirService.IsSampleOwnedBy(s.CreatePerson, _empNo);
+        !_operator || SirService.IsSampleOwnedBy(s.CreatePerson, _empNo);
 
     private static string SampleCreatePersonText(ZyqdSirSampleForFilingModel s)
     {
@@ -967,13 +954,13 @@
                 _displayName = (displayName ?? "").Trim();
         }
 
-        _reportReadOnly = AppRoles.IsOperator(auth?.Role) && !AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
+        _operator = AppRoles.IsOperator(auth?.Role) && !AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
 
         var guid = (DocumentGuid ?? "").Trim();
         var isNew = guid.Length == 0 || string.Equals(guid, "new", StringComparison.OrdinalIgnoreCase);
-        if (_reportReadOnly && isNew)
+        if (_operator && isNew)
         {
-            Notify.Show("业务员不能新建检测报告，请打开已有报告维护样品留样", Severity.Warning);
+            Notify.Show("业务员不能新建检测报告，请打开已有报告维护", Severity.Warning);
             Nav.NavigateTo("/sir");
             return;
         }
@@ -1119,16 +1106,14 @@
                 Details = _details,
                 Samples = ShowSampleFiling ? _samples : [],
             };
-            var (ok, msg) = _reportReadOnly
-                ? await Sir.SaveSamplesOnlyAsync(doc, _empNo, _displayName)
-                : await Sir.SaveAsync(doc);
+            var (ok, msg) = await Sir.SaveAsync(doc);
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
                 return;
             }
 
-            Notify.Show(_reportReadOnly ? "样品留样已保存" : "保存成功", Severity.Success);
+            Notify.Show("保存成功", Severity.Success);
             if (!Nav.Uri.Contains(_guid, StringComparison.OrdinalIgnoreCase))
             {
                 var href = $"/sir/{Uri.EscapeDataString(_guid)}?rt={Uri.EscapeDataString(_reportType)}&pt={Uri.EscapeDataString(_productType)}";

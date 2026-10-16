@@ -230,7 +230,7 @@ public class QuotationBaseService
         where T : QuotationBaseEntity
     {
         var items = await set
-            .Where(x => idList.Contains(x.Id) && (x.deleteSigh == null || x.deleteSigh == ""))
+            .Where(x => idList.Contains(x.Id) && (x.deleteSigh == null || x.deleteSigh.Trim() != "X"))
             .ToListAsync(ct);
         foreach (var item in items)
         {
@@ -294,6 +294,9 @@ public class QuotationBaseService
         if (f.TryGetValue("Remark", out v)) row.Remark = v;
     }
 
+    private static bool IsDeleted(string? deleteSigh)
+        => string.Equals((deleteSigh ?? "").Trim(), "X", StringComparison.OrdinalIgnoreCase);
+
     private static async Task<bool> SoftDeleteEntityAsync<T>(
         DbSet<T> set, int id, string person, DateTime now, CancellationToken ct)
         where T : QuotationBaseEntity
@@ -330,7 +333,7 @@ public class QuotationBaseService
     private static IQueryable<T> Filter<T>(IQueryable<T> q, QuotationBaseQueryDto query)
         where T : QuotationBaseEntity
     {
-        q = q.Where(x => x.deleteSigh == null || x.deleteSigh == "");
+        q = q.Where(x => x.deleteSigh == null || x.deleteSigh.Trim() != "X");
 
         var kw = (query.Keyword ?? "").Trim();
         if (kw.Length == 0)
@@ -613,12 +616,44 @@ public class QuotationBaseService
         };
     }
 
+    /// <summary>按型号找回基础资料。Id 对不上时仍能把规格带出。</summary>
+    public async Task<QuotationBaseListItemDto?> FindByPartNoAsync(
+        string itemType, string? partNo, CancellationToken ct = default)
+    {
+        var part = (partNo ?? "").Trim();
+        if (part.Length == 0) return null;
+        var type = QuotationBaseTypes.Normalize(itemType);
+
+        return type switch
+        {
+            QuotationBaseTypes.Remote => await FindPartAsync(
+                _db.QuotationBaseRemotes.AsNoTracking(), part, MapRemote, ct),
+            QuotationBaseTypes.Accessory => await FindPartAsync(
+                _db.QuotationBaseAccessories.AsNoTracking(), part, MapAccessory, ct),
+            QuotationBaseTypes.CB => await FindPartAsync(
+                _db.QuotationBaseCbs.AsNoTracking(), part, MapCb, ct),
+            QuotationBaseTypes.PR => await FindPartAsync(
+                _db.QuotationBasePrs.AsNoTracking(), part, MapPr, ct),
+            _ => await FindPartAsync(
+                _db.QuotationBaseMotors.AsNoTracking(), part, MapMotor, ct),
+        };
+    }
+
+    private static async Task<QuotationBaseListItemDto?> FindPartAsync<T>(
+        IQueryable<T> q, string partNo, Func<T, QuotationBaseListItemDto> map, CancellationToken ct)
+        where T : QuotationBaseEntity
+    {
+        var rows = await q.Where(x => x.Part_No == partNo).OrderBy(x => x.Id).Take(8).ToListAsync(ct);
+        var row = rows.FirstOrDefault(x => !IsDeleted(x.deleteSigh)) ?? rows.FirstOrDefault();
+        return row is null ? null : map(row);
+    }
+
     private static async Task<QuotationBaseListItemDto?> MapOneAsync<T>(
         IQueryable<T> q, int id, Func<T, QuotationBaseListItemDto> map, CancellationToken ct)
         where T : QuotationBaseEntity
     {
         var row = await q.FirstOrDefaultAsync(
-            x => x.Id == id && (x.deleteSigh == null || x.deleteSigh == ""), ct);
+            x => x.Id == id && (x.deleteSigh == null || x.deleteSigh.Trim() != "X"), ct);
         return row is null ? null : map(row);
     }
 
@@ -857,27 +892,27 @@ public class QuotationBaseService
         return type switch
         {
             QuotationBaseTypes.Remote => await _db.QuotationBaseRemotes.AsNoTracking()
-                .Where(x => x.deleteSigh == null || x.deleteSigh == "")
+                .Where(x => x.deleteSigh == null || x.deleteSigh.Trim() != "X")
                 .OrderBy(x => x.Part_No)
                 .Select(x => new QuotationPartOptionDto { Id = x.Id, Part_No = x.Part_No ?? "", Label = x.Part_No })
                 .ToListAsync(ct),
             QuotationBaseTypes.Accessory => await _db.QuotationBaseAccessories.AsNoTracking()
-                .Where(x => x.deleteSigh == null || x.deleteSigh == "")
+                .Where(x => x.deleteSigh == null || x.deleteSigh.Trim() != "X")
                 .OrderBy(x => x.Part_No)
                 .Select(x => new QuotationPartOptionDto { Id = x.Id, Part_No = x.Part_No ?? "", Label = x.Part_No })
                 .ToListAsync(ct),
             QuotationBaseTypes.CB => await _db.QuotationBaseCbs.AsNoTracking()
-                .Where(x => x.deleteSigh == null || x.deleteSigh == "")
+                .Where(x => x.deleteSigh == null || x.deleteSigh.Trim() != "X")
                 .OrderBy(x => x.Part_No)
                 .Select(x => new QuotationPartOptionDto { Id = x.Id, Part_No = x.Part_No ?? "", Label = x.Part_No })
                 .ToListAsync(ct),
             QuotationBaseTypes.PR => await _db.QuotationBasePrs.AsNoTracking()
-                .Where(x => x.deleteSigh == null || x.deleteSigh == "")
+                .Where(x => x.deleteSigh == null || x.deleteSigh.Trim() != "X")
                 .OrderBy(x => x.Part_No)
                 .Select(x => new QuotationPartOptionDto { Id = x.Id, Part_No = x.Part_No ?? "", Label = x.Part_No })
                 .ToListAsync(ct),
             _ => await _db.QuotationBaseMotors.AsNoTracking()
-                .Where(x => x.deleteSigh == null || x.deleteSigh == "")
+                .Where(x => x.deleteSigh == null || x.deleteSigh.Trim() != "X")
                 .OrderBy(x => x.Part_No)
                 .Select(x => new QuotationPartOptionDto { Id = x.Id, Part_No = x.Part_No ?? "", Label = x.Part_No })
                 .ToListAsync(ct),
@@ -890,6 +925,6 @@ public class QuotationBaseService
         => set.AsNoTracking().AnyAsync(
             x => x.Part_No == partNo
                  && x.Id != excludeId
-                 && (x.deleteSigh == null || x.deleteSigh == ""),
+                 && (x.deleteSigh == null || x.deleteSigh.Trim() != "X"),
             ct);
 }

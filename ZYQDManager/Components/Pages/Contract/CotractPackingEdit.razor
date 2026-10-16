@@ -65,22 +65,6 @@
                     }
                 </MudSelect>
                 <div class="cpk-form-actions">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.MergeType"
-                               OnClick="OpenMergePallet" Disabled="_busy">
-                        拼托
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
-                               StartIcon="@Icons.Material.Filled.LinkOff"
-                               OnClick="CancelMergePallet" Disabled="_busy">
-                        取消拼托
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
-                               StartIcon="@Icons.Material.Filled.CallMerge"
-                               Class="cpk-icon-dir-right"
-                               OnClick="MergeSelectedLines" Disabled="_busy">
-                        合并
-                    </MudButton>
                     <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || _isCreate"
@@ -107,8 +91,8 @@
 
         <MudPaper Class="pa-2 cpk-picker-panel" Outlined="true">
             <MudGrid Spacing="2" Class="cpk-picker-grid align-center">
-                <MudItem xs="8" lg="6" Class="cpk-picker-left">
-                    <div class="cpk-picker-left-inner">
+                <MudItem xs="12" md="7" Class="cpk-picker-left-col">
+                    <div class="cpk-picker-left">
                         <MudTextField @bind-Value="_productClientNo"
                                       Label="产品客户号"
                                       Variant="Variant.Outlined"
@@ -134,21 +118,32 @@
                                          SearchFunc="SearchProductsAsync"
                                          ToStringFunc="@(p => p is null ? "" : ProductLabel(p))"
                                          Placeholder="@(_products.Count == 0 ? "先填客户号回车" : "输入物料号/名称/型号筛选")"/>
-                    </div>
-                </MudItem>
-                <MudItem xs="4" lg="6" Class="cpk-picker-right">
-                    <div class="cpk-picker-right-inner">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Add"
+                                   Class="cpk-picker-add"
                                    Disabled="_busy || _selectedProduct is null"
                                    OnClick="AddLineFromBaseAsync">
                             添加
                         </MudButton>
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
-                                   Disabled="_busy"
-                                   OnClick="AddLine">
-                            空白行
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="5" Class="cpk-picker-right-col">
+                    <div class="cpk-picker-ops">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.MergeType"
+                                   OnClick="OpenMergePallet" Disabled="_busy">
+                            拼托
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                                   StartIcon="@Icons.Material.Filled.LinkOff"
+                                   OnClick="CancelMergePallet" Disabled="_busy">
+                            取消拼托
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.CallMerge"
+                                   Class="cpk-icon-dir-right"
+                                   OnClick="MergeSelectedLines" Disabled="_busy">
+                            合并
                         </MudButton>
                     </div>
                 </MudItem>
@@ -169,7 +164,9 @@
                     <MudTh>客户型号</MudTh>
                     <MudTh>SAP订单</MudTh>
                     <MudTh>铭牌1</MudTh>
+                    <MudTh>铭牌1类型</MudTh>
                     <MudTh>铭牌2</MudTh>
+                    <MudTh>铭牌2类型</MudTh>
                     <MudTh Class="cpk-sticky-l1">物料号</MudTh>
                     <MudTh Class="cpk-sticky-l2">物料名</MudTh>
                     <MudTh Class="cpk-sticky-l3">数量</MudTh>
@@ -209,38 +206,37 @@
                     <MudTd Class="cpk-img-cell">
                         <CpkLineImg Label="客户外箱标识"
                                     Value="@line.Customer_outer_box_logo"
-                                    ValueChanged="v => line.Customer_outer_box_logo = v"
-                                    ReadOnly="_busy"/>
+                                    ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
                         <CpkFitText Value="@line.Client_poNo" ValueChanged="v => line.Client_poNo = v" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitText Value="@line.materialModel" ValueChanged="v => line.materialModel = v" Disabled="_busy"/>
+                        <CpkFitText Value="@line.materialModel" ReadOnly="true" MinChars="6"/>
                     </MudTd>
                     <MudTd>
                         <CpkFitText Value="@line.SAP_order_NO" ValueChanged="v => line.SAP_order_NO = v" Disabled="_busy" MinChars="8"/>
                     </MudTd>
                     <MudTd Class="cpk-img-cell">
-                        <CpkLineImg Label="铭牌1"
-                                    Value="@line.nameplate_url"
-                                    ValueChanged="v => line.nameplate_url = v"
-                                    ReadOnly="_busy"/>
+                        <CpkLineImg Label="铭牌1" Value="@line.nameplate_url" ReadOnly="true"/>
+                    </MudTd>
+                    <MudTd>
+                        <CpkFitText Value="@line.nameplate_type" ReadOnly="true" MinChars="4"/>
                     </MudTd>
                     <MudTd Class="cpk-img-cell">
-                        <CpkLineImg Label="铭牌2"
-                                    Value="@line.nameplate_url2"
-                                    ValueChanged="v => line.nameplate_url2 = v"
-                                    ReadOnly="_busy"/>
+                        <CpkLineImg Label="铭牌2" Value="@line.nameplate_url2" ReadOnly="true"/>
+                    </MudTd>
+                    <MudTd>
+                        <CpkFitText Value="@line.nameplate_type2" ReadOnly="true" MinChars="4"/>
                     </MudTd>
                     <MudTd Class="cpk-sticky-l1">
                         <div class="cpk-sticky-clip">
-                            <CpkFitText Value="@line.materialNo" ValueChanged="v => line.materialNo = v" Disabled="_busy"/>
+                            <CpkFitText Value="@line.materialNo" ReadOnly="true"/>
                         </div>
                     </MudTd>
                     <MudTd Class="cpk-sticky-l2">
                         <div class="cpk-sticky-clip">
-                            <CpkFitText Value="@line.materialName" ValueChanged="v => line.materialName = v" Disabled="_busy" MinChars="8"/>
+                            <CpkFitText Value="@line.materialName" ReadOnly="true" MinChars="8"/>
                         </div>
                     </MudTd>
                     <MudTd Class="cpk-sticky-l3">
@@ -249,14 +245,10 @@
                         </div>
                     </MudTd>
                     <MudTd>
-                        <CpkFitText Value="@line.Packing_method"
-                                    ValueChanged="v => OnLineChanged(line, () => line.Packing_method = v)"
-                                    Disabled="_busy"/>
+                        <CpkFitText Value="@line.Packing_method" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitText Value="@line.Packing_method_unit"
-                                    ValueChanged="v => line.Packing_method_unit = v"
-                                    Disabled="_busy"/>
+                        <CpkFitText Value="@line.Packing_method_unit" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
                         <CpkFitNum Value="line.box_qty" ReadOnly="true"/>
@@ -265,9 +257,7 @@
                         <CpkFitText Value="@(line.var1 ?? "0")" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitText Value="@line.Carton_Size"
-                                    ValueChanged="v => OnLineChanged(line, () => line.Carton_Size = v)"
-                                    Disabled="_busy"/>
+                        <CpkFitText Value="@line.Carton_Size" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
                         @if (mergeMember)
@@ -313,10 +303,10 @@
                         <CpkFitText Value="@line.var4" ValueChanged="v => line.var4 = v" Disabled="_busy"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitNum Value="line.Net_weight" ValueChanged="v => OnLineChanged(line, () => line.Net_weight = v)" Disabled="_busy"/>
+                        <CpkFitNum Value="line.Net_weight" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
-                        <CpkFitNum Value="line.gross_weight" ValueChanged="v => OnLineChanged(line, () => line.gross_weight = v)" Disabled="_busy"/>
+                        <CpkFitNum Value="line.gross_weight" ReadOnly="true"/>
                     </MudTd>
                     <MudTd>
                         <CpkFitNum Value="line.total_Net_weight" ReadOnly="true"/>
@@ -367,6 +357,8 @@
                 <FooterContent>
                     <MudTd></MudTd>
                     <MudTd Class="cpk-summary-label">数据汇总</MudTd>
+                    <MudTd></MudTd>
+                    <MudTd></MudTd>
                     <MudTd></MudTd>
                     <MudTd></MudTd>
                     <MudTd></MudTd>
@@ -477,23 +469,45 @@
     }
     .cpk-picker-panel { flex: 0 0 auto; }
     .cpk-picker-grid { width: 100%; margin: 0 !important; }
-    .cpk-picker-left { display: flex; align-items: center; min-width: 0; }
-    .cpk-picker-left-inner {
+    .cpk-picker-left-col,
+    .cpk-picker-right-col {
+        display: flex !important;
+        align-items: center;
+        min-width: 0;
+    }
+    .cpk-picker-left {
         display: flex;
         align-items: center;
         gap: 8px;
         width: 100%;
         min-width: 0;
     }
-    .cpk-picker-client { width: 120px; max-width: 120px; flex: 0 0 120px; }
-    .cpk-picker-product { flex: 1 1 auto; min-width: 0; }
-    .cpk-picker-right { display: flex !important; justify-content: flex-end; align-items: center; }
-    .cpk-picker-right-inner {
+    /* 客户号、添加固定宽；产品选择器吃掉左侧剩余 */
+    .cpk-picker-client { width: 120px; flex: 0 0 120px; }
+    .cpk-picker-product {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+    .cpk-picker-product.mud-input-control,
+    .cpk-picker-product .mud-input-control {
+        margin-top: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+    }
+    .cpk-picker-add {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+    .cpk-picker-right-col { justify-content: flex-end; }
+    .cpk-picker-ops {
         display: flex;
         align-items: center;
         gap: 8px;
-        justify-content: flex-end;
+        flex: 0 0 auto;
         flex-wrap: wrap;
+        justify-content: flex-end;
     }
     /* 汇总行钉在滚动区底部，纵向滚动时始终可见 */
     .cpk-line-table .mud-table-foot .mud-table-cell {
@@ -847,6 +861,7 @@
             return;
         }
         ApplyRows(rows);
+        await CotractBase.ApplyNameplateTypesAsync(_header.ClientNo, _lines);
         SyncProductClientFromHeader();
     }
 
@@ -860,6 +875,7 @@
             return;
         }
         ApplyRows(rows);
+        await CotractBase.ApplyNameplateTypesAsync(_header.ClientNo, _lines);
     }
 
     private void ApplyRows(List<ZyqdCustomsAndPackingModel> rows)
@@ -1027,22 +1043,14 @@
             Box_label2 = row.Box_label2,
             Box_label_url2 = row.Box_label_url2,
             nameplate_url = row.nameplate_url,
+            nameplate_type = NameplateTypes.Normalize(row.nameplate_type),
             nameplate_url2 = row.nameplate_url2,
+            nameplate_type2 = NameplateTypes.Normalize(row.nameplate_type2),
             Customer_destination_country = _header.Customer_destination_country
         };
         CustomsAndPackingCalc.RecalcLine(line);
         _lines.Add(line);
-        RefreshSummary();
-    }
-
-    private void AddLine()
-    {
-        _lines.Add(new CustomsAndPackingLineDto
-        {
-            TempId = ++_tempSeq,
-            var7 = "原始行",
-            Customer_destination_country = _header.Customer_destination_country
-        });
+        _selectedProduct = null;
         RefreshSummary();
     }
 

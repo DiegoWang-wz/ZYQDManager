@@ -143,6 +143,42 @@ public class CotractBaseService
     public Task<ZyqdCotractBaseModel?> GetAsync(int id, CancellationToken ct = default)
         => _db.CotractBases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
 
+    /// <summary>按客户编号 + 物料号，把合同基础数据里的铭牌类型填到装箱明细（仅展示，不落装箱单表）。</summary>
+    public async Task ApplyNameplateTypesAsync(
+        string? clientNo, IList<CustomsAndPackingLineDto> lines, CancellationToken ct = default)
+    {
+        clientNo = CotractPiTypes.NormalizeClientNo(clientNo);
+        if (clientNo.Length == 0 || lines.Count == 0) return;
+
+        var mats = lines
+            .Select(x => (x.materialNo ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (mats.Count == 0) return;
+
+        var rows = await _db.CotractBases.AsNoTracking()
+            .Where(x => x.ClientNo == clientNo && x.materialNo != null && mats.Contains(x.materialNo))
+            .Select(x => new { x.materialNo, x.nameplate_type, x.nameplate_type2 })
+            .ToListAsync(ct);
+
+        var map = new Dictionary<string, (string? Type1, string? Type2)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var key = (r.materialNo ?? "").Trim();
+            if (key.Length == 0 || map.ContainsKey(key)) continue;
+            map[key] = (NameplateTypes.Normalize(r.nameplate_type), NameplateTypes.Normalize(r.nameplate_type2));
+        }
+
+        foreach (var line in lines)
+        {
+            var key = (line.materialNo ?? "").Trim();
+            if (key.Length == 0 || !map.TryGetValue(key, out var types)) continue;
+            line.nameplate_type = types.Type1;
+            line.nameplate_type2 = types.Type2;
+        }
+    }
+
     public async Task<List<ZyqdCotractBaseModel>> ListByClientNoAsync(string? clientNo, CancellationToken ct = default)
     {
         clientNo = CotractPiTypes.NormalizeClientNo(clientNo);
@@ -1111,6 +1147,14 @@ public class CotractBaseService
     private IQueryable<ZyqdCotractBaseModel> BuildFiltered(CotractBaseQueryDto query)
     {
         var q = ApplyScope(_db.CotractBases.AsNoTracking(), query);
+        // 没有物料明细的行不占列表位置
+        q = q.Where(x =>
+            (x.materialNo != null && x.materialNo.Trim() != "")
+            || (x.materialName != null && x.materialName.Trim() != "")
+            || (x.materialModel != null && x.materialModel.Trim() != "")
+            || (x.materiaSpecs != null && x.materiaSpecs.Trim() != "")
+            || (x.materiaPowered != null && x.materiaPowered.Trim() != "")
+            || (x.materiaCust != null && x.materiaCust.Trim() != ""));
 
         if (string.Equals(query.FilterColumn, "CreateTime", StringComparison.Ordinal))
             return FilterCreateTimeRange(q, query.DateStart, query.DateEnd);

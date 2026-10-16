@@ -1373,7 +1373,7 @@
         if (!viewAll && auth is not null && !string.IsNullOrWhiteSpace(auth.EmpNo))
         {
             var (_, _, info, _) = await UserInfo.GetAsync(auth.EmpNo);
-            viewAll = Auth.CanViewAllCustomers(auth, info);
+            viewAll = Auth.CanViewAllPiCi(auth, info);
         }
         return new CotractPiQueryDto
         {
