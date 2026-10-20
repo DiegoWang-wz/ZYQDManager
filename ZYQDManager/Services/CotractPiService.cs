@@ -226,6 +226,7 @@ public class CotractPiService
             return (false, err, header.DocumentGuid);
 
         header.ClientNo = CotractPiTypes.NormalizeClientNo(header.ClientNo);
+        CotractPiTypes.ApplySplitPaymentDefaults(header);
         header.Cotract_PI_type = CotractPiTypes.ResolveTemplateType(header.var6, header.ClientNo);
         header.var11 = CotractPiTypes.DocumentKind(header.var6);
         header.var12 = CotractPiTypes.ResolveVar12(header.Cotract_PI_type);

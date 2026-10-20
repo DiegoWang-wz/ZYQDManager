@@ -203,9 +203,9 @@ public class SirService
     }
 
     /// <summary>
-    /// 业务员专用：仅增改删自己创建的样品留样行（CreatePerson=工号-姓名），不改他人行与报告主表/明细。
+    /// 业务员专用：只更新认证勾选 + 自己创建的留样行，不改测试明细与其它主表字段。
     /// </summary>
-    public async Task<(bool Ok, string? Message)> SaveSamplesOnlyAsync(
+    public async Task<(bool Ok, string? Message)> SaveOperatorAsync(
         SirDocumentDto doc, string empNo, string? displayName = null, CancellationToken ct = default)
     {
         empNo = (empNo ?? "").Trim();
@@ -225,37 +225,53 @@ public class SirService
         if (reportType.Length == 0)
             return (false, "报告类型为空");
 
-        var existing = await _db.SirMains.AsNoTracking().FirstOrDefaultAsync(x => x.guid == guid, ct);
+        if (!doc.Main.UL && !doc.Main.FCC && !doc.Main.CE && !doc.Main.RoHS && !doc.Main.REACH && !doc.Main.Certification_None)
+            return (false, "认证测试要求必选");
+
+        var existing = await _db.SirMains.FirstOrDefaultAsync(x => x.guid == guid, ct);
         if (existing is null)
             return (false, "报告不存在，业务员不能新建检测报告，请联系检测员或管理员");
 
-        if (!NeedsSampleFiling(reportType))
-            return (false, "当前报告类型无需留样记录");
+        // 仅认证区（图二）
+        existing.UL = doc.Main.UL;
+        existing.FCC = doc.Main.FCC;
+        existing.CE = doc.Main.CE;
+        existing.RoHS = doc.Main.RoHS;
+        existing.REACH = doc.Main.REACH;
+        existing.Certification_None = doc.Main.Certification_None;
 
-        // 仅合并本人行：他人行不删不改
-        var oldSamples = await _db.SirSamples
-            .Where(x => x.main_guid == guid && x.Report_type == reportType)
-            .ToListAsync(ct);
-        var oldOwnedIds = oldSamples
-            .Where(x => IsSampleOwnedBy(x.CreatePerson, empNo))
-            .Select(x => x.Id)
-            .ToHashSet();
+        // 留样区（图三）：有留样类型时才合并本人行
+        if (NeedsSampleFiling(reportType))
+        {
+            var oldSamples = await _db.SirSamples
+                .Where(x => x.main_guid == guid && x.Report_type == reportType)
+                .ToListAsync(ct);
+            var oldOwnedIds = oldSamples
+                .Where(x => IsSampleOwnedBy(x.CreatePerson, empNo))
+                .Select(x => x.Id)
+                .ToHashSet();
 
-        var clientOwned = (doc.Samples ?? [])
-            .Where(x => x.Id == 0 || oldOwnedIds.Contains(x.Id))
-            .ToList();
+            var clientOwned = (doc.Samples ?? [])
+                .Where(x => x.Id == 0 || oldOwnedIds.Contains(x.Id))
+                .ToList();
 
-        MergeSamples(
-            oldSamples,
-            guid,
-            reportType,
-            clientOwned,
-            createPersonOverride: createPersonLabel,
-            deleteScopeIds: oldOwnedIds);
+            MergeSamples(
+                oldSamples,
+                guid,
+                reportType,
+                clientOwned,
+                createPersonOverride: createPersonLabel,
+                deleteScopeIds: oldOwnedIds);
+        }
 
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
+
+    /// <summary>兼容旧调用：等同 <see cref="SaveOperatorAsync"/>（含认证）。</summary>
+    public Task<(bool Ok, string? Message)> SaveSamplesOnlyAsync(
+        SirDocumentDto doc, string empNo, string? displayName = null, CancellationToken ct = default)
+        => SaveOperatorAsync(doc, empNo, displayName, ct);
 
     /// <summary>
     /// 样品留样按 Id 同步：有 Id 则更新，无 Id 则新增；库中多出的行删除。

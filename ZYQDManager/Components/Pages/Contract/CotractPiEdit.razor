@@ -172,7 +172,7 @@
                     <td colspan="1" class="cpi-label">Model#:</td>
                     <td colspan="7"><input class="cpi-cell" readonly value="@line.materialModel"/></td>
                     <td colspan="2">
-                        <input class="cpi-cell cpi-edit cpi-center" type="number" step="@QtyStep(line.var7)" min="1" value="@QtyText(line.qty, line.var7)" @onchange="e => OnNativeQty(e, idx)"/>
+                        <input class="cpi-cell cpi-edit cpi-center" type="number" step="@QtyStep(line.var7)" min="0" value="@QtyText(line.qty, line.var7)" @onchange="e => OnNativeQty(e, idx)"/>
                     </td>
                     <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@line.var7"/></td>
                     <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
@@ -245,31 +245,51 @@
                 <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                 <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.TOTAL.ToString("0.00")"/></td>
             </tr>
-            <tr>
-                <td colspan="18" class="cpi-bank">@_company.Bank1</td>
-                <td colspan="2" class="cpi-right">DEPOSIT DUE AT TIME OF ORDER</td>
-                <td colspan="2">
-                    <input class="cpi-cell cpi-edit cpi-center" value="@_header.Payment_ratio" @onchange="OnNativeRatio"/>
-                </td>
-                <td colspan="2" class="cpi-center">%</td>
-                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
-                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.Payment_ratio_Ext.ToString("0.00")"/></td>
-            </tr>
-            <tr>
-                <td colspan="18" class="cpi-bank">@_company.Bank2</td>
-                <td colspan="6" class="cpi-pay-cell">
-                    <div class="cpi-pay-full">@SelectedPaymentDisplay</div>
-                    <select class="cpi-pay-ghost" @bind="_header.var3" title="@SelectedPaymentDisplay">
-                        <option value="">未选择-null</option>
-                        @foreach (var p in CotractPiTypes.PaymentMethods)
-                        {
-                            <option value="@p.Value">@p.Display</option>
-                        }
-                    </select>
-                </td>
-                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
-                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.balance_before_delivery.ToString("0.00")"/></td>
-            </tr>
+            @if (ShowSplitBalancePayment)
+            {
+                <tr>
+                    <td colspan="18" class="cpi-bank">@_company.Bank1</td>
+                    <td colspan="4" class="cpi-right">UPON DESPATCH</td>
+                    <td colspan="2" class="cpi-center">50%</td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@SplitBalanceFirst.ToString("0.00")"/></td>
+                </tr>
+                <tr>
+                    <td colspan="18" class="cpi-bank">@_company.Bank2</td>
+                    <td colspan="4" class="cpi-right">WITHIN 10 DAYS AFTER ARRIVAL</td>
+                    <td colspan="2" class="cpi-center">50%</td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@SplitBalanceSecond.ToString("0.00")"/></td>
+                </tr>
+            }
+            else
+            {
+                <tr>
+                    <td colspan="18" class="cpi-bank">@_company.Bank1</td>
+                    <td colspan="2" class="cpi-right">DEPOSIT DUE AT TIME OF ORDER</td>
+                    <td colspan="2">
+                        <input class="cpi-cell cpi-edit cpi-center" value="@_header.Payment_ratio" @onchange="OnNativeRatio"/>
+                    </td>
+                    <td colspan="2" class="cpi-center">%</td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.Payment_ratio_Ext.ToString("0.00")"/></td>
+                </tr>
+                <tr>
+                    <td colspan="18" class="cpi-bank">@_company.Bank2</td>
+                    <td colspan="6" class="cpi-pay-cell">
+                        <div class="cpi-pay-full">@SelectedPaymentDisplay</div>
+                        <select class="cpi-pay-ghost" @bind="_header.var3" title="@SelectedPaymentDisplay">
+                            <option value="">未选择-null</option>
+                            @foreach (var p in CotractPiTypes.PaymentMethods)
+                            {
+                                <option value="@p.Value">@p.Display</option>
+                            }
+                        </select>
+                    </td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.balance_before_delivery.ToString("0.00")"/></td>
+                </tr>
+            }
             <tr>
                 <td colspan="18" class="cpi-bank">@_company.Bank3</td>
                 <td colspan="10" class="cpi-warn">Payer is responsible for all wire fees.</td>
@@ -661,6 +681,13 @@
             return string.IsNullOrWhiteSpace(hit?.Display) ? v : hit.Display;
         }
     }
+
+    private bool ShowSplitBalancePayment
+        => CotractPiTypes.ShouldSplitBalancePayment(_header.ClientNo);
+
+    private double SplitBalanceFirst => CotractPiTypes.SplitBalanceAmounts(_header.TOTAL).First;
+
+    private double SplitBalanceSecond => CotractPiTypes.SplitBalanceAmounts(_header.TOTAL).Second;
     private bool _unfreezeAfterRender;
 
     private async Task OpenDatePickerAsync()
@@ -986,13 +1013,13 @@
     private static string QtyStep(string? unit) => IsPieceQty(unit) ? "1" : "0.01";
 
     private static string QtyText(double qty, string? unit)
-        => IsPieceQty(unit) ? Math.Max(1, Math.Round(qty, 0)).ToString("0") : qty.ToString("0.##");
+        => IsPieceQty(unit) ? Math.Max(0, Math.Round(qty, 0)).ToString("0") : qty.ToString("0.##");
 
     private static double NormalizeQty(string? unit, double qty)
     {
         if (IsPieceQty(unit))
-            return Math.Max(1, Math.Round(qty, 0, MidpointRounding.AwayFromZero));
-        return Math.Max(1, Math.Round(qty, 2));
+            return Math.Max(0, Math.Round(qty, 0, MidpointRounding.AwayFromZero));
+        return Math.Max(0, Math.Round(qty, 2));
     }
 
     private void OnNativeShipFee(ChangeEventArgs e)
@@ -1040,6 +1067,7 @@
                 _shipClientNo = _billClientNo;
             if (string.IsNullOrWhiteSpace(_productClientNo))
                 _productClientNo = _billClientNo;
+            ApplySplitPaymentDefaults();
             await LoadShipToAsync();
             await LoadProductsAsync();
             await RefreshInvoiceNoAsync();
@@ -1152,7 +1180,7 @@
         }
 
         var origin = row.price;
-        var qty = NormalizeQty(row.Quantity_unit, 1);
+        var qty = NormalizeQty(row.Quantity_unit, 0);
         _lines.Add(new CotractPiLineDto
         {
             materiaCust = row.materiaCust,
@@ -1241,8 +1269,22 @@
         RecalcTotals();
     }
 
+    private void ApplySplitPaymentDefaults()
+    {
+        if (!CotractPiTypes.IsSplitBalancePaymentClient(_header.ClientNo)) return;
+        _header.var3 = CotractPiTypes.SplitBalancePaymentMethod;
+        _header.Payment_ratio = 0;
+        RecalcTotals();
+    }
+
     private void RecalcTotals()
     {
+        if (CotractPiTypes.IsSplitBalancePaymentClient(_header.ClientNo))
+        {
+            _header.var3 = CotractPiTypes.SplitBalancePaymentMethod;
+            _header.Payment_ratio = 0;
+        }
+
         var ship = ShowShipping ? _shipFeeAmt : 0;
         var insure = ShowInsurance ? _header.Insurance_premium : 0;
         var total = _lines.Sum(x => x.ext) + ship + insure;

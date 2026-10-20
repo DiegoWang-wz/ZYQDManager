@@ -333,7 +333,7 @@
         if (!firstRender || _ready) return;
 
         var auth = await Auth.GetStoredAsync();
-        // 业务员可编辑已有报告；新增、删除仍仅检测员/管理员
+        // 业务员可打开已有报告（仅改认证+本人留样）；新增/删除仍仅检测员/管理员
         _canManageReports = !AppRoles.IsOperator(auth?.Role) || AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
 
         // 仅顶栏「返回」时恢复上一次筛选/分页

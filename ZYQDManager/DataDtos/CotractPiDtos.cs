@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using ZYQDManager.DataModels;
 using ZYQDManager.Utilities;
 
 namespace ZYQDManager.DataDtos;
@@ -184,6 +185,75 @@ public static class CotractPiTypes
                 return true;
         }
         return false;
+    }
+
+    public static string SplitBalancePaymentMethod
+    {
+        get
+        {
+            var v = (Opt.SplitBalancePaymentMethod ?? "").Trim();
+            return v.Length > 0
+                ? v
+                : "UPON DESPATCH 50%，WITHIN 10 DAYS AFTER ARRIVAL 50%";
+        }
+    }
+
+    public static bool IsSplitBalancePaymentClient(string? clientNo)
+    {
+        var code = NormalizeClientNo(clientNo);
+        if (code.Length == 0) return false;
+        var list = Opt.SplitBalancePaymentClientNos;
+        if (list is null || list.Count == 0)
+            list = SelectOptions.Defaults.SplitBalancePaymentClientNos;
+        return list.Any(x => string.Equals(NormalizeClientNo(x), code, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsSplitBalancePaymentMethod(string? paymentMethod)
+    {
+        var selected = NormalizePaymentKey(paymentMethod);
+        if (selected.Length == 0) return false;
+        var target = NormalizePaymentKey(SplitBalancePaymentMethod);
+        return selected == target
+               || (selected.Contains("UPONDESPATCH", StringComparison.Ordinal)
+                   && selected.Contains("WITHIN10DAYSAFTERARRIVAL", StringComparison.Ordinal));
+    }
+
+    /// <summary>指定客户：自动第 15 条付款条件，隐藏定金行，按总金额拆两行各 50%。</summary>
+    public static bool ShouldSplitBalancePayment(string? clientNo)
+        => IsSplitBalancePaymentClient(clientNo);
+
+    /// <summary>兼容旧调用；以客户名单为准。</summary>
+    public static bool ShouldSplitBalancePayment(string? clientNo, string? paymentMethod)
+        => ShouldSplitBalancePayment(clientNo);
+
+    public static (double First, double Second) SplitBalanceAmounts(double total)
+    {
+        var first = Math.Round(total * 0.5, 2, MidpointRounding.AwayFromZero);
+        var second = Math.Round(total - first, 2, MidpointRounding.AwayFromZero);
+        return (first, second);
+    }
+
+    /// <summary>特殊客户落库时固定付款条件与定金比例。</summary>
+    public static void ApplySplitPaymentDefaults(ZyqdCotractPiModel header)
+    {
+        if (!IsSplitBalancePaymentClient(header.ClientNo)) return;
+        header.var3 = SplitBalancePaymentMethod;
+        header.Payment_ratio = 0;
+        header.Payment_ratio_Ext = 0;
+        header.balance_before_delivery = Math.Round(header.TOTAL, 2);
+    }
+
+    private static string NormalizePaymentKey(string? text)
+    {
+        var s = (text ?? "").Trim().ToUpperInvariant();
+        if (s.Length == 0) return "";
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s)
+        {
+            if (char.IsLetterOrDigit(ch))
+                sb.Append(ch);
+        }
+        return sb.ToString();
     }
 }
 

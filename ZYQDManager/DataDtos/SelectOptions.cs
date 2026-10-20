@@ -20,6 +20,11 @@ public sealed class SelectOptions
     public Dictionary<string, string> OrderTypeTemplates { get; set; } = new(StringComparer.Ordinal);
     public List<string> TradeTerms { get; set; } = [];
     public List<SelectOptionItem> PaymentMethods { get; set; } = [];
+    /// <summary>尾款拆成「发货前 50% / 到货后 10 天 50%」时匹配的付款条件原文。</summary>
+    public string SplitBalancePaymentMethod { get; set; }
+        = "UPON DESPATCH 50%，WITHIN 10 DAYS AFTER ARRIVAL 50%";
+    /// <summary>需要拆分显示尾款金额的客户编号。</summary>
+    public List<string> SplitBalancePaymentClientNos { get; set; } = [];
 
     public IReadOnlyList<string> ResolvedOrderTypes()
         => OrderTypes.Count > 0 ? OrderTypes : Defaults.OrderTypes;
@@ -76,6 +81,8 @@ public sealed class SelectOptions
             ["贸易订单（1300-2001）"] = "JS",
             ["寄售订单（1300-2001）"] = "JS"
         },
-        TradeTerms = ["EXW", "FOB", "C&F", "CIF", "DAP", "DDU", "DDP"]
+        TradeTerms = ["EXW", "FOB", "C&F", "CIF", "DAP", "DDU", "DDP"],
+        SplitBalancePaymentMethod = "UPON DESPATCH 50%，WITHIN 10 DAYS AFTER ARRIVAL 50%",
+        SplitBalancePaymentClientNos = ["10008021", "10011057", "10011830", "10011386"]
     };
 }

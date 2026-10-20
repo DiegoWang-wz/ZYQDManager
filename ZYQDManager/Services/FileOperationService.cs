@@ -5,7 +5,7 @@ using ZYQDManager.Utilities;
 namespace ZYQDManager.Services;
 
 /// <summary>
-/// 老系统文件加解密：http://192.168.3.240:16751/FileOperation
+/// 文件加解密（Development 走 240 共享盘；正式部署走 246 本机 D:\Files，见 appsettings）。
 /// EncodeFile / decodeFile / DeleteFile，参数与 EM_SunshadeDataSource.BLL.FileDecode 一致。
 /// </summary>
 public class FileOperationService

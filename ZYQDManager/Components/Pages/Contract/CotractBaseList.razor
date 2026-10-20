@@ -109,115 +109,109 @@
                   Class="cotract-base-table">
             <HeaderContent>
                 <MudTh Class="cb-no-cell">序号</MudTh>
-                @if (_showOuterBox) { <MudTh>客户外箱标志</MudTh> }
-                @if (_showTuoMark) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Tuo_Mark">托唛</MudTableSortLabel></MudTh> }
-                @if (_showTuoImg) { <MudTh>托唛(图)</MudTh> }
-                @if (_showCountry) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_destination_country">客户目的国</MudTableSortLabel></MudTh> }
+                <MudTh>客户外箱标志</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Tuo_Mark">托唛</MudTableSortLabel></MudTh>
+                <MudTh>托唛（图片）</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_destination_country">客户目的国</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="ClientNo">客户编号</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="ClientName">客户名称</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialNo">物料号</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialName">物料名</MudTableSortLabel></MudTh>
-                @if (_showMatType) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialType">物料类型</MudTableSortLabel></MudTh> }
-                @if (_showMatModel) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialModel">物料model</MudTableSortLabel></MudTh> }
-                @if (_showSpecs) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaSpecs">物料specs</MudTableSortLabel></MudTh> }
-                @if (_showPowered) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaPowered">物料Powered</MudTableSortLabel></MudTh> }
-                @if (_showCust) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaCust">物料Cust</MudTableSortLabel></MudTh> }
-                @if (_showNotes) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Notes">备注Notes</MudTableSortLabel></MudTh> }
-                @if (_showQtyUnit) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Quantity_unit">数量单位</MudTableSortLabel></MudTh> }
-                @if (_showCurrency) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="currency_unit">货币单位</MudTableSortLabel></MudTh> }
-                @if (_showPrice) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price">单价</MudTableSortLabel></MudTh> }
-                @if (_showPriceUnit) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price_unit">单价单位</MudTableSortLabel></MudTh> }
-                @if (_showBoxLabel) { <MudTh Class="cb-box-label-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label">箱唛</MudTableSortLabel></MudTh> }
-                @if (_showBoxImg) { <MudTh>箱唛图例</MudTh> }
-                @if (_showBox2) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label2">箱唛2</MudTableSortLabel></MudTh> }
-                @if (_showBoxImg2) { <MudTh>箱唛图例2</MudTh> }
-                @if (_showPo) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Client_poNo">客户po号</MudTableSortLabel></MudTh> }
-                @if (_showPlate) { <MudTh>铭牌图片</MudTh> }
-                @if (_showPlateType) { <MudTh>铭牌1类型</MudTh> }
-                @if (_showPlate2) { <MudTh>铭牌图片2</MudTh> }
-                @if (_showPlateType2) { <MudTh>铭牌2类型</MudTh> }
-                @if (_showSap) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="SAP_order_NO">sap单号</MudTableSortLabel></MudTh> }
-                @if (_showPack) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method">打包方式</MudTableSortLabel></MudTh> }
-                @if (_showPackUnit) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method_unit">打包方式单位</MudTableSortLabel></MudTh> }
-                @if (_showCarton) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Carton_Size">纸箱尺寸</MudTableSortLabel></MudTh> }
-                @if (_showPallet) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Pallet_Size">托盘尺寸</MudTableSortLabel></MudTh> }
-                @if (_showPalletMethod) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="palletizing_method">打托方式</MudTableSortLabel></MudTh> }
-                @if (_showPalletUnit) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="palletizing_method_unit">打托方式单位</MudTableSortLabel></MudTh> }
-                @if (_showNet) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Net_weight">净重</MudTableSortLabel></MudTh> }
-                @if (_showGross) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="gross_weight">毛重</MudTableSortLabel></MudTh> }
-                @if (_showManager) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_Manager">负责人</MudTableSortLabel></MudTh> }
-                @if (_showCreator) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh> }
-                @if (_showCreateTime) { <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建日期</MudTableSortLabel></MudTh> }
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialNo">物料编号</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialName">物料名称</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialType">物料类型</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materialModel">物料model</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaSpecs">物料specs</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaPowered">物料Powered</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="materiaCust">物料Cust</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Notes">备注Notes</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Quantity_unit">数量单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="currency_unit">货币单位</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price">单价</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="price_unit">单价单位</MudTableSortLabel></MudTh>
+                <MudTh Class="cb-box-label-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label">箱唛1</MudTableSortLabel></MudTh>
+                <MudTh>箱唛1图片</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Box_label2">箱唛2</MudTableSortLabel></MudTh>
+                <MudTh>箱唛2图片</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Client_poNo">客户po号</MudTableSortLabel></MudTh>
+                <MudTh>铭牌1图片</MudTh>
+                <MudTh>铭牌1类型</MudTh>
+                <MudTh>铭牌2图片</MudTh>
+                <MudTh>铭牌2类型</MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="SAP_order_NO">sap单号</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method">打包方式</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Packing_method_unit">打包方式（单位）</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Carton_Size">纸箱尺寸</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Pallet_Size">托盘尺寸</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="palletizing_method">打托方式</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="palletizing_method_unit">打托方式（单位）</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Net_weight">净重（KG）</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="gross_weight">毛重（KG）</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_Manager">客户负责人</MudTableSortLabel></MudTh>
+                <MudTh Class="cb-creator-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
+                <MudTh Class="cb-createtime-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
                 <MudTh Class="cb-ops-cell">操作</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd Class="cb-no-cell">@RowNo(context)</MudTd>
-                @if (_showOuterBox) { <MudTd><LegacyRemoteImg Path="@context.Customer_outer_box_logo"/></MudTd> }
-                @if (_showTuoMark) { <MudTd>@context.Tuo_Mark</MudTd> }
-                @if (_showTuoImg) { <MudTd><LegacyRemoteImg Path="@context.Tuo_Mark_url"/></MudTd> }
-                @if (_showCountry) { <MudTd>@context.Customer_destination_country</MudTd> }
+                <MudTd><LegacyRemoteImg Path="@context.Customer_outer_box_logo"/></MudTd>
+                <MudTd>@context.Tuo_Mark</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Tuo_Mark_url"/></MudTd>
+                <MudTd>@context.Customer_destination_country</MudTd>
                 <MudTd>@context.ClientNo</MudTd>
                 <MudTd>@context.ClientName</MudTd>
                 <MudTd>@context.materialNo</MudTd>
                 <MudTd>@context.materialName</MudTd>
-                @if (_showMatType) { <MudTd>@context.materialType</MudTd> }
-                @if (_showMatModel) { <MudTd>@context.materialModel</MudTd> }
-                @if (_showSpecs) { <MudTd>@context.materiaSpecs</MudTd> }
-                @if (_showPowered) { <MudTd>@context.materiaPowered</MudTd> }
-                @if (_showCust) { <MudTd>@context.materiaCust</MudTd> }
-                @if (_showNotes) { <MudTd>@context.Notes</MudTd> }
-                @if (_showQtyUnit) { <MudTd>@context.Quantity_unit</MudTd> }
-                @if (_showCurrency) { <MudTd>@context.currency_unit</MudTd> }
-                @if (_showPrice) { <MudTd>@context.price</MudTd> }
-                @if (_showPriceUnit) { <MudTd>@context.price_unit</MudTd> }
-                @if (_showBoxLabel)
-                {
-                    <MudTd Class="cb-box-label-cell">
-                        @if (!string.IsNullOrWhiteSpace(context.Box_label))
-                        {
-                            <MudTooltip Text="@context.Box_label" Arrow="true">
-                                <div class="cb-box-label-text">@context.Box_label</div>
-                            </MudTooltip>
-                        }
-                    </MudTd>
-                }
-                @if (_showBoxImg) { <MudTd><LegacyRemoteImg Path="@context.Box_label_url"/></MudTd> }
-                @if (_showBox2) { <MudTd>@context.Box_label2</MudTd> }
-                @if (_showBoxImg2) { <MudTd><LegacyRemoteImg Path="@context.Box_label_url2"/></MudTd> }
-                @if (_showPo) { <MudTd>@context.Client_poNo</MudTd> }
-                @if (_showPlate) { <MudTd><LegacyRemoteImg Path="@context.nameplate_url"/></MudTd> }
-                @if (_showPlateType) { <MudTd>@context.nameplate_type</MudTd> }
-                @if (_showPlate2) { <MudTd><LegacyRemoteImg Path="@context.nameplate_url2"/></MudTd> }
-                @if (_showPlateType2) { <MudTd>@context.nameplate_type2</MudTd> }
-                @if (_showSap) { <MudTd>@context.SAP_order_NO</MudTd> }
-                @if (_showPack) { <MudTd>@context.Packing_method</MudTd> }
-                @if (_showPackUnit) { <MudTd>@context.Packing_method_unit</MudTd> }
-                @if (_showCarton) { <MudTd>@context.Carton_Size</MudTd> }
-                @if (_showPallet) { <MudTd>@context.Pallet_Size</MudTd> }
-                @if (_showPalletMethod) { <MudTd>@context.palletizing_method</MudTd> }
-                @if (_showPalletUnit) { <MudTd>@context.palletizing_method_unit</MudTd> }
-                @if (_showNet) { <MudTd>@context.Net_weight</MudTd> }
-                @if (_showGross) { <MudTd>@context.gross_weight</MudTd> }
-                @if (_showManager)
-                {
-                    <MudTd Class="cb-manager-cell">
-                        @{
-                            var managers = SplitManagers(context.Customer_Manager);
-                        }
-                        @if (managers.Count > 0)
-                        {
-                            <MudChipSet T="string" ReadOnly="true" Class="cb-manager-chipset">
-                                @foreach (var m in managers)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
-                                             Text="@m"/>
-                                }
-                            </MudChipSet>
-                        }
-                    </MudTd>
-                }
-                @if (_showCreator) { <MudTd>@context.CreatePerson</MudTd> }
-                @if (_showCreateTime) { <MudTd>@(context.CreateTime?.ToString("yyyy-MM-dd"))</MudTd> }
+                <MudTd>@context.materialType</MudTd>
+                <MudTd>@context.materialModel</MudTd>
+                <MudTd>@context.materiaSpecs</MudTd>
+                <MudTd>@context.materiaPowered</MudTd>
+                <MudTd>@context.materiaCust</MudTd>
+                <MudTd>@context.Notes</MudTd>
+                <MudTd>@context.Quantity_unit</MudTd>
+                <MudTd>@context.currency_unit</MudTd>
+                <MudTd>@context.price</MudTd>
+                <MudTd>@context.price_unit</MudTd>
+                <MudTd Class="cb-box-label-cell">
+                    @if (!string.IsNullOrWhiteSpace(context.Box_label))
+                    {
+                        <MudTooltip Text="@context.Box_label" Arrow="true">
+                            <div class="cb-box-label-text">@context.Box_label</div>
+                        </MudTooltip>
+                    }
+                </MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Box_label_url"/></MudTd>
+                <MudTd>@context.Box_label2</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.Box_label_url2"/></MudTd>
+                <MudTd>@context.Client_poNo</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.nameplate_url"/></MudTd>
+                <MudTd>@context.nameplate_type</MudTd>
+                <MudTd><LegacyRemoteImg Path="@context.nameplate_url2"/></MudTd>
+                <MudTd>@context.nameplate_type2</MudTd>
+                <MudTd>@context.SAP_order_NO</MudTd>
+                <MudTd>@context.Packing_method</MudTd>
+                <MudTd>@context.Packing_method_unit</MudTd>
+                <MudTd>@context.Carton_Size</MudTd>
+                <MudTd>@context.Pallet_Size</MudTd>
+                <MudTd>@context.palletizing_method</MudTd>
+                <MudTd>@context.palletizing_method_unit</MudTd>
+                <MudTd>@context.Net_weight</MudTd>
+                <MudTd>@context.gross_weight</MudTd>
+                <MudTd Class="cb-manager-cell">
+                    @{
+                        var managers = SplitManagers(context.Customer_Manager);
+                    }
+                    @if (managers.Count > 0)
+                    {
+                        <MudChipSet T="string" ReadOnly="true" Class="cb-manager-chipset">
+                            @foreach (var m in managers)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                                         Text="@m"/>
+                            }
+                        </MudChipSet>
+                    }
+                </MudTd>
+                <MudTd Class="cb-creator-cell">@(string.IsNullOrWhiteSpace(context.CreatePerson) ? "—" : context.CreatePerson)</MudTd>
+                <MudTd Class="cb-createtime-cell">@(context.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</MudTd>
                 <MudTd Class="cb-ops-cell">
                     <div class="cb-ops-grid">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -341,8 +335,8 @@
         border-spacing: 0;
     }
 
-    .cotract-base-table .mud-table-head .mud-table-cell:not(.cb-ops-cell):not(.cb-no-cell):not(:first-child),
-    .cotract-base-table .mud-table-body .mud-table-cell:not(.cb-ops-cell):not(.cb-no-cell):not(:first-child) {
+    .cotract-base-table .mud-table-head .mud-table-cell:not(.cb-ops-cell):not(.cb-creator-cell):not(.cb-createtime-cell):not(.cb-no-cell):not(:first-child),
+    .cotract-base-table .mud-table-body .mud-table-cell:not(.cb-ops-cell):not(.cb-creator-cell):not(.cb-createtime-cell):not(.cb-no-cell):not(:first-child) {
         white-space: nowrap;
         min-width: 88px;
         vertical-align: middle;
@@ -407,31 +401,62 @@
         background-color: #eeeeee !important;
     }
 
+    /* 右侧固定：创建人 | 创建时间 | 操作 */
+    .cotract-base-table .mud-table-cell.cb-creator-cell,
+    .cotract-base-table .mud-table-cell.cb-createtime-cell,
     .cotract-base-table .mud-table-cell.cb-ops-cell {
         position: sticky;
-        right: 0;
         z-index: 4;
-        width: 168px;
-        min-width: 168px;
-        max-width: 168px;
         box-sizing: border-box;
-        padding: 6px 8px !important;
-        white-space: normal;
         vertical-align: middle;
         overflow: hidden;
         background-color: #fff !important;
+        white-space: nowrap;
+    }
+
+    .cotract-base-table .mud-table-cell.cb-ops-cell {
+        right: 0;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        padding: 6px 8px !important;
+        white-space: normal;
         border-left: 1px solid #e0e0e0;
     }
 
+    .cotract-base-table .mud-table-cell.cb-createtime-cell {
+        right: 168px;
+        width: 156px;
+        min-width: 156px;
+        max-width: 156px;
+        padding: 6px 8px !important;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .cotract-base-table .mud-table-cell.cb-creator-cell {
+        right: 324px;
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        padding: 6px 8px !important;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .cotract-base-table .mud-table-head .mud-table-cell.cb-creator-cell,
+    .cotract-base-table .mud-table-head .mud-table-cell.cb-createtime-cell,
     .cotract-base-table .mud-table-head .mud-table-cell.cb-ops-cell {
         z-index: 6;
         background-color: #fff !important;
     }
 
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-creator-cell,
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-createtime-cell,
     .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-ops-cell {
         background-color: #f5f5f5 !important;
     }
 
+    .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-creator-cell,
+    .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-createtime-cell,
     .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-ops-cell {
         background-color: #eeeeee !important;
     }
@@ -524,13 +549,6 @@
     private bool _sortDescending = true;
     private int _currentPage;
     private int _rowsPerPage = 20;
-    private bool _showOuterBox, _showTuoMark, _showTuoImg, _showCountry;
-    private bool _showMatType, _showMatModel, _showSpecs, _showPowered, _showCust, _showNotes;
-    private bool _showQtyUnit, _showCurrency, _showPrice, _showPriceUnit;
-    private bool _showBoxLabel, _showBoxImg, _showBox2, _showBoxImg2, _showPo;
-    private bool _showPlate, _showPlateType, _showPlate2, _showPlateType2, _showSap;
-    private bool _showPack, _showPackUnit, _showCarton, _showPallet, _showPalletMethod, _showPalletUnit;
-    private bool _showNet, _showGross, _showManager, _showCreator, _showCreateTime;
     private const long MaxImportBytes = 32L * 1024 * 1024;
     private string ImageBase => Config["LegacyFiles:BaseUrl"] ?? LegacyFileUrl.DefaultBase;
 
@@ -567,50 +585,6 @@
         });
 
     private int RowNo(ZyqdCotractBaseModel row) => _skip + _rows.IndexOf(row) + 1;
-
-    /// <summary>当前页整列都空时不渲染该列，避免空值占宽。</summary>
-    private void RefreshColumns()
-    {
-        _showOuterBox = _rows.Any(x => HasImg(x.Customer_outer_box_logo));
-        _showTuoMark = _rows.Any(x => HasText(x.Tuo_Mark));
-        _showTuoImg = _rows.Any(x => HasImg(x.Tuo_Mark_url));
-        _showCountry = _rows.Any(x => HasText(x.Customer_destination_country));
-        _showMatType = _rows.Any(x => HasText(x.materialType));
-        _showMatModel = _rows.Any(x => HasText(x.materialModel));
-        _showSpecs = _rows.Any(x => HasText(x.materiaSpecs));
-        _showPowered = _rows.Any(x => HasText(x.materiaPowered));
-        _showCust = _rows.Any(x => HasText(x.materiaCust));
-        _showNotes = _rows.Any(x => HasText(x.Notes));
-        _showQtyUnit = _rows.Any(x => HasText(x.Quantity_unit));
-        _showCurrency = _rows.Any(x => HasText(x.currency_unit));
-        _showPrice = _rows.Any(x => x.price != 0);
-        _showPriceUnit = _rows.Any(x => HasText(x.price_unit));
-        _showBoxLabel = _rows.Any(x => HasText(x.Box_label));
-        _showBoxImg = _rows.Any(x => HasImg(x.Box_label_url));
-        _showBox2 = _rows.Any(x => HasText(x.Box_label2));
-        _showBoxImg2 = _rows.Any(x => HasImg(x.Box_label_url2));
-        _showPo = _rows.Any(x => HasText(x.Client_poNo));
-        _showPlate = _rows.Any(x => HasImg(x.nameplate_url));
-        _showPlateType = _rows.Any(x => HasText(x.nameplate_type));
-        _showPlate2 = _rows.Any(x => HasImg(x.nameplate_url2));
-        _showPlateType2 = _rows.Any(x => HasText(x.nameplate_type2));
-        _showSap = _rows.Any(x => HasText(x.SAP_order_NO));
-        _showPack = _rows.Any(x => HasText(x.Packing_method));
-        _showPackUnit = _rows.Any(x => HasText(x.Packing_method_unit));
-        _showCarton = _rows.Any(x => HasText(x.Carton_Size));
-        _showPallet = _rows.Any(x => HasText(x.Pallet_Size));
-        _showPalletMethod = _rows.Any(x => HasText(x.palletizing_method));
-        _showPalletUnit = _rows.Any(x => HasText(x.palletizing_method_unit));
-        _showNet = _rows.Any(x => x.Net_weight != 0);
-        _showGross = _rows.Any(x => x.gross_weight != 0);
-        _showManager = _rows.Any(x => HasText(x.Customer_Manager));
-        _showCreator = _rows.Any(x => HasText(x.CreatePerson));
-        _showCreateTime = _rows.Any(x => x.CreateTime is not null);
-    }
-
-    private static bool HasText(string? s) => !string.IsNullOrWhiteSpace(s);
-
-    private static bool HasImg(string? s) => !LegacyFileUrl.IsBlankOrPlaceholder(s);
 
     private static List<string> SplitManagers(string? raw)
         => CustomerManagerText.Split(raw);
@@ -718,7 +692,6 @@
             _skip = state.Page * take;
             var (rows, total) = await CotractBase.QueryPageAsync(query, _skip, take, ct);
             _rows = rows;
-            RefreshColumns();
             _filteredTotal = total;
             _currentPage = state.Page;
             _rowsPerPage = take;

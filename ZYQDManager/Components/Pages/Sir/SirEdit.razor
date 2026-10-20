@@ -26,7 +26,7 @@
                            Margin="Margin.Dense"
                            Dense="true"
                            Class="sir-type-select"
-                           Disabled="_busy">
+                           Disabled="_busy || !CanEditCore">
                     @foreach (var t in SirReportTypes.Tests)
                     {
                         <MudSelectItem Value="@t.Value">@t.Label</MudSelectItem>
@@ -40,7 +40,7 @@
                            Margin="Margin.Dense"
                            Dense="true"
                            Class="sir-product-select"
-                           Disabled="_busy">
+                           Disabled="_busy || !CanEditCore">
                     @foreach (var p in _productOptions)
                     {
                         <MudSelectItem Value="@p">@p</MudSelectItem>
@@ -85,18 +85,20 @@
                     <tr>
                         <th rowspan="2" class="sir-th-side">由 FROM:</th>
                         <th>部门 Dept</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.Department" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.Department" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <td rowspan="4" colspan="5" class="sir-mid-blank"></td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Appearance_Approval_Report" Dense="true" Color="Color.Primary"
+                                         Disabled="@(!CanEditCore)"
                                          Label="外观批准报告 Appearance Approval Report"/>
                         </td>
                     </tr>
                     <tr>
                         <th>业务员 Name</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.SalesmanName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.SalesmanName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Dimension_Report" Dense="true" Color="Color.Primary"
+                                         Disabled="@(!CanEditCore)"
                                          Label="尺寸检验报告 Dimension Report"/>
                         </td>
                     </tr>
@@ -106,39 +108,43 @@
                         <td colspan="2">
                             <MudTextField Value="_main.Client"
                                           ValueChanged="@(EventCallback.Factory.Create<string>(this, OnClientChanged))"
-                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Immediate="false"/>
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Immediate="false"
+                                          ReadOnly="@(!CanEditCore)"/>
                         </td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Material_Report" Dense="true" Color="Color.Primary"
+                                         Disabled="@(!CanEditCore)"
                                          Label="材料检验报告 Material Report"/>
                         </td>
                     </tr>
                     <tr>
                         <th>部门 Dept</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.ClientDepartment" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.ClientDepartment" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Function_Report" Dense="true" Color="Color.Primary"
+                                         Disabled="@(!CanEditCore)"
                                          Label="性能检验报告 Function Report"/>
                         </td>
                     </tr>
                     <tr>
                         <th>联系人 Name</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.ContactName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.ContactName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <td colspan="10" class="sir-mid-blank"></td>
                     </tr>
 
                     @* 产品信息 *@
                     <tr>
                         <th colspan="2">产品型号 Part No.</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.Product_partNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.Product_partNo" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <th colspan="2">产品名称 Designation</th>
                         <td colspan="3">
                             <MudTextField Value="_main.ProductName"
                                           ValueChanged="@(EventCallback.Factory.Create<string>(this, OnProductNameChanged))"
-                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/>
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                          ReadOnly="@(!CanEditCore)"/>
                         </td>
                         <th colspan="2">软件版本 Firmware index</th>
-                        <td colspan="3"><MudTextField @bind-Value="_main.SoftwareVersion" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="3"><MudTextField @bind-Value="_main.SoftwareVersion" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                     </tr>
                     <tr>
                         <th colspan="2">签发日期 Issue Date</th>
@@ -148,26 +154,28 @@
                                            DateFormat="yyyy-MM-dd"
                                            Variant="Variant.Outlined"
                                            Margin="Margin.Dense"
-                                           Editable="true"
+                                           Editable="@CanEditCore"
+                                           ReadOnly="@(!CanEditCore)"
                                            Dense="true"/>
                         </td>
                         <th colspan="2">样品数量 Qty of Samples</th>
-                        <td colspan="3"><MudNumericField @bind-Value="_main.SampleQuantity" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Min="0"/></td>
+                        <td colspan="3"><MudNumericField @bind-Value="_main.SampleQuantity" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Min="0" ReadOnly="@(!CanEditCore)"/></td>
                         <th colspan="2">第几次送样 Samples delivery times</th>
                         <td colspan="3">
                             <MudNumericField T="int"
                                              Value="_main.DeliveryTimes"
                                              ValueChanged="@(EventCallback.Factory.Create<int>(this, OnDeliveryTimesChanged))"
-                                             Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Min="0"/>
+                                             Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Min="0"
+                                             ReadOnly="@(!CanEditCore)"/>
                         </td>
                     </tr>
                     <tr>
                         <th colspan="2">程序名称 program name</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.program_name" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.program_name" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <th colspan="2">程序代码 program code</th>
-                        <td colspan="3"><MudTextField @bind-Value="_main.program_code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="3"><MudTextField @bind-Value="_main.program_code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                         <th colspan="2">程序校验码 check code</th>
-                        <td colspan="3"><MudTextField @bind-Value="_main.check_code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                        <td colspan="3"><MudTextField @bind-Value="_main.check_code" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                     </tr>
 
                     @* 认证 + 签名 *@
@@ -193,9 +201,9 @@
                             </div>
                         </td>
                         <td colspan="3" class="sir-sign-cell">
-                            <div class="sir-sign-row"><span>测试:</span><MudTextField @bind-Value="_main.Test_Engineer" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></div>
-                            <div class="sir-sign-row"><span>复核:</span><MudTextField @bind-Value="_main.Test_Checked_by" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></div>
-                            <div class="sir-sign-row"><span>批准:</span><MudTextField @bind-Value="_main.Test_Approved_By" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></div>
+                            <div class="sir-sign-row"><span>测试:</span><MudTextField @bind-Value="_main.Test_Engineer" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></div>
+                            <div class="sir-sign-row"><span>复核:</span><MudTextField @bind-Value="_main.Test_Checked_by" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></div>
+                            <div class="sir-sign-row"><span>批准:</span><MudTextField @bind-Value="_main.Test_Approved_By" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></div>
                         </td>
                     </tr>
                     </tbody>
@@ -284,7 +292,7 @@
                                 <td class="center sir-concl-cell">@ConclusionCheck(item, "B")</td>
                                 <td class="center sir-concl-cell">@ConclusionCheck(item, "C")</td>
                                 <td class="center sir-concl-cell">@ConclusionCheck(item, "D")</td>
-                                <td><MudTextField @bind-Value="item.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"/></td>
+                                <td><MudTextField @bind-Value="item.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
                             </tr>
                         }
                         </tbody>
@@ -301,15 +309,18 @@
                                 var idx = i;
                                 <div class="sir-preview-item">
                                     <LegacyRemoteImg Path="@_images[idx]" CssClass="sir-preview-fill"/>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                   Size="Size.Small"
-                                                   Color="Color.Error"
-                                                   Class="sir-preview-remove"
-                                                   Disabled="_busy"
-                                                   OnClick="@(() => RemoveRemoteImage(idx))"/>
+                                    @if (CanEditCore)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       Class="sir-preview-remove"
+                                                       Disabled="_busy"
+                                                       OnClick="@(() => RemoveRemoteImage(idx))"/>
+                                    }
                                 </div>
                             }
-                            @if (_images.Count < 5)
+                            @if (CanEditCore && _images.Count < 5)
                             {
                                 <label class="sir-upload-label sir-add-slot sir-add-slot-lg @(_busy || _imgUploading ? "sir-add-slot-disabled" : null)">
                                     <InputFile OnChange="OnRemoteImagesSelected"
@@ -418,7 +429,7 @@
                 }
 
                 <div class="sir-note-block">
-                    <MudTextField @bind-Value="_main.Note" Label="备注 Note" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2"/>
+                    <MudTextField @bind-Value="_main.Note" Label="备注 Note" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" ReadOnly="@(!CanEditCore)"/>
                 </div>
             </div>
         }
@@ -565,6 +576,11 @@
         border-color: #165DFF;
         background: #165DFF;
         color: #fff;
+    }
+    .sir-cert-tile-disabled {
+        opacity: .55;
+        pointer-events: none;
+        cursor: default;
     }
     .sir-sign-cell { padding: 8px !important; }
     .sir-sign-row {
@@ -925,13 +941,15 @@
     private bool _loaded;
     private bool _imgUploading;
     private string _guid = "";
-    /// <summary>业务员不能新建报告；已有报告可直接改主表和明细。留样行仍只改自己创建的。</summary>
+    /// <summary>业务员：不能新建；只能改认证（图二）+ 自己的留样（图三）。测试明细/主表其它项仅检测员管理员。</summary>
     private bool _operator;
     private string _empNo = "";
     private string _displayName = "";
     private bool ShowRemoteImages => SirService.IsRemoteWithoutSample(_reportType);
     private bool ShowSampleFiling => SirService.NeedsSampleFiling(_reportType);
     private string CurrentCreatePersonLabel => SirService.FormatSampleCreatePerson(_empNo, _displayName);
+    /// <summary>检测员/管理员可改主表与测试明细；业务员为 false。</summary>
+    private bool CanEditCore => !_operator;
 
     private bool CanEditSample(ZyqdSirSampleForFilingModel s) =>
         !_operator || SirService.IsSampleOwnedBy(s.CreatePerson, _empNo);
@@ -1012,6 +1030,7 @@
 
     private async Task OnReportTypeChanged(string value)
     {
+        if (!CanEditCore) return;
         _reportType = value;
         _productType = SirReportTypes.DefaultProduct(value);
         _productOptions = SirReportTypes.ProductsFor(value).ToList();
@@ -1022,6 +1041,7 @@
 
     private async Task OnProductTypeChanged(string value)
     {
+        if (!CanEditCore) return;
         _productType = value;
         _main.product_type = value;
         await LoadAsync();
@@ -1029,6 +1049,7 @@
 
     private async Task OnClientChanged(string value)
     {
+        if (!CanEditCore) return;
         _main.Client = value;
         RefreshPartNo();
         var clientNo = (value ?? "").Trim();
@@ -1050,12 +1071,14 @@
 
     private void OnProductNameChanged(string value)
     {
+        if (!CanEditCore) return;
         _main.ProductName = value;
         RefreshPartNo();
     }
 
     private void OnIssuanceDateChanged(DateTime? value)
     {
+        if (!CanEditCore) return;
         _issuanceDate = value;
         _main.IssuanceDate = value?.Date ?? DateTime.Today;
         RefreshPartNo();
@@ -1063,6 +1086,7 @@
 
     private void OnDeliveryTimesChanged(int value)
     {
+        if (!CanEditCore) return;
         _main.DeliveryTimes = value;
         RefreshPartNo();
     }
@@ -1106,7 +1130,10 @@
                 Details = _details,
                 Samples = ShowSampleFiling ? _samples : [],
             };
-            var (ok, msg) = await Sir.SaveAsync(doc);
+            // 业务员：只落库认证 + 本人留样，避免绕过 UI 改测试明细
+            var (ok, msg) = _operator
+                ? await Sir.SaveOperatorAsync(doc, _empNo, _displayName)
+                : await Sir.SaveAsync(doc);
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
@@ -1390,7 +1417,9 @@
 
     private RenderFragment CertTile(string label, bool active, Action<bool> set) => __builder =>
     {
-        <div class="@($"sir-cert-tile{(active ? " active" : "")}")" @onclick="@(() => { set(!active); StateHasChanged(); })">
+        // 认证区业务员可改（图二）
+        <div class="@($"sir-cert-tile{(active ? " active" : "")}{(_busy ? " sir-cert-tile-disabled" : "")}")"
+             @onclick="@(() => { if (_busy) return; set(!active); StateHasChanged(); })">
             <span class="sir-cert-box">@(active ? "✓" : "")</span>
             <span>@label</span>
         </div>
@@ -1440,11 +1469,13 @@
                      Value="@checkedVal"
                      ValueChanged="@(EventCallback.Factory.Create<bool>(this, v => SetConclusion(row, which, v ? "√" : "")))"
                      Dense="true"
-                     Color="Color.Primary"/>
+                     Color="Color.Primary"
+                     Disabled="@(!CanEditCore)"/>
     };
 
-    private static void SetConclusion(ZyqdSirDetailModel row, string which, string? value)
+    private void SetConclusion(ZyqdSirDetailModel row, string which, string? value)
     {
+        if (!CanEditCore) return;
         switch (which)
         {
             case "A": row.Conclusion_A = value; break;
@@ -1458,6 +1489,7 @@
     {
         var value = GetResult(row, index) ?? "";
         var filling = row.filling_type ?? "0";
+        var editable = CanEditCore;
 
         if (filling == "1")
         {
@@ -1468,6 +1500,7 @@
             builder.AddAttribute(2, "ValueChanged", EventCallback.Factory.Create<bool>(this, v => SetResult(row, index, v ? "√" : "")));
             builder.AddAttribute(3, "Dense", true);
             builder.AddAttribute(4, "Color", Color.Primary);
+            builder.AddAttribute(5, "Disabled", !editable);
             builder.CloseComponent();
         }
         else if (filling == "2")
@@ -1483,7 +1516,10 @@
             builder.OpenElement(0, "button");
             builder.AddAttribute(1, "type", "button");
             builder.AddAttribute(2, "class", $"sir-cycle-btn {stateClass}");
-            builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => CycleOkNg(row, index)));
+            if (editable)
+                builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => CycleOkNg(row, index)));
+            else
+                builder.AddAttribute(3, "disabled", true);
             builder.AddContent(4, display);
             builder.CloseElement();
         }
@@ -1495,12 +1531,14 @@
             builder.AddAttribute(3, "Dense", true);
             builder.AddAttribute(4, "Margin", Margin.Dense);
             builder.AddAttribute(5, "Variant", Variant.Outlined);
+            builder.AddAttribute(6, "ReadOnly", !editable);
             builder.CloseComponent();
         }
     };
 
     private void CycleOkNg(ZyqdSirDetailModel row, int index)
     {
+        if (!CanEditCore) return;
         var cur = (GetResult(row, index) ?? "").Trim();
         var next = cur switch
         {
@@ -1536,8 +1574,9 @@
         _ => null
     };
 
-    private static void SetResult(ZyqdSirDetailModel row, int index, string? value)
+    private void SetResult(ZyqdSirDetailModel row, int index, string? value)
     {
+        if (!CanEditCore) return;
         switch (index)
         {
             case 1: row.Actual_Results1 = value; break;

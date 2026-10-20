@@ -129,10 +129,7 @@ public class CotractPiExcelService
         if (fees.Insure)
             Money(ws, 18 + extra, 12, main.Insurance_premium, curr);
         Money(ws, 19 + extra, 12, main.TOTAL, curr);
-        Set(ws, 20 + extra, 11, main.Payment_ratio.ToString("0.##") + "%");
-        Money(ws, 20 + extra, 12, main.Payment_ratio_Ext, curr);
-        Money(ws, 21 + extra, 12, main.balance_before_delivery, curr);
-        Set(ws, 21 + extra, 5, main.var3);
+        WritePaymentBlockEnglish(ws, 20 + extra, 21 + extra, main, curr);
         Set(ws, 25 + extra, 0, "NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP or SCREENSHOT TO " + main.email);
         SetDate(ws, 28 + extra, 11, main.var5);
     }
@@ -178,12 +175,181 @@ public class CotractPiExcelService
         if (fees.Insure)
             Money(ws, 19 + extra, 12, main.Insurance_premium, curr);
         Money(ws, 20 + extra, 12, main.TOTAL, curr);
-        Money(ws, 21 + extra, 12, main.Payment_ratio_Ext, curr);
-        Money(ws, 22 + extra, 12, main.balance_before_delivery, curr);
-        Set(ws, 21 + extra, 11, main.Payment_ratio.ToString("0.##") + "%");
-        Set(ws, 22 + extra, 5, main.var3);
+        WritePaymentBlockChinese(ws, 21 + extra, 22 + extra, main, curr);
         Set(ws, 30 + extra, 0, "NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP OR SCREENSHOT TO " + main.email);
         SetDate(ws, 31 + extra, 11, main.var5);
+    }
+
+    /// <summary>
+    /// 英文模板：定金行 + 付款行。特殊客户改为 UPON DESPATCH / WITHIN 10 DAYS 各 50%（按总金额）。
+    /// </summary>
+    private static void WritePaymentBlockEnglish(
+        IXLWorksheet ws, int depositRow, int paymentRow, ZyqdCotractPiModel main, string curr)
+    {
+        if (CotractPiTypes.ShouldSplitBalancePayment(main.ClientNo))
+        {
+            WriteSplitPaymentRows(ws, depositRow, paymentRow, main.TOTAL, curr, percentCol: 11);
+            return;
+        }
+
+        Set(ws, depositRow, 11, main.Payment_ratio.ToString("0.##") + "%");
+        Money(ws, depositRow, 12, main.Payment_ratio_Ext, curr);
+        Set(ws, paymentRow, 5, main.var3);
+        Money(ws, paymentRow, 12, main.balance_before_delivery, curr);
+    }
+
+    /// <summary>中文模板：同上，列位与英文略有差异。</summary>
+    private static void WritePaymentBlockChinese(
+        IXLWorksheet ws, int depositRow, int paymentRow, ZyqdCotractPiModel main, string curr)
+    {
+        if (CotractPiTypes.ShouldSplitBalancePayment(main.ClientNo))
+        {
+            WriteSplitPaymentRows(ws, depositRow, paymentRow, main.TOTAL, curr, percentCol: 11);
+            return;
+        }
+
+        Money(ws, depositRow, 12, main.Payment_ratio_Ext, curr);
+        Set(ws, depositRow, 11, main.Payment_ratio.ToString("0.##") + "%");
+        Set(ws, paymentRow, 5, main.var3);
+        Money(ws, paymentRow, 12, main.balance_before_delivery, curr);
+    }
+
+    /// <summary>
+    /// 特殊客户：定金行改成 UPON DESPATCH + 50%，付款行 WITHIN 10 DAYS AFTER ARRIVAL + 50%。
+    /// 保留模板合并格与边框，标题右对齐贴着百分比列。
+    /// </summary>
+    private static void WriteSplitPaymentRows(
+        IXLWorksheet ws, int depositNpoi, int paymentNpoi, double total, string curr, int percentCol)
+    {
+        var (first, second) = CotractPiTypes.SplitBalanceAmounts(total);
+        var depositExcel = depositNpoi + 1;
+        var paymentExcel = paymentNpoi + 1;
+        var percentExcel = percentCol + 1; // ClosedXML：npoi 11 → 12
+        var paymentLabelExcel = 6;         // 与 var3 同列（npoi 5）
+
+        // 1) 定金行：原地替换 DEPOSIT，保留合并/边框，标题靠右
+        var upon = ReplaceDepositLabelInPlace(ws, depositExcel, "UPON DESPATCH");
+        Set(ws, depositNpoi, percentCol, "50%");
+        Money(ws, depositNpoi, 12, first, curr);
+
+        // 2) 付款行：若标题合并格盖住 % 列，收窄到 % 左侧，再写标题与 50%
+        //    标题列与定金行对齐，右对齐贴着 50%
+        var withinCol = upon?.Address.ColumnNumber ?? paymentLabelExcel;
+        ShrinkPaymentLabelMerge(ws, paymentExcel, withinCol, percentExcel);
+        ShrinkPaymentLabelMerge(ws, paymentExcel, paymentLabelExcel, percentExcel);
+        var within = WriteRightLabel(ws, paymentExcel, withinCol, "WITHIN 10 DAYS AFTER ARRIVAL");
+        if (upon is not null)
+        {
+            CopyFontStyle(within, upon);
+            CopyBorderStyle(upon, within);
+        }
+
+        var depositPct = ResolveCell(ws, depositExcel, percentExcel);
+        var paymentPct = ResolveCell(ws, paymentExcel, percentExcel);
+        paymentPct.Style.NumberFormat.Format = "@";
+        paymentPct.SetValue("50%");
+        paymentPct.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        paymentPct.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        CopyFontStyle(depositPct, paymentPct);
+        CopyBorderStyle(depositPct, paymentPct);
+
+        Money(ws, paymentNpoi, 12, second, curr);
+    }
+
+    private static IXLCell ResolveCell(IXLWorksheet ws, int excelRow, int excelCol)
+    {
+        var cell = ws.Cell(excelRow, excelCol);
+        return cell.IsMerged() ? cell.MergedRange().FirstCell() : cell;
+    }
+
+    private static IXLCell? ReplaceDepositLabelInPlace(IXLWorksheet ws, int excelRow, string newText)
+    {
+        IXLCell? hit = null;
+        for (var c = 1; c <= 14; c++)
+        {
+            var probe = ResolveCell(ws, excelRow, c);
+            var text = probe.GetString();
+            if (text.Contains("DEPOSIT", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("DUE AT TIME OF ORDER", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("定金", StringComparison.Ordinal))
+            {
+                hit = probe;
+                break;
+            }
+        }
+
+        // 找不到原文时，写到 % 列左侧单元格，保证靠右贴着 50%
+        hit ??= ResolveCell(ws, excelRow, 11);
+        hit.Style.NumberFormat.Format = "@";
+        hit.SetValue(newText);
+        hit.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        hit.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        return hit;
+    }
+
+    private static IXLCell WriteRightLabel(IXLWorksheet ws, int excelRow, int excelCol, string text)
+    {
+        var cell = ResolveCell(ws, excelRow, excelCol);
+        cell.Style.NumberFormat.Format = "@";
+        cell.SetValue(text);
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        return cell;
+    }
+
+    /// <summary>
+    /// 付款条件合并格若延伸到 % 列，拆开后只合并到 % 列左侧，给 50% 留独立格。
+    /// </summary>
+    private static void ShrinkPaymentLabelMerge(
+        IXLWorksheet ws, int excelRow, int labelExcelCol, int percentExcelCol)
+    {
+        var cell = ws.Cell(excelRow, labelExcelCol);
+        if (!cell.IsMerged())
+            return;
+
+        var range = cell.MergedRange();
+        if (range.FirstRow().RowNumber() != excelRow || range.LastRow().RowNumber() != excelRow)
+            return;
+
+        var firstCol = range.FirstColumn().ColumnNumber();
+        var lastCol = range.LastColumn().ColumnNumber();
+        if (lastCol < percentExcelCol)
+            return;
+
+        range.Unmerge();
+        var newLast = percentExcelCol - 1;
+        if (newLast >= firstCol)
+        {
+            try
+            {
+                ws.Range(excelRow, firstCol, excelRow, newLast).Merge();
+            }
+            catch
+            {
+                // 模板边框异常时忽略，至少保证 % 列可写
+            }
+        }
+    }
+
+    private static void CopyFontStyle(IXLCell from, IXLCell to)
+    {
+        to.Style.Font.FontName = from.Style.Font.FontName;
+        to.Style.Font.FontSize = from.Style.Font.FontSize;
+        to.Style.Font.Bold = from.Style.Font.Bold;
+        to.Style.Font.Italic = from.Style.Font.Italic;
+        to.Style.Font.FontColor = from.Style.Font.FontColor;
+    }
+
+    private static void CopyBorderStyle(IXLCell from, IXLCell to)
+    {
+        to.Style.Border.LeftBorder = from.Style.Border.LeftBorder;
+        to.Style.Border.RightBorder = from.Style.Border.RightBorder;
+        to.Style.Border.TopBorder = from.Style.Border.TopBorder;
+        to.Style.Border.BottomBorder = from.Style.Border.BottomBorder;
+        to.Style.Border.LeftBorderColor = from.Style.Border.LeftBorderColor;
+        to.Style.Border.RightBorderColor = from.Style.Border.RightBorderColor;
+        to.Style.Border.TopBorderColor = from.Style.Border.TopBorderColor;
+        to.Style.Border.BottomBorderColor = from.Style.Border.BottomBorderColor;
     }
 
     /// <summary>
