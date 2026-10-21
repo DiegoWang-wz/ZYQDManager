@@ -614,7 +614,7 @@
             _requiredCompletion = row.RequiredCompletionTime?.Date;
             _prototypeProvided = row.PrototypeProvidedTime?.Date;
             _prototypeConfirm = row.ExpectedPrototypeConfirmTime?.Date;
-            _lastSavedText = (row.UpdateTime ?? row.CreateTime)?.ToString("yyyy-MM-dd HH:mm");
+            _lastSavedText = DateDisplay.Format(row.UpdateTime ?? row.CreateTime, "");
         }
         catch (Exception ex)
         {
@@ -646,7 +646,7 @@
             var result = await MotorLx.SaveDraftAsync(_model, auth?.EmpNo, auth?.EmpNo);
             _model.ProjectGuid = result.ProjectGuid;
             _model.DocGuid = result.DocGuid;
-            _lastSavedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            _lastSavedText = DateDisplay.Format(DateTime.Now, "");
             Notify.Show(result.Created ? "已保存，GUID 已生成" : "已保存", Severity.Success);
 
             if (result.Created)

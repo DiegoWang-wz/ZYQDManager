@@ -626,6 +626,7 @@
 
     private bool _busy;
     private string? _loadedKey;
+    private string? _cleanFingerprint;
     private QuotationDocumentDto _doc = new();
     private ZyqdQuotationMainModel _main = new();
     private readonly Dictionary<string, List<QuotationPartOptionDto>> _parts = new();
@@ -666,6 +667,7 @@
                 _doc = Quotation.CreateBlank(empNo);
                 _main = _doc.Main;
                 ApplyDefaultSignature(empNo);
+                MarkClean();
                 return;
             }
 
@@ -702,6 +704,7 @@
                 ApplyDefaultSignature(empNo);
             else
                 SyncSignatureKeyFromMain();
+            MarkClean();
         }
         catch (Exception ex)
         {
@@ -711,6 +714,104 @@
         {
             _busy = false;
         }
+    }
+
+    private void MarkClean() => _cleanFingerprint = BuildFingerprint();
+
+    private bool HasUnsavedChanges
+        => !string.Equals(_cleanFingerprint, BuildFingerprint(), StringComparison.Ordinal);
+
+    private string BuildFingerprint()
+    {
+        _doc.Main = _main;
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            M = new
+            {
+                _main.ClientCode,
+                _main.ClientName,
+                _main.Address,
+                _main.Tel,
+                _main.Mail,
+                _main.Attn,
+                _main.Quota_No,
+                _main.DATE,
+                _main.rate,
+                _main.currencyUnit,
+                _main.signature,
+                _main.signature_url,
+                _main.personId,
+            },
+            D = _doc.Details.Select(x => new
+            {
+                x.Uid,
+                x.ItemType,
+                x.Part_No,
+                x.TierCount,
+                x.Qty,
+                x.Price,
+                x.Discount,
+                x.Amount,
+                x.Qty2,
+                x.Price2,
+                x.Discount2,
+                x.Amount2,
+                x.Qty3,
+                x.Price3,
+                x.Discount3,
+                x.Amount3,
+                x.Qty4,
+                x.Price4,
+                x.Discount4,
+                x.Amount4,
+                x.Note,
+                x.Rated_torque,
+                x.Rated_speed,
+                x.Power_supply,
+                x.Rated_Power,
+                x.Rated_Current,
+                x.Noise_dBA,
+                x.Motor_Length,
+                x.Tube_diameter,
+                x.Battery_Capacity,
+                x.Exclude_text,
+                x.Remote_controller_type,
+                x.Battery_Type,
+                x.Radio_Frequency,
+                x.Working_Temperature,
+                x.NoOfChannels,
+                x.adaptor,
+                x.Rated_Voltage,
+                x.Size,
+                x.No_Of_Actuator,
+                x.Output_Control,
+                x.Sensor,
+                x.Protection_Degree,
+                x.Max_Loading,
+                x.Max_Stroke,
+                x.Protection_Degree2,
+                x.Noise,
+            }),
+        });
+    }
+
+    private async Task<bool> ConfirmSaveBeforeExportAsync()
+    {
+        if (IsCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return false;
+        }
+
+        if (IsDetail || !HasUnsavedChanges)
+            return true;
+
+        var (cont, saveFirst) = await UnsavedExportGuard.AskAsync(DialogService, exportFromDatabase: false);
+        if (!cont)
+            return false;
+        if (saveFirst)
+            return await SaveCoreAsync(showSuccess: true);
+        return true;
     }
 
     private async Task EnsurePartsAsync()
@@ -980,9 +1081,11 @@
         }
     }
 
-    private async Task SaveAsync()
+    private async Task SaveAsync() => await SaveCoreAsync(showSuccess: true);
+
+    private async Task<bool> SaveCoreAsync(bool showSuccess)
     {
-        if (IsDetail) return;
+        if (IsDetail) return false;
         _busy = true;
         try
         {
@@ -993,16 +1096,20 @@
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
-                return;
+                return false;
             }
 
-            Notify.Show(IsCopy ? "创建成功" : "保存成功", Severity.Success);
+            if (showSuccess)
+                Notify.Show(IsCopy ? "创建成功" : "保存成功", Severity.Success);
+            MarkClean();
             if (create)
                 NavManager.NavigateTo($"/quotation/{guid}", replace: true);
+            return true;
         }
         catch (Exception ex)
         {
             Notify.Show("保存失败：" + ex.Message, Severity.Error);
+            return false;
         }
         finally
         {
@@ -1121,11 +1228,8 @@
 
     private async Task ExportPdfAsync(string lang)
     {
-        if (IsCreate)
-        {
-            Notify.Show("请先保存再导出", Severity.Warning);
+        if (!await ConfirmSaveBeforeExportAsync())
             return;
-        }
 
         _busy = true;
         Notify.Show("正在生成 PDF…", Severity.Info);
@@ -1154,11 +1258,8 @@
 
     private async Task ExportExcelAsync(string lang)
     {
-        if (IsCreate)
-        {
-            Notify.Show("请先保存再导出", Severity.Warning);
+        if (!await ConfirmSaveBeforeExportAsync())
             return;
-        }
 
         _busy = true;
         Notify.Show("正在生成 Excel…", Severity.Info);

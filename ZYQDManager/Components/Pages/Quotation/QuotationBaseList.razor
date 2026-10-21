@@ -21,6 +21,8 @@
                            Margin="Margin.Dense"
                            Class="@($"qb-type-select qb-type-{TypeCss(_itemType)}")"
                            ToStringFunc="@(v => QuotationBaseTypes.LabelOf(v))"
+                           Adornment="Adornment.Start"
+                           AdornmentIcon="@ChipIconOf(_itemType)"
                            Disabled="_busy || _batchEditMode">
                     @foreach (var t in QuotationBaseTypes.All)
                     {
@@ -187,9 +189,11 @@
                         <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Protection_Degree2">防护等级</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Noise">噪音</MudTableSortLabel></MudTh>
                     }
-                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Remark">备注</MudTableSortLabel></MudTh>
+                    <MudTh Class="qb-remark-cell"><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="Remark">备注</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="UpdatePerson">修改人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="UpdateTime">修改时间</MudTableSortLabel></MudTh>
+                    <MudTh Class="qb-creator-cell"><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
+                    <MudTh Class="qb-createtime-cell"><MudTableSortLabel T="QuotationBaseListItemDto" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
                     <MudTh Class="qb-ops-cell">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -238,9 +242,29 @@
                         <MudTd Class="@BatchTdClass(context, "Protection_Degree2")">@BatchCell(context, "Protection_Degree2", context.Protection_Degree2)</MudTd>
                         <MudTd Class="@BatchTdClass(context, "Noise")">@BatchCell(context, "Noise", context.Noise)</MudTd>
                     }
-                    <MudTd>@FormatDate(context.CreateTime)</MudTd>
-                    <MudTd>@Dash(context.CreatePerson)</MudTd>
-                    <MudTd Class="@BatchTdClass(context, "Remark")">@BatchCell(context, "Remark", context.Remark)</MudTd>
+                    <MudTd Class="@($"{BatchTdClass(context, "Remark")} qb-remark-cell")">
+                        @{
+                            var remark = (context.Remark ?? "").Trim();
+                        }
+                        @if (CanBatchEdit(context))
+                        {
+                            @BatchCell(context, "Remark", context.Remark)
+                        }
+                        else if (remark.Length > 0)
+                        {
+                            <MudTooltip Text="@remark" Arrow="true">
+                                <div class="qb-remark-text">@remark</div>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </MudTd>
+                    <MudTd>@Dash(context.UpdatePerson)</MudTd>
+                    <MudTd>@FormatDate(context.UpdateTime)</MudTd>
+                    <MudTd Class="qb-creator-cell">@Dash(context.CreatePerson)</MudTd>
+                    <MudTd Class="qb-createtime-cell">@FormatDate(context.CreateTime)</MudTd>
                     <MudTd Class="qb-ops-cell">
                         <div class="qb-ops-grid">
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -329,16 +353,23 @@
         overflow: hidden;
         z-index: -1;
     }
-    /* 批量勾选行整行高亮；须盖过 sticky 勾选/序号/操作列的白底与斑马纹 */
+    /* 批量勾选行整行高亮；须盖过 sticky 勾选/序号/创建/操作列的白底与斑马纹 */
     .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell,
     .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell:first-child,
     .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-no-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-creator-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-createtime-cell,
     .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-ops-cell,
-    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(even) > .mud-table-cell:first-child,
-    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(even) > .mud-table-cell.qb-no-cell,
-    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(even) > .mud-table-cell.qb-ops-cell,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(odd) > .mud-table-cell:first-child,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(odd) > .mud-table-cell.qb-no-cell,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(odd) > .mud-table-cell.qb-creator-cell,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(odd) > .mud-table-cell.qb-createtime-cell,
+    .qb-table.qb-batch-edit.mud-table-striped .mud-table-body .qb-batch-row:nth-of-type(odd) > .mud-table-cell.qb-ops-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row:hover > .mud-table-cell.qb-creator-cell,
+    .qb-table.qb-batch-edit .mud-table-body .qb-batch-row:hover > .mud-table-cell.qb-createtime-cell,
     .qb-table.qb-batch-edit .mud-table-body .qb-batch-row:hover > .mud-table-cell.qb-ops-cell {
         background-color: #fff8e1 !important;
+        background-image: linear-gradient(#fff8e1, #fff8e1);
     }
     .qb-table.qb-batch-edit .mud-table-body .qb-batch-row > .mud-table-cell.qb-cell-dirty {
         outline: 1px dashed #ef6c00;
@@ -357,7 +388,7 @@
     .qb-table.qb-batch-edit .qb-batch-input .mud-input-slot {
         background-color: #fffdf5 !important;
     }
-    .qb-type-select { width: 160px; }
+    .qb-type-select { width: 168px; }
     .qb-type-select .mud-input-slot,
     .qb-type-select input.mud-select-input {
         font-weight: 600;
@@ -365,23 +396,28 @@
     .qb-type-motor .mud-input-outlined-border { border-color: #1976d2 !important; }
     .qb-type-motor .mud-input-slot,
     .qb-type-motor input.mud-select-input,
-    .qb-type-motor .mud-input-label { color: #1976d2 !important; }
+    .qb-type-motor .mud-input-label,
+    .qb-type-motor .mud-input-adornment .mud-icon-root { color: #1976d2 !important; }
     .qb-type-remote .mud-input-outlined-border { border-color: #0288d1 !important; }
     .qb-type-remote .mud-input-slot,
     .qb-type-remote input.mud-select-input,
-    .qb-type-remote .mud-input-label { color: #0288d1 !important; }
+    .qb-type-remote .mud-input-label,
+    .qb-type-remote .mud-input-adornment .mud-icon-root { color: #0288d1 !important; }
     .qb-type-cb .mud-input-outlined-border { border-color: #ed6c02 !important; }
     .qb-type-cb .mud-input-slot,
     .qb-type-cb input.mud-select-input,
-    .qb-type-cb .mud-input-label { color: #ed6c02 !important; }
+    .qb-type-cb .mud-input-label,
+    .qb-type-cb .mud-input-adornment .mud-icon-root { color: #ed6c02 !important; }
     .qb-type-pr .mud-input-outlined-border { border-color: #2e7d32 !important; }
     .qb-type-pr .mud-input-slot,
     .qb-type-pr input.mud-select-input,
-    .qb-type-pr .mud-input-label { color: #2e7d32 !important; }
+    .qb-type-pr .mud-input-label,
+    .qb-type-pr .mud-input-adornment .mud-icon-root { color: #2e7d32 !important; }
     .qb-type-accessory .mud-input-outlined-border { border-color: #7b1fa2 !important; }
     .qb-type-accessory .mud-input-slot,
     .qb-type-accessory input.mud-select-input,
-    .qb-type-accessory .mud-input-label { color: #7b1fa2 !important; }
+    .qb-type-accessory .mud-input-label,
+    .qb-type-accessory .mud-input-adornment .mud-icon-root { color: #7b1fa2 !important; }
     .qb-type-item {
         font-weight: 600;
         min-width: 120px;
@@ -411,22 +447,40 @@
         margin-top: auto;
         border-top: 1px solid var(--mud-palette-lines-default);
     }
-    .qb-table .mud-table-head .mud-table-cell:not(.qb-ops-cell):not(.qb-no-cell):not(:first-child),
-    .qb-table .mud-table-body .mud-table-cell:not(.qb-ops-cell):not(.qb-no-cell):not(:first-child) {
+    .qb-table .mud-table-head .mud-table-cell:not(.qb-ops-cell):not(.qb-creator-cell):not(.qb-createtime-cell):not(.qb-remark-cell):not(.qb-no-cell):not(:first-child),
+    .qb-table .mud-table-body .mud-table-cell:not(.qb-ops-cell):not(.qb-creator-cell):not(.qb-createtime-cell):not(.qb-remark-cell):not(.qb-no-cell):not(:first-child) {
         white-space: nowrap;
         min-width: 88px;
         vertical-align: middle;
     }
+    .qb-table .mud-table-cell.qb-remark-cell {
+        max-width: 400px;
+        min-width: 120px;
+        width: 400px;
+        overflow: hidden;
+        vertical-align: middle;
+    }
+    .qb-remark-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 384px;
+    }
     .qb-table .mud-table-cell:first-child,
     .qb-table .mud-table-cell.qb-no-cell {
         position: sticky;
-        z-index: 4;
+        z-index: 5;
         box-sizing: border-box;
         background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
         vertical-align: middle !important;
     }
     .qb-table .mud-table-head .mud-table-cell:first-child,
-    .qb-table .mud-table-head .mud-table-cell.qb-no-cell { z-index: 6; }
+    .qb-table .mud-table-head .mud-table-cell.qb-no-cell {
+        z-index: 7;
+        background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
+    }
     .qb-table .mud-table-cell:first-child {
         left: 0;
         width: 42px !important;
@@ -453,34 +507,66 @@
         text-align: center;
         border-right: 1px solid #e0e0e0;
     }
-    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qb-no-cell {
-        background-color: #f5f5f5 !important;
-    }
+
+    /* 右侧固定：创建人 | 创建时间 | 操作 */
+    .qb-table .mud-table-cell.qb-creator-cell,
+    .qb-table .mud-table-cell.qb-createtime-cell,
     .qb-table .mud-table-cell.qb-ops-cell {
         position: sticky;
-        right: 0;
-        z-index: 4;
-        width: 168px;
-        min-width: 168px;
-        max-width: 168px;
+        z-index: 5;
         box-sizing: border-box;
-        padding: 6px 8px !important;
-        white-space: normal;
         vertical-align: middle;
         overflow: hidden;
         background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
         border-left: 1px solid #e0e0e0;
     }
+    .qb-table .mud-table-cell.qb-ops-cell {
+        right: 0;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        padding: 6px 8px !important;
+        white-space: normal;
+    }
+    .qb-table .mud-table-cell.qb-createtime-cell {
+        right: 168px;
+        width: 156px;
+        min-width: 156px;
+        max-width: 156px;
+        padding: 6px 8px !important;
+        white-space: nowrap;
+    }
+    .qb-table .mud-table-cell.qb-creator-cell {
+        right: 324px;
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        padding: 6px 8px !important;
+        white-space: nowrap;
+    }
+    .qb-table .mud-table-head .mud-table-cell.qb-creator-cell,
+    .qb-table .mud-table-head .mud-table-cell.qb-createtime-cell,
     .qb-table .mud-table-head .mud-table-cell.qb-ops-cell {
-        z-index: 6;
+        z-index: 7;
         background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
     }
-    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qb-ops-cell {
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.qb-no-cell,
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.qb-creator-cell,
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.qb-createtime-cell,
+    .qb-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.qb-ops-cell {
         background-color: #f5f5f5 !important;
+        background-image: linear-gradient(#f5f5f5, #f5f5f5);
     }
+    .qb-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
+    .qb-table .mud-table-body .mud-table-row:hover .mud-table-cell.qb-no-cell,
+    .qb-table .mud-table-body .mud-table-row:hover .mud-table-cell.qb-creator-cell,
+    .qb-table .mud-table-body .mud-table-row:hover .mud-table-cell.qb-createtime-cell,
     .qb-table .mud-table-body .mud-table-row:hover .mud-table-cell.qb-ops-cell {
         background-color: #eeeeee !important;
+        background-image: linear-gradient(#eeeeee, #eeeeee);
     }
     .qb-ops-grid {
         display: grid;
@@ -530,7 +616,7 @@
     private int _total;
     private int _currentPage;
     private int _rowsPerPage = 20;
-    private string? _sortLabel = "Id";
+    private string? _sortLabel = "CreateTime";
     private bool _sortDescending = true;
     private const long MaxImportBytes = 32L * 1024 * 1024;
     private bool _batchEditMode;
@@ -617,7 +703,7 @@
     private static string Dash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private static string FormatDate(DateTime? dt)
-        => dt is null || dt == default ? "-" : dt.Value.ToString("yyyy-MM-dd HH:mm");
+        => DateDisplay.Format(dt, "-");
 
     private async Task OnKeyUp(KeyboardEventArgs e)
     {
@@ -874,7 +960,9 @@
         _busy = true;
         try
         {
-            _sortLabel = string.IsNullOrWhiteSpace(state.SortLabel) ? "Id" : state.SortLabel;
+            _sortLabel = string.IsNullOrWhiteSpace(state.SortLabel) || state.SortDirection == SortDirection.None
+                ? "CreateTime"
+                : state.SortLabel;
             _sortDescending = state.SortDirection != SortDirection.Ascending;
             var query = BuildQuery();
             var skip = state.Page * state.PageSize;

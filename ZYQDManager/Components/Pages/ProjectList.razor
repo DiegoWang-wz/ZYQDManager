@@ -443,5 +443,5 @@
         string.IsNullOrWhiteSpace(status) ? "-" : status;
 
     private static string FormatDate(DateTime? dt) =>
-        dt.HasValue ? dt.Value.ToString("yyyy-MM-dd") : "-";
+        DateDisplay.Format(dt, "-");
 }

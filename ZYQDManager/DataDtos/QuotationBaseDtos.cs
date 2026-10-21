@@ -78,6 +78,7 @@ public static class QuotationBaseFilterFields
             ("Battery_Type", "电池型号"),
             ("Radio_Frequency", "频率"),
             ("CreatePerson", "创建人"),
+            ("UpdatePerson", "修改人"),
             ("Remark", "备注"),
         ],
         "Accessory" =>
@@ -85,6 +86,7 @@ public static class QuotationBaseFilterFields
             ("Part_No", "型号"),
             ("adaptor", "配件名"),
             ("CreatePerson", "创建人"),
+            ("UpdatePerson", "修改人"),
             ("Remark", "备注"),
         ],
         "CB" =>
@@ -94,6 +96,7 @@ public static class QuotationBaseFilterFields
             ("Size", "尺寸"),
             ("Rated_Power", "额定功率"),
             ("CreatePerson", "创建人"),
+            ("UpdatePerson", "修改人"),
             ("Remark", "备注"),
         ],
         "PR" =>
@@ -103,6 +106,7 @@ public static class QuotationBaseFilterFields
             ("Max_Stroke", "最大行程"),
             ("Noise", "噪音"),
             ("CreatePerson", "创建人"),
+            ("UpdatePerson", "修改人"),
             ("Remark", "备注"),
         ],
         _ =>
@@ -113,6 +117,7 @@ public static class QuotationBaseFilterFields
             ("Power_supply", "电源"),
             ("Rated_Power", "额定功率"),
             ("CreatePerson", "创建人"),
+            ("UpdatePerson", "修改人"),
             ("Remark", "备注"),
         ],
     };

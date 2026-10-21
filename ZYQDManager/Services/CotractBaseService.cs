@@ -131,7 +131,9 @@ public class CotractBaseService
                 gross_weight = x.gross_weight,
                 Customer_Manager = x.Customer_Manager,
                 CreatePerson = x.CreatePerson,
-                CreateTime = x.CreateTime
+                CreateTime = x.CreateTime,
+                UpdatePerson = x.UpdatePerson,
+                UpdateTime = x.UpdateTime
             })
             .ToListAsync(ct);
         return (rows, total);
@@ -1158,6 +1160,8 @@ public class CotractBaseService
 
         if (string.Equals(query.FilterColumn, "CreateTime", StringComparison.Ordinal))
             return FilterCreateTimeRange(q, query.DateStart, query.DateEnd);
+        if (string.Equals(query.FilterColumn, "UpdateTime", StringComparison.Ordinal))
+            return FilterUpdateTimeRange(q, query.DateStart, query.DateEnd);
 
         var keyword = query.Keyword?.Trim();
         if (string.IsNullOrEmpty(keyword))
@@ -1194,6 +1198,7 @@ public class CotractBaseService
             "gross_weight" => FilterGrossWeight(q, keyword),
             "Customer_Manager" => q.Where(x => x.Customer_Manager != null && x.Customer_Manager.Contains(keyword)),
             "CreatePerson" => q.Where(x => x.CreatePerson != null && x.CreatePerson.Contains(keyword)),
+            "UpdatePerson" => q.Where(x => x.UpdatePerson != null && x.UpdatePerson.Contains(keyword)),
             _ => q.Where(x => x.ClientNo != null && x.ClientNo.Contains(keyword))
         };
     }
@@ -1224,6 +1229,24 @@ public class CotractBaseService
         {
             var to = e.Date.AddDays(1);
             q = q.Where(x => x.CreateTime != null && x.CreateTime < to);
+        }
+
+        return q;
+    }
+
+    private static IQueryable<ZyqdCotractBaseModel> FilterUpdateTimeRange(
+        IQueryable<ZyqdCotractBaseModel> q, DateTime? start, DateTime? end)
+    {
+        if (start is DateTime s)
+        {
+            var from = s.Date;
+            q = q.Where(x => x.UpdateTime != null && x.UpdateTime >= from);
+        }
+
+        if (end is DateTime e)
+        {
+            var to = e.Date.AddDays(1);
+            q = q.Where(x => x.UpdateTime != null && x.UpdateTime < to);
         }
 
         return q;
@@ -1265,6 +1288,8 @@ public class CotractBaseService
             "Customer_Manager" => desc ? q.OrderByDescending(x => x.Customer_Manager) : q.OrderBy(x => x.Customer_Manager),
             "CreatePerson" => desc ? q.OrderByDescending(x => x.CreatePerson) : q.OrderBy(x => x.CreatePerson),
             "CreateTime" => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime),
+            "UpdatePerson" => desc ? q.OrderByDescending(x => x.UpdatePerson) : q.OrderBy(x => x.UpdatePerson),
+            "UpdateTime" => desc ? q.OrderByDescending(x => x.UpdateTime) : q.OrderBy(x => x.UpdateTime),
             _ => q.OrderByDescending(x => x.CreateTime)
         };
         return ordered.ThenByDescending(x => x.Id);

@@ -89,8 +89,10 @@ public static class CustomsAndPackingFilterFields
         ("SAP订单号", "SAP订单号"),
         ("创建人", "创建人"),
         ("创建时间", "创建时间"),
+        ("修改人", "修改人"),
+        ("修改时间", "修改时间"),
     ];
 
     public static bool IsDateFilter(string? filterColumn)
-        => string.Equals(filterColumn, "创建时间", StringComparison.Ordinal);
+        => filterColumn is "创建时间" or "修改时间";
 }

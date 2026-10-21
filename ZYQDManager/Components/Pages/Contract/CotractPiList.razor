@@ -120,9 +120,11 @@
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="var6">订单类型</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="Person">需求人</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="INVOICE_NO">发票号</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_DATE">日期</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="CreateTime">创建日期</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_PO_REF">PO号</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpi-po-cell"><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_PO_REF">PO号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="UpdatePerson">修改人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="UpdateTime">修改时间</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpi-creator-cell"><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpi-createtime-cell"><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
                     <MudTh Class="@OpsCellClass">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -132,9 +134,25 @@
                     <MudTd>@context.var6</MudTd>
                     <MudTd>@context.Person</MudTd>
                     <MudTd>@context.INVOICE_NO</MudTd>
-                    <MudTd>@FormatBillDate(context)</MudTd>
-                    <MudTd>@FormatCreateTime(context)</MudTd>
-                    <MudTd>@Dash(context.BILL_TO_PO_REF)</MudTd>
+                    <MudTd Class="cpi-po-cell">
+                        @{
+                            var po = (context.BILL_TO_PO_REF ?? "").Trim();
+                        }
+                        @if (po.Length > 0)
+                        {
+                            <MudTooltip Text="@po" Arrow="true">
+                                <div class="cpi-po-text">@po</div>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <text>-</text>
+                        }
+                    </MudTd>
+                    <MudTd>@(string.IsNullOrWhiteSpace(context.UpdatePerson) ? "-" : context.UpdatePerson)</MudTd>
+                    <MudTd>@FormatUpdateTime(context)</MudTd>
+                    <MudTd Class="cpi-creator-cell">@(string.IsNullOrWhiteSpace(context.CreatePerson) ? "-" : context.CreatePerson)</MudTd>
+                    <MudTd Class="cpi-createtime-cell">@FormatCreateTime(context)</MudTd>
                     <MudTd Class="@OpsCellClass">
                         <div class="@OpsGridClass">
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -290,11 +308,27 @@
         border-top: 1px solid var(--mud-palette-lines-default);
     }
 
-    .cotract-pi-table .mud-table-head .mud-table-cell:not(.cpi-ops-cell):not(.cpi-no-cell):not(:first-child),
-    .cotract-pi-table .mud-table-body .mud-table-cell:not(.cpi-ops-cell):not(.cpi-no-cell):not(:first-child) {
+    .cotract-pi-table .mud-table-head .mud-table-cell:not(.cpi-ops-cell):not(.cpi-creator-cell):not(.cpi-createtime-cell):not(.cpi-po-cell):not(.cpi-no-cell):not(:first-child),
+    .cotract-pi-table .mud-table-body .mud-table-cell:not(.cpi-ops-cell):not(.cpi-creator-cell):not(.cpi-createtime-cell):not(.cpi-po-cell):not(.cpi-no-cell):not(:first-child) {
         white-space: nowrap;
         min-width: 88px;
         vertical-align: middle;
+    }
+
+    .cotract-pi-table .mud-table-cell.cpi-po-cell {
+        max-width: 180px;
+        min-width: 100px;
+        width: 180px;
+        white-space: nowrap !important;
+        vertical-align: middle;
+        overflow: hidden;
+    }
+
+    .cpi-po-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 164px;
     }
 
     .cotract-pi-table .mud-table-cell:first-child,
@@ -337,8 +371,8 @@
         border-right: 1px solid #e0e0e0;
     }
 
-    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpi-no-cell {
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpi-no-cell {
         background-color: #f5f5f5 !important;
     }
 
@@ -347,20 +381,27 @@
         background-color: #eeeeee !important;
     }
 
+    /* 右侧固定：创建人 | 创建时间 | 操作 */
+    .cotract-pi-table .mud-table-cell.cpi-creator-cell,
+    .cotract-pi-table .mud-table-cell.cpi-createtime-cell,
     .cotract-pi-table .mud-table-cell.cpi-ops-cell {
         position: sticky;
-        right: 0;
         z-index: 4;
-        width: 168px;
-        min-width: 168px;
-        max-width: 168px;
         box-sizing: border-box;
-        padding: 6px 8px !important;
-        white-space: normal;
         vertical-align: middle;
         overflow: hidden;
         background-color: #fff !important;
+        white-space: nowrap;
         border-left: 1px solid #e0e0e0;
+    }
+
+    .cotract-pi-table .mud-table-cell.cpi-ops-cell {
+        right: 0;
+        width: 168px;
+        min-width: 168px;
+        max-width: 168px;
+        padding: 6px 8px !important;
+        white-space: normal;
     }
 
     /* 仅编辑+删除：单行横排，按内容收窄 */
@@ -372,15 +413,45 @@
         white-space: nowrap;
     }
 
+    .cotract-pi-table .mud-table-cell.cpi-createtime-cell {
+        right: 168px;
+        width: 156px;
+        min-width: 156px;
+        max-width: 156px;
+        padding: 6px 8px !important;
+    }
+
+    .cotract-pi-table .mud-table-cell.cpi-creator-cell {
+        right: 324px;
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        padding: 6px 8px !important;
+    }
+
+    /* 操作列收窄时，左侧固定列同步右偏移 */
+    .cotract-pi-table:has(.cpi-ops-cell--compact) .mud-table-cell.cpi-createtime-cell {
+        right: 136px;
+    }
+    .cotract-pi-table:has(.cpi-ops-cell--compact) .mud-table-cell.cpi-creator-cell {
+        right: 292px;
+    }
+
+    .cotract-pi-table .mud-table-head .mud-table-cell.cpi-creator-cell,
+    .cotract-pi-table .mud-table-head .mud-table-cell.cpi-createtime-cell,
     .cotract-pi-table .mud-table-head .mud-table-cell.cpi-ops-cell {
         z-index: 6;
         background-color: #fff !important;
     }
 
-    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpi-ops-cell {
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpi-creator-cell,
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpi-createtime-cell,
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpi-ops-cell {
         background-color: #f5f5f5 !important;
     }
 
+    .cotract-pi-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpi-creator-cell,
+    .cotract-pi-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpi-createtime-cell,
     .cotract-pi-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpi-ops-cell {
         background-color: #eeeeee !important;
     }
@@ -598,11 +669,11 @@
 
     private int RowNo(ZyqdCotractPiModel row) => _skip + _rows.IndexOf(row) + 1;
 
-    private static string FormatBillDate(ZyqdCotractPiModel row)
-        => CotractPiTypes.FormatDate(row.BILL_TO_DATE);
-
     private static string FormatCreateTime(ZyqdCotractPiModel row)
-        => CotractPiTypes.FormatDate(row.CreateTime);
+        => DateDisplay.Format(row.CreateTime, "-");
+
+    private static string FormatUpdateTime(ZyqdCotractPiModel row)
+        => DateDisplay.Format(row.UpdateTime, "-");
 
     private string EditHref(ZyqdCotractPiModel row)
     {
@@ -760,7 +831,7 @@
         {
             var query = await BuildQueryAsync();
             query.SortLabel = string.IsNullOrWhiteSpace(state.SortLabel) || state.SortDirection == SortDirection.None
-                ? null
+                ? "CreateTime"
                 : state.SortLabel;
             query.SortDescending = state.SortDirection != SortDirection.Ascending;
             var take = state.PageSize <= 0 ? 20 : state.PageSize;

@@ -942,5 +942,5 @@
     private static bool IsBlank(string? value) => string.IsNullOrWhiteSpace(value);
     private static string Display(string? value) => IsBlank(value) ? "—" : value!.Trim();
     private static string FormatDate(DateTime? dt)
-        => dt is null ? "—" : dt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+        => DateDisplay.Format(dt);
 }

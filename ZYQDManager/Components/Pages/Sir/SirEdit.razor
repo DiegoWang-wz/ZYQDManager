@@ -940,6 +940,7 @@
     private bool _busy;
     private bool _loaded;
     private bool _imgUploading;
+    private string? _cleanFingerprint;
     private string _guid = "";
     /// <summary>业务员：不能新建；只能改认证（图二）+ 自己的留样（图三）。测试明细/主表其它项仅检测员管理员。</summary>
     private bool _operator;
@@ -1017,6 +1018,7 @@
             _productOptions = SirReportTypes.ProductsFor(_reportType).ToList();
             _issuanceDate = _main.IssuanceDate == default ? DateTime.Today : _main.IssuanceDate.Date;
             _loaded = true;
+            MarkClean();
         }
         catch (Exception ex)
         {
@@ -1026,6 +1028,108 @@
         {
             _busy = false;
         }
+    }
+
+    private void MarkClean()
+    {
+        SyncMainForExport();
+        _cleanFingerprint = BuildFingerprint();
+    }
+
+    private bool HasUnsavedChanges
+    {
+        get
+        {
+            SyncMainForExport();
+            return !string.Equals(_cleanFingerprint, BuildFingerprint(), StringComparison.Ordinal);
+        }
+    }
+
+    private string BuildFingerprint()
+        => System.Text.Json.JsonSerializer.Serialize(new
+        {
+            M = new
+            {
+                _main.Department,
+                _main.SalesmanName,
+                _main.Client,
+                _main.ClientDepartment,
+                _main.ContactName,
+                _main.Report_type,
+                _main.product_type,
+                _main.Product_partNo,
+                _main.ProductName,
+                _main.SoftwareVersion,
+                _main.IssuanceDate,
+                _main.SampleQuantity,
+                _main.DeliveryTimes,
+                _main.program_name,
+                _main.program_code,
+                _main.check_code,
+                _main.Test_Engineer,
+                _main.Test_Checked_by,
+                _main.Test_Approved_By,
+                _main.UL,
+                _main.FCC,
+                _main.CE,
+                _main.RoHS,
+                _main.REACH,
+                _main.Certification_None,
+                _main.Appearance_Approval_Report,
+                _main.Dimension_Report,
+                _main.Material_Report,
+                _main.Function_Report,
+                _main.Note,
+                _main.ImageUrls,
+            },
+            D = _details.Select(x => new
+            {
+                x.Id,
+                x.Specification_type,
+                x.Specification,
+                x.Criteria,
+                x.Actual_Results1,
+                x.Actual_Results2,
+                x.Actual_Results3,
+                x.Actual_Results4,
+                x.Actual_Results5,
+                x.Actual_Results6,
+                x.Conclusion_A,
+                x.Conclusio_B,
+                x.Conclusion_C,
+                x.Conclusion_D,
+                x.Note,
+                x.filling_type,
+            }),
+            S = _samples.Select(x => new
+            {
+                x.Id,
+                x.materialNo,
+                x.materialName,
+                x.materialModel,
+                x.materiaSpecs,
+                x.Note,
+                x.Note1,
+                x.ImageUrls,
+                x.CreatePerson,
+            }),
+            Img = _images,
+        });
+
+    private async Task<bool> ConfirmSaveBeforeExportAsync()
+    {
+        if (!_loaded)
+            return false;
+
+        if (!HasUnsavedChanges)
+            return true;
+
+        var (cont, saveFirst) = await UnsavedExportGuard.AskAsync(DialogService, exportFromDatabase: false);
+        if (!cont)
+            return false;
+        if (saveFirst)
+            return await SaveCoreAsync(showSuccess: true);
+        return true;
     }
 
     private async Task OnReportTypeChanged(string value)
@@ -1100,7 +1204,9 @@
         _main.Product_partNo = $"{client}-{name}-{date}-{_main.DeliveryTimes}";
     }
 
-    private async Task SaveAsync()
+    private async Task SaveAsync() => await SaveCoreAsync(showSuccess: true);
+
+    private async Task<bool> SaveCoreAsync(bool showSuccess)
     {
         _busy = true;
         try
@@ -1137,19 +1243,24 @@
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
-                return;
+                return false;
             }
 
-            Notify.Show("保存成功", Severity.Success);
+            if (showSuccess)
+                Notify.Show("保存成功", Severity.Success);
+            MarkClean();
             if (!Nav.Uri.Contains(_guid, StringComparison.OrdinalIgnoreCase))
             {
                 var href = $"/sir/{Uri.EscapeDataString(_guid)}?rt={Uri.EscapeDataString(_reportType)}&pt={Uri.EscapeDataString(_productType)}";
                 Nav.NavigateTo(href, replace: true);
             }
+
+            return true;
         }
         catch (Exception ex)
         {
             Notify.Show("保存失败：" + ex.Message, Severity.Error);
+            return false;
         }
         finally
         {
@@ -1170,7 +1281,8 @@
 
     private async Task ExportExcelAsync()
     {
-        if (!_loaded) return;
+        if (!await ConfirmSaveBeforeExportAsync())
+            return;
         _busy = true;
         Notify.Show("正在导出 Excel…", Severity.Info);
         await InvokeAsync(StateHasChanged);
@@ -1198,7 +1310,8 @@
 
     private async Task ExportPdfAsync(bool preview)
     {
-        if (!_loaded) return;
+        if (!await ConfirmSaveBeforeExportAsync())
+            return;
         _busy = true;
         Notify.Show(preview ? "正在生成预览…" : "正在导出 PDF…", Severity.Info);
         await InvokeAsync(StateHasChanged);

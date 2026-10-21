@@ -414,7 +414,7 @@ public class QuotationBaseService
     private static IQueryable<T> Sort<T>(IQueryable<T> q, QuotationBaseQueryDto query)
         where T : QuotationBaseEntity
     {
-        var label = (query.SortLabel ?? "Id").Trim();
+        var label = (query.SortLabel ?? "CreateTime").Trim();
         var desc = query.SortDescending;
 
         // 公共排序
@@ -422,13 +422,14 @@ public class QuotationBaseService
         {
             return label switch
             {
+                "Id" => desc ? q.OrderByDescending(x => x.Id) : q.OrderBy(x => x.Id),
                 "Part_No" => desc ? q.OrderByDescending(x => x.Part_No) : q.OrderBy(x => x.Part_No),
                 "CreateTime" => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime),
                 "UpdateTime" => desc ? q.OrderByDescending(x => x.UpdateTime) : q.OrderBy(x => x.UpdateTime),
                 "CreatePerson" => desc ? q.OrderByDescending(x => x.CreatePerson) : q.OrderBy(x => x.CreatePerson),
                 "UpdatePerson" => desc ? q.OrderByDescending(x => x.UpdatePerson) : q.OrderBy(x => x.UpdatePerson),
                 "Remark" => desc ? q.OrderByDescending(x => x.Remark) : q.OrderBy(x => x.Remark),
-                _ => desc ? q.OrderByDescending(x => x.Id) : q.OrderBy(x => x.Id),
+                _ => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime),
             };
         }
 

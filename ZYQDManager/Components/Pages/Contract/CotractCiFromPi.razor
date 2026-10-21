@@ -216,8 +216,8 @@
         border-right: 1px solid #e0e0e0;
     }
 
-    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpi-no-cell {
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .cotract-pi-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpi-no-cell {
         background-color: #f5f5f5 !important;
     }
 
@@ -266,7 +266,7 @@
     private int RowNo(ZyqdCotractPiModel row) => _skip + _rows.IndexOf(row) + 1;
 
     private static string FormatBillDate(ZyqdCotractPiModel row)
-        => CotractPiTypes.FormatDate(row.BILL_TO_DATE);
+        => DateDisplay.Format(row.BILL_TO_DATE, "-");
 
     private static string Dash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;

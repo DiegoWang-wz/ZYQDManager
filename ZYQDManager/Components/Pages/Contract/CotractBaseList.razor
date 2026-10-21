@@ -146,6 +146,8 @@
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Net_weight">净重（KG）</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="gross_weight">毛重（KG）</MudTableSortLabel></MudTh>
                 <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="Customer_Manager">客户负责人</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="UpdatePerson">更新人员</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="UpdateTime">更新时间</MudTableSortLabel></MudTh>
                 <MudTh Class="cb-creator-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
                 <MudTh Class="cb-createtime-cell"><MudTableSortLabel T="ZyqdCotractBaseModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
                 <MudTh Class="cb-ops-cell">操作</MudTh>
@@ -210,8 +212,10 @@
                         </MudChipSet>
                     }
                 </MudTd>
+                <MudTd>@(string.IsNullOrWhiteSpace(context.UpdatePerson) ? "—" : context.UpdatePerson)</MudTd>
+                <MudTd>@DateDisplay.Format(context.UpdateTime)</MudTd>
                 <MudTd Class="cb-creator-cell">@(string.IsNullOrWhiteSpace(context.CreatePerson) ? "—" : context.CreatePerson)</MudTd>
-                <MudTd Class="cb-createtime-cell">@(context.CreateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—")</MudTd>
+                <MudTd Class="cb-createtime-cell">@DateDisplay.Format(context.CreateTime)</MudTd>
                 <MudTd Class="cb-ops-cell">
                     <div class="cb-ops-grid">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -349,16 +353,20 @@
     .cotract-base-table .mud-table-cell:first-child,
     .cotract-base-table .mud-table-cell.cb-no-cell {
         position: sticky;
-        z-index: 4;
+        z-index: 5;
         box-sizing: border-box;
         vertical-align: middle !important;
         overflow: hidden;
+        /* 必须用不透明底，半透明斑马色会导致横向滚动时文字叠在固定列上 */
         background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
     }
 
     .cotract-base-table .mud-table-head .mud-table-cell:first-child,
     .cotract-base-table .mud-table-head .mud-table-cell.cb-no-cell {
-        z-index: 6;
+        z-index: 7;
+        background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
     }
 
     .cotract-base-table .mud-table-cell:first-child {
@@ -391,14 +399,16 @@
         border-right: 1px solid #e0e0e0;
     }
 
-    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-no-cell {
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cb-no-cell {
         background-color: #f5f5f5 !important;
+        background-image: linear-gradient(#f5f5f5, #f5f5f5);
     }
 
     .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
     .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-no-cell {
         background-color: #eeeeee !important;
+        background-image: linear-gradient(#eeeeee, #eeeeee);
     }
 
     /* 右侧固定：创建人 | 创建时间 | 操作 */
@@ -406,11 +416,12 @@
     .cotract-base-table .mud-table-cell.cb-createtime-cell,
     .cotract-base-table .mud-table-cell.cb-ops-cell {
         position: sticky;
-        z-index: 4;
+        z-index: 5;
         box-sizing: border-box;
         vertical-align: middle;
         overflow: hidden;
         background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
         white-space: nowrap;
     }
 
@@ -445,20 +456,23 @@
     .cotract-base-table .mud-table-head .mud-table-cell.cb-creator-cell,
     .cotract-base-table .mud-table-head .mud-table-cell.cb-createtime-cell,
     .cotract-base-table .mud-table-head .mud-table-cell.cb-ops-cell {
-        z-index: 6;
+        z-index: 7;
         background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
     }
 
-    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-creator-cell,
-    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-createtime-cell,
-    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cb-ops-cell {
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cb-creator-cell,
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cb-createtime-cell,
+    .cotract-base-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cb-ops-cell {
         background-color: #f5f5f5 !important;
+        background-image: linear-gradient(#f5f5f5, #f5f5f5);
     }
 
     .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-creator-cell,
     .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-createtime-cell,
     .cotract-base-table .mud-table-body .mud-table-row:hover .mud-table-cell.cb-ops-cell {
         background-color: #eeeeee !important;
+        background-image: linear-gradient(#eeeeee, #eeeeee);
     }
 
     .cb-ops-grid {
@@ -538,7 +552,9 @@
     private string? _keyword;
     private DateTime? _dateStart;
     private DateTime? _dateEnd;
-    private bool IsDateFilter => string.Equals(_filterColumn, "CreateTime", StringComparison.Ordinal);
+    private bool IsDateFilter =>
+        string.Equals(_filterColumn, "CreateTime", StringComparison.Ordinal)
+        || string.Equals(_filterColumn, "UpdateTime", StringComparison.Ordinal);
     private List<ZyqdCotractBaseModel> _rows = new();
     private HashSet<ZyqdCotractBaseModel> _selected = new();
     private int _skip;

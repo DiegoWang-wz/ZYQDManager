@@ -772,6 +772,7 @@
     private bool _isCreate;
     private ZyqdCustomsAndPackingModel _header = new();
     private List<CustomsAndPackingLineDto> _lines = [];
+    private string? _cleanFingerprint;
     private int _tempSeq;
     private CustomsAndPackingLineDto? _splitLine;
     private double _splitQty;
@@ -879,6 +880,7 @@
         }
         ApplyRows(rows);
         await CotractBase.ApplyNameplateTypesAsync(_header.ClientNo, _lines);
+        MarkClean();
     }
 
     private void ApplyRows(List<ZyqdCustomsAndPackingModel> rows)
@@ -891,6 +893,98 @@
         CustomsAndPackingCalc.RecalcAllLines(_lines);
         RefreshSummary();
         SyncProductClientFromHeader();
+    }
+
+    private void MarkClean() => _cleanFingerprint = BuildFingerprint();
+
+    private bool HasUnsavedChanges
+        => !string.Equals(_cleanFingerprint, BuildFingerprint(), StringComparison.Ordinal);
+
+    private string BuildFingerprint()
+    {
+        CustomsAndPackingCalc.RecalcAllLines(_lines);
+        RefreshSummary();
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            H = new
+            {
+                _header.ClientNo,
+                _header.ClientName,
+                _header.Customer_destination_country,
+                _header.PIcotract_code,
+                _header.Shipping_heads_up,
+                _header.delivery_time,
+                _header.Trade_Term,
+                _header.packing_list_type,
+                _header.Shipping_method,
+                _header.encasement_method,
+                _header.Box_type_quantity,
+                _header.SAP_order_NO,
+                _header.all_qty,
+                _header.all_box_qty,
+                _header.all_Pallet_qty,
+                _header.all_total_Net_weight,
+                _header.all_total_gross_weight,
+                _header.all_volume,
+                _header.all_emit,
+                _header.var5,
+            },
+            Lines = _lines.Select(x => new
+            {
+                x.materialNo,
+                x.materialName,
+                x.qty,
+                x.price,
+                x.box_qty,
+                x.Pallet_qty,
+                x.Pallet_code,
+                x.var1,
+                x.var2,
+                x.var3,
+                x.var4,
+                x.var7,
+                x.var8,
+                x.Packing_method,
+                x.Packing_method_unit,
+                x.palletizing_method,
+                x.palletizing_method_unit,
+                x.Carton_Size,
+                x.Pallet_Size,
+                x.Net_weight,
+                x.gross_weight,
+                x.total_Net_weight,
+                x.total_gross_weight,
+                x.volume,
+                x.SAP_order_NO,
+                x.Client_poNo,
+                x.PI_Material_Name,
+                x.nameplate_type,
+                x.nameplate_type2,
+                x.Customer_outer_box_logo,
+                x.Tuo_Mark,
+                x.Box_label,
+                x.Box_label2,
+            }),
+        });
+    }
+
+    private async Task<bool> ConfirmSaveBeforeExportAsync()
+    {
+        if (_isCreate)
+        {
+            Notify.Show("请先保存再导出", Severity.Warning);
+            return false;
+        }
+
+        if (!HasUnsavedChanges)
+            return true;
+
+        var (cont, saveFirst) = await UnsavedExportGuard.AskAsync(DialogService, exportFromDatabase: true);
+        if (!cont)
+            return false;
+        if (saveFirst)
+            return await SaveCoreAsync(showSuccess: true);
+        return true;
     }
 
     private void SyncProductClientFromHeader()
@@ -1391,12 +1485,14 @@
         CloseSplit();
     }
 
-    private async Task SaveAsync()
+    private async Task SaveAsync() => await SaveCoreAsync(showSuccess: true);
+
+    private async Task<bool> SaveCoreAsync(bool showSuccess)
     {
         if (_lines.Count == 0)
         {
             Notify.Show("请至少保留一行明细", Severity.Warning);
-            return;
+            return false;
         }
 
         foreach (var line in _lines.Where(x => CustomsAndPackingCalc.IsMergePrimary(x.var8)
@@ -1405,7 +1501,7 @@
             if (string.IsNullOrWhiteSpace(line.Pallet_code))
             {
                 Notify.Show($"物料 {line.materialNo} 已拼托但未填托盘编号，请补全后再保存", Severity.Warning);
-                return;
+                return false;
             }
         }
         foreach (var primary in _lines.Where(x => CustomsAndPackingCalc.IsMergePrimary(x.var8)))
@@ -1413,7 +1509,7 @@
             if (string.IsNullOrWhiteSpace(primary.var2))
             {
                 Notify.Show($"托主 {primary.materialNo} 未填尾托尺寸，请补全后再保存", Severity.Warning);
-                return;
+                return false;
             }
         }
 
@@ -1427,28 +1523,28 @@
             if (!ok)
             {
                 Notify.Show(msg ?? "保存失败", Severity.Error);
-                return;
+                return false;
             }
-            Notify.Show("保存成功", Severity.Success);
+            if (showSuccess)
+                Notify.Show("保存成功", Severity.Success);
             if (_isCreate && !string.IsNullOrWhiteSpace(guid))
                 NavManager.NavigateTo($"/contract-pk/{guid}", replace: true);
             else
                 await LoadExistingAsync(guid ?? _header.DocumentGuid ?? "");
+            return true;
         }
         catch (Exception ex)
         {
             Notify.Show("保存失败：" + ex.Message, Severity.Error);
+            return false;
         }
         finally { _busy = false; }
     }
 
     private async Task ExportExcelAsync(string type)
     {
-        if (_isCreate)
-        {
-            Notify.Show("请先保存再导出", Severity.Warning);
+        if (!await ConfirmSaveBeforeExportAsync())
             return;
-        }
 
         if (type is "报关" or "生产")
         {

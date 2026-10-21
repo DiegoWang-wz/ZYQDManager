@@ -83,7 +83,7 @@
                     <MudTd>@Dash(context.currencyUnit)</MudTd>
                     <MudTd>@Dash(context.signature)</MudTd>
                     <MudTd>@Dash(context.personId)</MudTd>
-                    <MudTd>@(context.createTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</MudTd>
+                    <MudTd>@DateDisplay.Format(context.createTime, "-")</MudTd>
                     <MudTd Class="qe-ops-cell">
                         <div class="qe-ops-grid">
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -231,8 +231,8 @@
         border-right: 1px solid #e0e0e0;
     }
 
-    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qe-no-cell {
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.qe-no-cell {
         background-color: #f5f5f5 !important;
     }
 
@@ -262,7 +262,7 @@
         background-color: #fff !important;
     }
 
-    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.qe-ops-cell {
+    .qe-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.qe-ops-cell {
         background-color: #f5f5f5 !important;
     }
 

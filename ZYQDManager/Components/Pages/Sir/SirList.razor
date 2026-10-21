@@ -117,8 +117,8 @@
                     <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Product_partNo">产品型号</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="ProductName">产品名称</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="SoftwareVersion">软件版本</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="IssuanceDate">签发日期</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Test_Approved_By">批准人</MudTableSortLabel></MudTh>
+                    <MudTh Class="sir-date-cell"><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="IssuanceDate">签发日期</MudTableSortLabel></MudTh>
+                    <MudTh Class="sir-approver-cell"><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Test_Approved_By">批准人</MudTableSortLabel></MudTh>
                     <MudTh Class="sir-ops-cell">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -131,8 +131,8 @@
                     <MudTd>@Dash(context.Product_partNo)</MudTd>
                     <MudTd>@Dash(context.ProductName)</MudTd>
                     <MudTd>@Dash(context.SoftwareVersion)</MudTd>
-                    <MudTd>@FormatDate(context.IssuanceDate)</MudTd>
-                    <MudTd>@Dash(context.Test_Approved_By)</MudTd>
+                    <MudTd Class="sir-date-cell">@FormatDate(context.IssuanceDate)</MudTd>
+                    <MudTd Class="sir-approver-cell">@Dash(context.Test_Approved_By)</MudTd>
                     <MudTd Class="sir-ops-cell">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Edit"
@@ -217,14 +217,14 @@
         border-top: 1px solid var(--mud-palette-lines-default);
     }
     /* 有勾选时跳过 first-child（勾选列）；无勾选时 first 已是 sir-no-cell，同样被排除 */
-    .sir-table .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell):not(:first-child),
-    .sir-table .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell):not(:first-child) {
+    .sir-table .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-date-cell):not(.sir-approver-cell):not(.sir-no-cell):not(:first-child),
+    .sir-table .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-date-cell):not(.sir-approver-cell):not(.sir-no-cell):not(:first-child) {
         white-space: nowrap;
         min-width: 88px;
         vertical-align: middle;
     }
-    .sir-table.sir-table-no-select .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell),
-    .sir-table.sir-table-no-select .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-no-cell) {
+    .sir-table.sir-table-no-select .mud-table-head .mud-table-cell:not(.sir-ops-cell):not(.sir-date-cell):not(.sir-approver-cell):not(.sir-no-cell),
+    .sir-table.sir-table-no-select .mud-table-body .mud-table-cell:not(.sir-ops-cell):not(.sir-date-cell):not(.sir-approver-cell):not(.sir-no-cell) {
         white-space: nowrap;
         min-width: 88px;
         vertical-align: middle;
@@ -273,25 +273,33 @@
         left: 0;
     }
     .sir-table .mud-table-head .mud-table-cell.sir-no-cell { z-index: 6; }
-    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.sir-no-cell {
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-no-cell {
         background-color: #f5f5f5 !important;
     }
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-no-cell {
         background-color: #eeeeee !important;
     }
+    /* 右侧固定：签发日期 | 批准人 | 操作 */
+    .sir-table .mud-table-cell.sir-date-cell,
+    .sir-table .mud-table-cell.sir-approver-cell,
     .sir-table .mud-table-cell.sir-ops-cell {
         position: sticky;
-        right: 0;
         z-index: 4;
-        width: 88px !important;
-        min-width: 88px !important;
-        max-width: 100px !important;
+        box-sizing: border-box;
         white-space: nowrap;
         background-color: #fff !important;
         border-left: 1px solid #e0e0e0;
         vertical-align: middle;
+        overflow: hidden;
+    }
+
+    .sir-table .mud-table-cell.sir-ops-cell {
+        right: 0;
+        width: 88px !important;
+        min-width: 88px !important;
+        max-width: 100px !important;
         padding-left: 6px !important;
         padding-right: 6px !important;
     }
@@ -300,10 +308,40 @@
         min-width: 140px !important;
         max-width: 160px !important;
     }
+
+    .sir-table .mud-table-cell.sir-approver-cell {
+        right: 88px;
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        padding: 6px 8px !important;
+    }
+    .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-approver-cell {
+        right: 140px;
+    }
+
+    .sir-table .mud-table-cell.sir-date-cell {
+        right: 176px; /* 88 + 88 */
+        width: 156px;
+        min-width: 156px;
+        max-width: 156px;
+        padding: 6px 8px !important;
+    }
+    .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-date-cell {
+        right: 228px; /* 140 + 88 */
+    }
+
+    .sir-table .mud-table-head .mud-table-cell.sir-date-cell,
+    .sir-table .mud-table-head .mud-table-cell.sir-approver-cell,
     .sir-table .mud-table-head .mud-table-cell.sir-ops-cell { z-index: 6; }
-    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.sir-ops-cell {
+
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-date-cell,
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-approver-cell,
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-ops-cell {
         background-color: #f5f5f5 !important;
     }
+    .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-date-cell,
+    .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-approver-cell,
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-ops-cell {
         background-color: #eeeeee !important;
     }
@@ -401,7 +439,7 @@
     private int RowNo(ZyqdSirMainModel row) => _skip + _rows.IndexOf(row) + 1;
 
     private static string FormatDate(DateTime dt)
-        => dt == default ? "-" : dt.ToString("yyyy-MM-dd");
+        => DateDisplay.Format(dt, "-");
 
     private static string EditHref(ZyqdSirMainModel row)
     {

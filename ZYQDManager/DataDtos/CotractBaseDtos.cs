@@ -56,6 +56,8 @@ public static class CotractBaseFilterFields
         ("gross_weight", "毛重"),
         ("Customer_Manager", "负责人"),
         ("CreatePerson", "创建人"),
-        ("CreateTime", "创建日期")
+        ("CreateTime", "创建日期"),
+        ("UpdatePerson", "更新人员"),
+        ("UpdateTime", "更新时间")
     ];
 }

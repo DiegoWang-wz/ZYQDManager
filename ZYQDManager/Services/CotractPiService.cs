@@ -42,7 +42,9 @@ public class CotractPiService
                 INVOICE_NO = x.INVOICE_NO,
                 BILL_TO_DATE = x.BILL_TO_DATE,
                 CreateTime = x.CreateTime,
+                CreatePerson = x.CreatePerson,
                 UpdateTime = x.UpdateTime,
+                UpdatePerson = x.UpdatePerson,
                 BILL_TO_PO_REF = x.BILL_TO_PO_REF
             })
             .ToListAsync(ct);
@@ -424,6 +426,23 @@ public class CotractPiService
             return q;
         }
 
+        if (string.Equals(query.FilterColumn, "修改时间", StringComparison.Ordinal))
+        {
+            if (query.DateStart is { } from)
+            {
+                var start = from.Date;
+                q = q.Where(x => x.UpdateTime != null && x.UpdateTime >= start);
+            }
+
+            if (query.DateEnd is { } to)
+            {
+                var end = to.Date.AddDays(1);
+                q = q.Where(x => x.UpdateTime != null && x.UpdateTime < end);
+            }
+
+            return q;
+        }
+
         var keyword = (query.Keyword ?? "").Trim();
         if (keyword.Length == 0)
             return q;
@@ -437,6 +456,7 @@ public class CotractPiService
             "需求人" or "Person" => q.Where(x => x.Person != null && x.Person.Contains(keyword)),
             "发票号" or "INVOICE_NO" => q.Where(x => x.INVOICE_NO != null && x.INVOICE_NO.Contains(keyword)),
             "PO号" or "BILL_TO_PO_REF" => q.Where(x => x.BILL_TO_PO_REF != null && x.BILL_TO_PO_REF.Contains(keyword)),
+            "修改人" or "UpdatePerson" => q.Where(x => x.UpdatePerson != null && x.UpdatePerson.Contains(keyword)),
             _ => q.Where(x =>
                 (x.ClientName != null && x.ClientName.Contains(keyword))
                 || (x.ClientNo != null && (x.ClientNo.Contains(keyword) || x.ClientNo.EndsWith(keyword))))
@@ -455,8 +475,11 @@ public class CotractPiService
             "INVOICE_NO" => desc ? q.OrderByDescending(x => x.INVOICE_NO) : q.OrderBy(x => x.INVOICE_NO),
             "BILL_TO_DATE" => desc ? q.OrderByDescending(x => x.BILL_TO_DATE) : q.OrderBy(x => x.BILL_TO_DATE),
             "CreateTime" => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime),
+            "CreatePerson" => desc ? q.OrderByDescending(x => x.CreatePerson) : q.OrderBy(x => x.CreatePerson),
+            "UpdateTime" => desc ? q.OrderByDescending(x => x.UpdateTime) : q.OrderBy(x => x.UpdateTime),
+            "UpdatePerson" => desc ? q.OrderByDescending(x => x.UpdatePerson) : q.OrderBy(x => x.UpdatePerson),
             "BILL_TO_PO_REF" => desc ? q.OrderByDescending(x => x.BILL_TO_PO_REF) : q.OrderBy(x => x.BILL_TO_PO_REF),
-            _ => desc ? q.OrderByDescending(x => x.UpdateTime) : q.OrderBy(x => x.UpdateTime)
+            _ => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime)
         };
     }
 

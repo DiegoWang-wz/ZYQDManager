@@ -124,9 +124,11 @@
                     <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="ClientName">客户名称</MudTableSortLabel></MudTh>
                     <MudTh>目的国</MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="PIcotract_code">PI合同</MudTableSortLabel></MudTh>
-                    <MudTh>SAP订单</MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
-                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-sap-cell">SAP订单</MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="UpdatePerson">修改人</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="UpdateTime">修改时间</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-creator-cell"><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreatePerson">创建人</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-createtime-cell"><MudTableSortLabel T="ZyqdCustomsAndPackingModel" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel></MudTh>
                     <MudTh Class="cpk-ops-cell">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -135,9 +137,25 @@
                     <MudTd>@Dash(context.ClientName)</MudTd>
                     <MudTd>@Dash(context.Customer_destination_country)</MudTd>
                     <MudTd>@Dash(context.PIcotract_code)</MudTd>
-                    <MudTd>@Dash(context.SAP_order_NO)</MudTd>
-                    <MudTd>@Dash(context.CreatePerson)</MudTd>
-                    <MudTd>@(context.CreateTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</MudTd>
+                    <MudTd Class="cpk-sap-cell">
+                        @{
+                            var sap = (context.SAP_order_NO ?? "").Trim();
+                        }
+                        @if (sap.Length > 0)
+                        {
+                            <MudTooltip Text="@sap" Arrow="true">
+                                <div class="cpk-sap-text">@sap</div>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </MudTd>
+                    <MudTd>@Dash(context.UpdatePerson)</MudTd>
+                    <MudTd>@DateDisplay.Format(context.UpdateTime, "-")</MudTd>
+                    <MudTd Class="cpk-creator-cell">@Dash(context.CreatePerson)</MudTd>
+                    <MudTd Class="cpk-createtime-cell">@DateDisplay.Format(context.CreateTime, "-")</MudTd>
                     <MudTd Class="cpk-ops-cell">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Edit"
@@ -198,16 +216,36 @@
     .cpk-table { height: 100%; display: flex; flex-direction: column; }
     .cpk-table .mud-table-container { flex: 1 1 0 !important; min-height: 0 !important; overflow: auto !important; }
     .cpk-table .mud-table-pagination { flex: 0 0 auto !important; margin-top: auto; border-top: 1px solid var(--mud-palette-lines-default); }
-    .cpk-table .mud-table-head .mud-table-cell:not(.cpk-ops-cell):not(.cpk-no-cell):not(:first-child),
-    .cpk-table .mud-table-body .mud-table-cell:not(.cpk-ops-cell):not(.cpk-no-cell):not(:first-child) {
+    .cpk-table .mud-table-head .mud-table-cell:not(.cpk-ops-cell):not(.cpk-creator-cell):not(.cpk-createtime-cell):not(.cpk-sap-cell):not(.cpk-no-cell):not(:first-child),
+    .cpk-table .mud-table-body .mud-table-cell:not(.cpk-ops-cell):not(.cpk-creator-cell):not(.cpk-createtime-cell):not(.cpk-sap-cell):not(.cpk-no-cell):not(:first-child) {
         white-space: nowrap; min-width: 88px; vertical-align: middle;
+    }
+    .cpk-table .mud-table-cell.cpk-sap-cell {
+        max-width: 400px;
+        min-width: 120px;
+        width: 400px;
+        overflow: hidden;
+        vertical-align: middle;
+    }
+    .cpk-sap-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 384px;
     }
     .cpk-table .mud-table-cell:first-child,
     .cpk-table .mud-table-cell.cpk-no-cell {
-        position: sticky; z-index: 4; box-sizing: border-box; background-color: #fff !important; vertical-align: middle !important;
+        position: sticky; z-index: 5; box-sizing: border-box;
+        background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
+        vertical-align: middle !important;
     }
     .cpk-table .mud-table-head .mud-table-cell:first-child,
-    .cpk-table .mud-table-head .mud-table-cell.cpk-no-cell { z-index: 6; }
+    .cpk-table .mud-table-head .mud-table-cell.cpk-no-cell {
+        z-index: 7;
+        background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
+    }
     .cpk-table .mud-table-cell:first-child {
         left: 0; width: 42px !important; min-width: 42px !important; max-width: 42px !important; padding: 0 !important; text-align: center !important; white-space: nowrap !important;
     }
@@ -222,27 +260,66 @@
     .cpk-table .mud-table-cell.cpk-no-cell {
         left: 42px; width: 48px !important; min-width: 48px !important; max-width: 48px !important; padding: 0 2px !important; text-align: center; border-right: 1px solid #e0e0e0;
     }
-    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell:first-child,
-    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpk-no-cell,
-    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(even) .mud-table-cell.cpk-ops-cell {
+
+    /* 右侧固定：创建人 | 创建时间 | 操作 */
+    .cpk-table .mud-table-cell.cpk-creator-cell,
+    .cpk-table .mud-table-cell.cpk-createtime-cell,
+    .cpk-table .mud-table-cell.cpk-ops-cell {
+        position: sticky;
+        z-index: 5;
+        box-sizing: border-box;
+        vertical-align: middle;
+        overflow: hidden;
+        white-space: nowrap;
+        background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
+        border-left: 1px solid #e0e0e0;
+    }
+    .cpk-table .mud-table-cell.cpk-ops-cell {
+        right: 0;
+        width: 160px;
+        min-width: 160px;
+        max-width: 160px;
+        padding: 6px 8px !important;
+    }
+    .cpk-table .mud-table-cell.cpk-createtime-cell {
+        right: 160px;
+        width: 156px;
+        min-width: 156px;
+        max-width: 156px;
+        padding: 6px 8px !important;
+    }
+    .cpk-table .mud-table-cell.cpk-creator-cell {
+        right: 316px;
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        padding: 6px 8px !important;
+    }
+    .cpk-table .mud-table-head .mud-table-cell.cpk-creator-cell,
+    .cpk-table .mud-table-head .mud-table-cell.cpk-createtime-cell,
+    .cpk-table .mud-table-head .mud-table-cell.cpk-ops-cell {
+        z-index: 7;
+        background-color: #fff !important;
+        background-image: linear-gradient(#fff, #fff);
+    }
+
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpk-no-cell,
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpk-creator-cell,
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpk-createtime-cell,
+    .cpk-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.cpk-ops-cell {
         background-color: #f5f5f5 !important;
+        background-image: linear-gradient(#f5f5f5, #f5f5f5);
     }
     .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
     .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-no-cell,
+    .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-creator-cell,
+    .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-createtime-cell,
     .cpk-table .mud-table-body .mud-table-row:hover .mud-table-cell.cpk-ops-cell {
         background-color: #eeeeee !important;
+        background-image: linear-gradient(#eeeeee, #eeeeee);
     }
-    .cpk-table .mud-table-cell.cpk-ops-cell {
-        position: sticky;
-        right: 0;
-        z-index: 4;
-        min-width: 160px;
-        white-space: nowrap;
-        vertical-align: middle;
-        background-color: #fff !important;
-        border-left: 1px solid #e0e0e0;
-    }
-    .cpk-table .mud-table-head .mud-table-cell.cpk-ops-cell { z-index: 6; background-color: #fff !important; }
     .cpk-table .mud-table-body .mud-table-row { cursor: pointer; }
 </style>
 

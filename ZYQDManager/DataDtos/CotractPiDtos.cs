@@ -386,10 +386,11 @@ public static class CotractPiFilterFields
         ("需求人", "需求人"),
         ("发票号", "发票号"),
         ("PO号", "PO号"),
-        ("日期", "日期"),
-        ("创建日期", "创建日期")
+        ("创建日期", "创建日期"),
+        ("修改人", "修改人"),
+        ("修改时间", "修改时间")
     ];
 
     public static bool IsDateFilter(string? filterColumn)
-        => filterColumn is "日期" or "创建日期";
+        => filterColumn is "创建日期" or "修改时间";
 }

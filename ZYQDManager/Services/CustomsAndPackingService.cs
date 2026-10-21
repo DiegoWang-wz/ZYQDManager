@@ -426,8 +426,8 @@ public class CustomsAndPackingService
                 q = q.Where(_ => false);
         }
 
-        // 仅条件为「创建时间」时按日期区间筛
-        if (CustomsAndPackingFilterFields.IsDateFilter(query.FilterColumn))
+        // 创建时间 / 修改时间：按日期区间筛
+        if (string.Equals(query.FilterColumn, "创建时间", StringComparison.Ordinal))
         {
             if (query.DateStart is { } ds)
             {
@@ -444,6 +444,23 @@ public class CustomsAndPackingService
             return q;
         }
 
+        if (string.Equals(query.FilterColumn, "修改时间", StringComparison.Ordinal))
+        {
+            if (query.DateStart is { } ds)
+            {
+                var start = ds.Date;
+                q = q.Where(x => x.UpdateTime != null && x.UpdateTime.Value >= start);
+            }
+
+            if (query.DateEnd is { } de)
+            {
+                var end = de.Date.AddDays(1);
+                q = q.Where(x => x.UpdateTime != null && x.UpdateTime.Value < end);
+            }
+
+            return q;
+        }
+
         var kw = (query.Keyword ?? "").Trim();
         if (kw.Length == 0)
             return q;
@@ -453,6 +470,7 @@ public class CustomsAndPackingService
             "客户名称" => q.Where(x => x.ClientName != null && x.ClientName.Contains(kw)),
             "PI合同" => q.Where(x => x.PIcotract_code != null && x.PIcotract_code.Contains(kw)),
             "创建人" => q.Where(x => x.CreatePerson != null && x.CreatePerson.Contains(kw)),
+            "修改人" => q.Where(x => x.UpdatePerson != null && x.UpdatePerson.Contains(kw)),
             "SAP订单号" => q.Where(x =>
                 (x.SAP_order_NO != null && x.SAP_order_NO.Contains(kw))
                 || (x.Customer_destination_country != null && x.Customer_destination_country.Contains(kw))
@@ -473,6 +491,9 @@ public class CustomsAndPackingService
             "PIcotract_code" => desc ? q.OrderByDescending(x => x.PIcotract_code) : q.OrderBy(x => x.PIcotract_code),
             "Person" => desc ? q.OrderByDescending(x => x.Person) : q.OrderBy(x => x.Person),
             "CreatePerson" => desc ? q.OrderByDescending(x => x.CreatePerson) : q.OrderBy(x => x.CreatePerson),
+            "CreateTime" => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime),
+            "UpdatePerson" => desc ? q.OrderByDescending(x => x.UpdatePerson) : q.OrderBy(x => x.UpdatePerson),
+            "UpdateTime" => desc ? q.OrderByDescending(x => x.UpdateTime) : q.OrderBy(x => x.UpdateTime),
             _ => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime)
         };
     }
