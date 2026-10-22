@@ -845,7 +845,11 @@
             var result = await CotractBase.ImportAsync(ms, empNo, query);
             if (!result.Ok)
             {
-                Notify.Show(result.Message, Severity.Error);
+                // 导入失败用对话框展示完整原因（顶部提示太短，看不清具体问题）
+                await DialogService.ShowMessageBoxAsync(
+                    "导入失败",
+                    result.Message ?? "未知错误",
+                    yesText: "知道了");
                 return;
             }
 

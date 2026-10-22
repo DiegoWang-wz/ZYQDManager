@@ -86,6 +86,9 @@ public class SirService
         var details = await _db.SirDetails.AsNoTracking()
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
             .ToListAsync(ct);
+        // 历史连点保存可能留下重复序号：按 Specification_type 去重（保留 Id 最大）并按 M.n 排序
+        if (details.Count > 0)
+            details = DedupeAndSortDetails(details);
         if (details.Count == 0)
             details = BuildDefaultDetails(guid, reportType!, productType!);
 
@@ -157,13 +160,13 @@ public class SirService
             _db.Entry(existing).CurrentValues.SetValues(doc.Main);
         }
 
-        // 明细按 main_guid + Report_type 覆盖保存
+        // 明细按 main_guid + Report_type 覆盖保存（写入前按序号去重，避免连点把双份写回）
         var oldDetails = await _db.SirDetails
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
             .ToListAsync(ct);
         _db.SirDetails.RemoveRange(oldDetails);
 
-        foreach (var d in doc.Details ?? [])
+        foreach (var d in DedupeAndSortDetails(doc.Details ?? []))
         {
             d.Id = 0;
             d.main_guid = guid;
@@ -384,6 +387,29 @@ public class SirService
             "Test_Approved_By" => desc ? q.OrderByDescending(x => x.Test_Approved_By) : q.OrderBy(x => x.Test_Approved_By),
             _ => desc ? q.OrderByDescending(x => x.Id) : q.OrderBy(x => x.Id),
         };
+    }
+
+    /// <summary>
+    /// 按 Specification_type（M.n）去重：同序号保留 Id 较大的一条，再按序号数值排序。
+    /// </summary>
+    private static List<ZyqdSirDetailModel> DedupeAndSortDetails(IEnumerable<ZyqdSirDetailModel> source)
+    {
+        return source
+            .GroupBy(x => (x.Specification_type ?? "").Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Key.Length > 0)
+            .Select(g => g.OrderByDescending(x => x.Id).First())
+            .OrderBy(x => SpecTypeSortKey(x.Specification_type))
+            .ThenBy(x => x.Specification_type, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int SpecTypeSortKey(string? spec)
+    {
+        spec = (spec ?? "").Trim();
+        if (spec.StartsWith("M.", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(spec.AsSpan(2), out var n))
+            return n;
+        return int.MaxValue;
     }
 
     private static List<ZyqdSirDetailModel> BuildDefaultDetails(string mainGuid, string reportType, string productType)

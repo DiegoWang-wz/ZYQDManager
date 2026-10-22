@@ -940,7 +940,9 @@
     private bool _busy;
     private bool _loaded;
     private bool _imgUploading;
+    private bool _saving;
     private string? _cleanFingerprint;
+    private string? _pageKey;
     private string _guid = "";
     /// <summary>业务员：不能新建；只能改认证（图二）+ 自己的留样（图三）。测试明细/主表其它项仅检测员管理员。</summary>
     private bool _operator;
@@ -975,8 +977,8 @@
 
         _operator = AppRoles.IsOperator(auth?.Role) && !AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
 
-        var guid = (DocumentGuid ?? "").Trim();
-        var isNew = guid.Length == 0 || string.Equals(guid, "new", StringComparison.OrdinalIgnoreCase);
+        var routeGuid = (DocumentGuid ?? "").Trim();
+        var isNew = routeGuid.Length == 0 || string.Equals(routeGuid, "new", StringComparison.OrdinalIgnoreCase);
         if (_operator && isNew)
         {
             Notify.Show("业务员不能新建检测报告，请打开已有报告维护", Severity.Warning);
@@ -984,14 +986,28 @@
             return;
         }
 
+        // 新建：整页生命周期只生成一次 guid，避免 OnParametersSet 重入换号
         if (isNew)
-            guid = Guid.NewGuid().ToString("N");
+        {
+            if (string.IsNullOrWhiteSpace(_guid))
+                _guid = Guid.NewGuid().ToString("N");
+        }
+        else
+        {
+            _guid = routeGuid;
+        }
 
-        _guid = guid;
-        _reportType = string.IsNullOrWhiteSpace(QueryReportType) ? "remote" : QueryReportType.Trim();
-        _productType = string.IsNullOrWhiteSpace(QueryProductType)
-            ? SirReportTypes.DefaultProduct(_reportType)
+        var rt = string.IsNullOrWhiteSpace(QueryReportType) ? "remote" : QueryReportType.Trim();
+        var pt = string.IsNullOrWhiteSpace(QueryProductType)
+            ? SirReportTypes.DefaultProduct(rt)
             : QueryProductType.Trim();
+        var pageKey = $"{(isNew ? "new" : routeGuid)}|{rt}|{pt}|{_operator}";
+        if (_pageKey == pageKey && _loaded)
+            return;
+        _pageKey = pageKey;
+
+        _reportType = rt;
+        _productType = pt;
         _productOptions = SirReportTypes.ProductsFor(_reportType).ToList();
         if (!_productOptions.Contains(_productType))
             _productType = SirReportTypes.DefaultProduct(_reportType);
@@ -1208,7 +1224,13 @@
 
     private async Task<bool> SaveCoreAsync(bool showSuccess)
     {
+        // 防呆：连点保存 / 保存中再点导出保存，只允许进入一次
+        if (_saving || !_loaded)
+            return false;
+
+        _saving = true;
         _busy = true;
+        await InvokeAsync(StateHasChanged);
         try
         {
             _main.guid = _guid;
@@ -1264,6 +1286,7 @@
         }
         finally
         {
+            _saving = false;
             _busy = false;
         }
     }
@@ -1281,6 +1304,8 @@
 
     private async Task ExportExcelAsync()
     {
+        if (_busy || _saving || !_loaded)
+            return;
         if (!await ConfirmSaveBeforeExportAsync())
             return;
         _busy = true;
@@ -1310,6 +1335,8 @@
 
     private async Task ExportPdfAsync(bool preview)
     {
+        if (_busy || _saving || !_loaded)
+            return;
         if (!await ConfirmSaveBeforeExportAsync())
             return;
         _busy = true;

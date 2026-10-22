@@ -170,14 +170,32 @@ public class QuotationBaseExcelService
         if (excelStream.CanSeek)
             excelStream.Position = 0;
 
+        // 先读入内存做文件头诊断，再交给 ClosedXML
+        using var buffer = new MemoryStream();
+        await excelStream.CopyToAsync(buffer, ct);
+        var bytes = buffer.ToArray();
+        if (bytes.Length < 4 || bytes[0] != (byte)'P' || bytes[1] != (byte)'K')
+        {
+            if (bytes.Length >= 4 && bytes[0] == 0xD0 && bytes[1] == 0xCF && bytes[2] == 0x11 && bytes[3] == 0xE0)
+                return Fail("导入失败：检测到旧版 .xls。请另存为 .xlsx，或使用「下载模板」。");
+            return Fail("导入失败：不是有效的 xlsx 文件（文件头不正确）。请用「下载模板」填写后上传 .xlsx。");
+        }
+
         XLWorkbook wb;
         try
         {
-            wb = new XLWorkbook(excelStream);
+            wb = new XLWorkbook(new MemoryStream(bytes));
         }
         catch (Exception ex)
         {
-            return Fail("无法打开 Excel，请使用 xlsx 模板：" + ex.Message);
+            var detail = ex.Message;
+            for (var e = ex.InnerException; e != null; e = e.InnerException)
+                detail += " → " + e.Message;
+            return Fail(
+                "无法打开 Excel。\n"
+                + "具体原因：文件损坏或格式异常（常见：xls 改后缀、加密、另存异常）。\n"
+                + "技术详情：" + detail + "\n"
+                + "处理建议：请先「下载模板」，用 Excel 填写后直接上传 .xlsx。");
         }
 
         using (wb)

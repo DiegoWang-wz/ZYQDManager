@@ -338,6 +338,11 @@ public class CotractBaseService
             await _fileOp.DecodeFileAsync(savePath, ct);
             var bytes = await File.ReadAllBytesAsync(savePath, ct);
             await _fileOp.EncodeFileAsync(savePath, ct);
+
+            var headerCheck = DiagnoseExcelBytes(bytes);
+            if (headerCheck is not null)
+                return FailImport(headerCheck);
+
             using var ms = new MemoryStream(bytes);
             return await ImportWorkbookAsync(ms, empNo, scope, ct);
         }
@@ -364,7 +369,7 @@ public class CotractBaseService
         }
         catch (Exception ex)
         {
-            return FailImport("无法打开 Excel，请使用 xlsx 模板：" + ex.Message);
+            return FailImport(FormatExcelOpenError(ex));
         }
 
         using (wb)
@@ -495,6 +500,49 @@ public class CotractBaseService
                 parts.Add(e.Message);
         }
         return parts.Count == 0 ? ex.ToString() : string.Join(" → ", parts);
+    }
+
+    /// <summary>根据文件头判断是否为可用的 xlsx；返回 null 表示通过。</summary>
+    private static string? DiagnoseExcelBytes(byte[] bytes)
+    {
+        if (bytes is null || bytes.Length < 4)
+            return "导入失败：文件为空或过小，不是有效的 Excel。请重新「下载模板」填写后上传 .xlsx。";
+
+        // ZIP / OOXML (.xlsx)
+        if (bytes[0] == (byte)'P' && bytes[1] == (byte)'K')
+            return null;
+
+        // OLE Compound (.xls)
+        if (bytes[0] == 0xD0 && bytes[1] == 0xCF && bytes[2] == 0x11 && bytes[3] == 0xE0)
+            return "导入失败：检测到旧版 .xls 格式。本系统只支持 .xlsx，请用 Excel「另存为 → Excel 工作簿 (*.xlsx)」，或直接使用页面「下载模板」。";
+
+        // HTML / 网页另存
+        if (bytes[0] == (byte)'<' || (bytes.Length > 14 &&
+            System.Text.Encoding.ASCII.GetString(bytes, 0, Math.Min(64, bytes.Length))
+                .Contains("<html", StringComparison.OrdinalIgnoreCase)))
+            return "导入失败：文件内容像是网页/HTML，不是 Excel。请勿把网页另存为 .xlsx，请用「下载模板」填写后上传。";
+
+        // CSV / 纯文本（常见可打印 ASCII）
+        if (bytes[0] is >= 0x20 and <= 0x7E)
+            return "导入失败：文件看起来像 CSV/文本，不是 xlsx。请用 Excel 打开后「另存为 .xlsx」，或使用「下载模板」。";
+
+        return "导入失败：文件头不是标准 xlsx（ZIP）。可能仍被公司加密、文件损坏，或扩展名被改成 .xlsx。请重新「下载模板」填写后上传；若仍失败，请确认解密服务正常。";
+    }
+
+    private static string FormatExcelOpenError(Exception ex)
+    {
+        var detail = FlattenException(ex);
+        var tip = detail.Contains("corrupted", StringComparison.OrdinalIgnoreCase)
+                  || detail.Contains("corrupt", StringComparison.OrdinalIgnoreCase)
+            ? "文件内容损坏或格式不对（常见：xls 改后缀、加密未解开、用 WPS/网页另存异常）。"
+            : detail.Contains("password", StringComparison.OrdinalIgnoreCase)
+                ? "文件可能带密码保护，请先取消密码后再上传。"
+                : "Excel 引擎无法解析该文件。";
+
+        return "无法打开 Excel。\n"
+               + "具体原因：" + tip + "\n"
+               + "技术详情：" + detail + "\n"
+               + "处理建议：请先点「下载模板」，用 Excel 填写后直接上传 .xlsx（不要改成 xls，也不要只改后缀）。";
     }
 
     private static string ImportKey(string? clientNo, string? materialNo)
@@ -724,8 +772,9 @@ public class CotractBaseService
     {
         const double pad = 5;
         const double pxPerColChar = 7.0;
-        const double maxColChars = 255;
-        const double maxRowPts = 409;
+        // Excel 极限约 255 列宽 / 409 行高，导出图压到约一半，避免单元格过大
+        const double maxColChars = 255.0 / 2.0;
+        const double maxRowPts = 409.0 / 2.0;
 
         foreach (var p in pending)
         {

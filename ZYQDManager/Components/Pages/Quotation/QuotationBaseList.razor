@@ -1156,7 +1156,10 @@
             var result = await QuotationBaseExcel.ImportAsync(ms, empNo);
             if (!result.Ok)
             {
-                Notify.Show(result.Message, Severity.Error);
+                await DialogService.ShowMessageBoxAsync(
+                    "导入失败",
+                    result.Message ?? "未知错误",
+                    yesText: "知道了");
                 return;
             }
 
