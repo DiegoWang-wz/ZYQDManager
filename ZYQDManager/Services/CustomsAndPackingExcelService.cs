@@ -233,14 +233,10 @@ public class CustomsAndPackingExcelService
             Set(ws, r, 10, item.SAP_order_NO);
             Set(ws, r, 11, item.materialNo);
             Set(ws, r, 12, item.materialName);
-            Set(ws, r, 13, Num(item.qty));
+            // 数量 / 净重 / 毛重：数值输入；箱数/托数/重量/体积：Excel 公式（改数后可重算）
+            WriteCustomsCalcRow(ws, r, item);
             Set(ws, r, 14, FormatPacking(item));
-            Set(ws, r, 15, Num(item.box_qty));
             Set(ws, r, 17, item.Carton_Size);
-            Set(ws, r, 19, Num(item.Pallet_qty));
-            Set(ws, r, 20, item.var3);
-
-            Set(ws, r, 16, Num(ExportDisplayPalletQty(item)));
             Set(ws, r, 18, ExportPalletSizeText(item));
             if (CustomsAndPackingCalc.IsMergeMember(item.var8))
             {
@@ -263,12 +259,6 @@ public class CustomsAndPackingExcelService
                 Set(ws, r, 21, dd);
             }
 
-            Set(ws, r, 22, Num(item.Pallet_weight));
-            Set(ws, r, 23, Num(item.Net_weight));
-            Set(ws, r, 24, Num(item.gross_weight));
-            Set(ws, r, 25, Num(item.total_Net_weight));
-            Set(ws, r, 26, Num(item.total_gross_weight));
-            Set(ws, r, 27, Num(item.volume));
             Set(ws, r, 28, item.Pallet_code);
             Set(ws, r, 29, item.emit);
             Set(ws, r, 31, item.packing_unit);
@@ -279,13 +269,11 @@ public class CustomsAndPackingExcelService
         }
 
         var totalRow = dataNpoi + lists.Count;
-        Set(ws, totalRow, 13, Num(main.all_qty));
-        Set(ws, totalRow, 15, Num(main.all_box_qty));
-        Set(ws, totalRow, 16, Num(main.all_Pallet_qty));
-        Set(ws, totalRow, 25, Num(main.all_total_Net_weight));
-        Set(ws, totalRow, 26, Num(main.all_total_gross_weight));
-        Set(ws, totalRow, 27, Num(main.all_volume));
+        var firstExcel = dataNpoi + 1; // 数据首行 Excel 行号
+        var lastExcel = dataNpoi + lists.Count;
+        WriteCustomsTotalFormulas(ws, totalRow, firstExcel, lastExcel, main);
         Set(ws, totalRow, 29, main.all_emit);
+        HideCustomsHelperColumns(ws);
 
         var desc =
             $"总计:{Num(main.all_box_qty)}箱/{Num(main.all_Pallet_qty)}托/{main.all_emit}箱散发/{Num(main.all_total_gross_weight)}KG/{Num(main.all_volume)}m³{main.Shipping_method}出运";
@@ -820,6 +808,213 @@ public class CustomsAndPackingExcelService
 
     private static void SetText(IXLWorksheet ws, int npoiRow, int npoiCol, string? value)
         => Set(ws, npoiRow, npoiCol, value);
+
+    /// <param name="numFmt">
+    /// Excel 数字格式。勿用 <c>0.##</c>（整数常显示成「1000.」带尾点）；
+    /// 计数用 <c>0</c>，重量体积用 <c>0.00</c>。
+    /// </param>
+    private static void SetNum(IXLWorksheet ws, int npoiRow, int npoiCol, double value, string numFmt = "0")
+    {
+        var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
+        cell.Style.NumberFormat.Format = numFmt;
+        cell.Value = value;
+    }
+
+    private static void SetFormula(
+        IXLWorksheet ws, int npoiRow, int npoiCol, string formulaA1, double cachedValue, string numFmt = "0")
+    {
+        var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
+        cell.Style.NumberFormat.Format = numFmt;
+        // 先写入缓存值再设公式：ClosedXML 会保留公式，打开 Excel/LibreOffice 后重算
+        cell.Value = cachedValue;
+        cell.FormulaA1 = formulaA1.StartsWith('=') ? formulaA1 : "=" + formulaA1;
+    }
+
+    /// <summary>
+    /// 报关明细：输入写数值，结果写公式（对齐 CustomsAndPackingCalc）。
+    /// 隐藏辅助列：打包数/打托数/拼托标记/尺寸拆分。
+    /// </summary>
+    private static void WriteCustomsCalcRow(IXLWorksheet ws, int npoiRow, ZyqdCustomsAndPackingModel item)
+    {
+        var excelRow = npoiRow + 1;
+        var dto = CustomsAndPackingService.ToLineDto(item, 0);
+        var packing = ParsePositiveLocal(item.Packing_method, 1);
+        var palletizing = ParsePositiveLocal(item.palletizing_method, 1);
+        var hasTail = string.IsNullOrWhiteSpace(item.var2) ? 0 : 1;
+        var mergeMember = CustomsAndPackingCalc.IsMergeMember(item.var8) ? 1 : 0;
+        var shared = CustomsAndPackingCalc.NeedsSharedPalletSlot(dto) ? 1 : 0;
+        var emit = ParseDoubleLocal(item.emit);
+
+        // 辅助列（Excel 50+）：改数时公式依赖这些
+        SetNum(ws, npoiRow, HelperPack, packing);
+        SetNum(ws, npoiRow, HelperPalletizing, palletizing);
+        SetNum(ws, npoiRow, HelperHasTail, hasTail);
+        SetNum(ws, npoiRow, HelperMergeMember, mergeMember);
+        SetNum(ws, npoiRow, HelperSharedSlot, shared);
+        SetNum(ws, npoiRow, HelperEmit, emit);
+
+        // 拼托成员：体积不算整托/尾托尺寸
+        WriteSizeHelpers(ws, npoiRow, HelperPalletW,
+            mergeMember == 1 ? null : item.Pallet_Size);
+        WriteSizeHelpers(ws, npoiRow, HelperTailW,
+            mergeMember == 1 ? null : item.var2);
+        WriteSizeHelpers(ws, npoiRow, HelperCartonW, item.Carton_Size);
+
+        // 可见输入
+        SetNum(ws, npoiRow, 13, item.qty);                    // N 数量
+        SetNum(ws, npoiRow, 23, item.Net_weight, "0.00");     // X 净重
+        SetNum(ws, npoiRow, 24, item.gross_weight, "0.00");   // Y 毛重
+
+        var n = $"N{excelRow}";
+        var x = $"X{excelRow}";
+        var y = $"Y{excelRow}";
+        var p = $"P{excelRow}";
+        var t = $"T{excelRow}";
+        var w = $"W{excelRow}";
+        var ax = ColLetter(HelperPack + 1) + excelRow;
+        var ay = ColLetter(HelperPalletizing + 1) + excelRow;
+        var az = ColLetter(HelperHasTail + 1) + excelRow;
+        var ba = ColLetter(HelperMergeMember + 1) + excelRow;
+        var bb = ColLetter(HelperSharedSlot + 1) + excelRow;
+        var bc = ColLetter(HelperEmit + 1) + excelRow;
+        var bd = ColLetter(HelperPalletW + 1) + excelRow;
+        var be = ColLetter(HelperPalletH + 1) + excelRow;
+        var bf = ColLetter(HelperPalletD + 1) + excelRow;
+        var bg = ColLetter(HelperTailW + 1) + excelRow;
+        var bh = ColLetter(HelperTailH + 1) + excelRow;
+        var bi = ColLetter(HelperTailD + 1) + excelRow;
+        var bj = ColLetter(HelperCartonW + 1) + excelRow;
+        var bk = ColLetter(HelperCartonH + 1) + excelRow;
+        var bl = ColLetter(HelperCartonD + 1) + excelRow;
+
+        // P 箱数 = CEILING(数量/打包)
+        SetFormula(ws, npoiRow, 15,
+            $"IFERROR(CEILING({n}/{ax},1),0)", item.box_qty);
+        // T 整托 = FLOOR(箱数/打托)
+        SetFormula(ws, npoiRow, 19,
+            $"IFERROR(FLOOR({p}/{ay},1),0)", item.Pallet_qty);
+        // U 余箱
+        SetFormula(ws, npoiRow, 20,
+            $"IFERROR(MOD({p},{ay}),0)", ParseDoubleLocal(item.var3));
+        // Q 显示托数（拼托成员=0；否则整托+尾托+拼托主补位）
+        SetFormula(ws, npoiRow, 16,
+            $"IF({ba}=1,0,IF({t}+{az}>0,{t}+{az},IF({bb}=1,1,0)))",
+            ExportDisplayPalletQty(item));
+        // W 托重 = 整托*15 +（非拼托成员且有尾托/补位时 +15）
+        SetFormula(ws, npoiRow, 22,
+            $"IF({ba}=1,{t}*{CustomsAndPackingCalc.KgPerPallet},{t}*{CustomsAndPackingCalc.KgPerPallet}+IF(OR({az}=1,{bb}=1),{CustomsAndPackingCalc.KgPerPallet},0))",
+            item.Pallet_weight, "0.00");
+        // Z 总净重
+        SetFormula(ws, npoiRow, 25,
+            $"IFERROR(ROUND({n}/{ax}*{x},2),0)", item.total_Net_weight, "0.00");
+        // AA 总毛重
+        SetFormula(ws, npoiRow, 26,
+            $"IFERROR(ROUND({n}/{ax}*{y}+{w},2),0)", item.total_gross_weight, "0.00");
+        // AB 体积（mm³→m³，向上取两位）；整托=0 且拼托主补位时按 1 托计
+        SetFormula(ws, npoiRow, 27,
+            $"IFERROR(CEILING((IF({t}>0,{t},IF({bb}=1,1,0))*{bd}*{be}*{bf}+IF({az}=1,{bg}*{bh}*{bi},0)+{bc}*{bj}*{bk}*{bl})/1000000000,0.01),0)",
+            item.volume, "0.00");
+    }
+
+    private static void WriteCustomsTotalFormulas(
+        IXLWorksheet ws,
+        int totalNpoiRow,
+        int firstExcelRow,
+        int lastExcelRow,
+        ZyqdCustomsAndPackingModel main)
+    {
+        SetFormula(ws, totalNpoiRow, 13, $"SUM(N{firstExcelRow}:N{lastExcelRow})", main.all_qty);
+        SetFormula(ws, totalNpoiRow, 15, $"SUM(P{firstExcelRow}:P{lastExcelRow})", main.all_box_qty);
+        SetFormula(ws, totalNpoiRow, 16, $"SUM(Q{firstExcelRow}:Q{lastExcelRow})", main.all_Pallet_qty);
+        SetFormula(ws, totalNpoiRow, 25, $"SUM(Z{firstExcelRow}:Z{lastExcelRow})", main.all_total_Net_weight, "0.00");
+        SetFormula(ws, totalNpoiRow, 26, $"SUM(AA{firstExcelRow}:AA{lastExcelRow})", main.all_total_gross_weight, "0.00");
+        SetFormula(ws, totalNpoiRow, 27, $"SUM(AB{firstExcelRow}:AB{lastExcelRow})", main.all_volume, "0.00");
+    }
+
+    private static void HideCustomsHelperColumns(IXLWorksheet ws)
+    {
+        for (var c = HelperPack + 1; c <= HelperCartonD + 1; c++)
+            ws.Column(c).Hide();
+    }
+
+    private static void WriteSizeHelpers(IXLWorksheet ws, int npoiRow, int startNpoiCol, string? size)
+    {
+        // 尺寸用常规小数，避免 0.## 整数尾点
+        const string fmt = "0.######";
+        if (TryParseSizeLocal(size, out var a, out var b, out var c))
+        {
+            SetNum(ws, npoiRow, startNpoiCol, a, fmt);
+            SetNum(ws, npoiRow, startNpoiCol + 1, b, fmt);
+            SetNum(ws, npoiRow, startNpoiCol + 2, c, fmt);
+        }
+        else
+        {
+            SetNum(ws, npoiRow, startNpoiCol, 0, fmt);
+            SetNum(ws, npoiRow, startNpoiCol + 1, 0, fmt);
+            SetNum(ws, npoiRow, startNpoiCol + 2, 0, fmt);
+        }
+    }
+
+    // 隐藏辅助列（0-based npoi）：打包、打托、尾托标记、拼托成员、补位托、散发、尺寸
+    private const int HelperPack = 49;
+    private const int HelperPalletizing = 50;
+    private const int HelperHasTail = 51;
+    private const int HelperMergeMember = 52;
+    private const int HelperSharedSlot = 53;
+    private const int HelperEmit = 54;
+    private const int HelperPalletW = 55;
+    private const int HelperPalletH = 56;
+    private const int HelperPalletD = 57;
+    private const int HelperTailW = 58;
+    private const int HelperTailH = 59;
+    private const int HelperTailD = 60;
+    private const int HelperCartonW = 61;
+    private const int HelperCartonH = 62;
+    private const int HelperCartonD = 63;
+
+    private static string ColLetter(int excelCol1Based)
+    {
+        var n = excelCol1Based;
+        var s = "";
+        while (n > 0)
+        {
+            n--;
+            s = (char)('A' + n % 26) + s;
+            n /= 26;
+        }
+        return s;
+    }
+
+    private static double ParsePositiveLocal(string? text, double fallback)
+    {
+        if (!double.TryParse((text ?? "").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var n)
+            && !double.TryParse((text ?? "").Trim(), NumberStyles.Any, CultureInfo.CurrentCulture, out n))
+            return fallback;
+        return n > 0 ? n : fallback;
+    }
+
+    private static double ParseDoubleLocal(string? text)
+    {
+        if (double.TryParse((text ?? "").Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var n))
+            return n;
+        if (double.TryParse((text ?? "").Trim(), NumberStyles.Any, CultureInfo.CurrentCulture, out n))
+            return n;
+        return 0;
+    }
+
+    private static bool TryParseSizeLocal(string? size, out double a, out double b, out double c)
+    {
+        a = b = c = 0;
+        var parts = (size ?? "").Split('*', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 3) return false;
+        if (double.TryParse(parts[0], NumberStyles.Any, CultureInfo.InvariantCulture, out a)
+            && double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out b)
+            && double.TryParse(parts[2], NumberStyles.Any, CultureInfo.InvariantCulture, out c))
+            return true;
+        return double.TryParse(parts[0], NumberStyles.Any, CultureInfo.CurrentCulture, out a)
+               && double.TryParse(parts[1], NumberStyles.Any, CultureInfo.CurrentCulture, out b)
+               && double.TryParse(parts[2], NumberStyles.Any, CultureInfo.CurrentCulture, out c);
+    }
 
     private static string Num(double n)
         => n.ToString("0.##", CultureInfo.InvariantCulture);
