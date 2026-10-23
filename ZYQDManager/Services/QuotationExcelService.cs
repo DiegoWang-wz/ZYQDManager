@@ -18,6 +18,8 @@ public class QuotationExcelService
     private const int RowsPerPage = 50;
     private const int DetailStartNpoi = 19;
     private const int PictureRows = 6;
+    /// <summary>非基础规格字段换行显示宽度（中文计 2、英文计 1）。</summary>
+    private const int ExtraSpecMaxDisplayWidth = 85;
 
     private static readonly string[] TypeOrder =
     [
@@ -214,12 +216,9 @@ public class QuotationExcelService
         WriteSpecRow(ctx, null, null, L.MotorLength + item.Motor_Length);
         WriteSpecRow(ctx, null, null, L.TubeDiameter + item.Tube_diameter);
 
-        if (!string.IsNullOrWhiteSpace(item.Battery_Capacity))
-            WriteSpecRow(ctx, null, null, L.BatteryCapacity + item.Battery_Capacity);
-        if (!string.IsNullOrWhiteSpace(item.Exclude_text))
-            WriteSpecRow(ctx, null, null, L.Exclude + item.Exclude_text);
-        if (!string.IsNullOrWhiteSpace(item.Note))
-            WriteSpecRow(ctx, null, null, L.Note + item.Note);
+        WriteExtraSpecRows(ctx, L.BatteryCapacity, item.Battery_Capacity);
+        WriteExtraSpecRows(ctx, L.Exclude, item.Exclude_text);
+        WriteExtraSpecRows(ctx, L.Note, item.Note);
 
         EnsurePictureSpace(ctx, pictureStart, item.Quotation_logo);
         WriteBlank(ctx);
@@ -249,16 +248,14 @@ public class QuotationExcelService
             WriteSpecRow(ctx, null, null, L.RadioFrequency + item.Radio_Frequency, item, currencyUnit, priceTier: 3);
             WriteSpecRow(ctx, null, null, L.WorkingTemperature + item.Working_Temperature, item, currencyUnit, priceTier: 4);
             WriteSpecRow(ctx, null, null, L.NoOfChannels + item.NoOfChannels);
-            if (!string.IsNullOrWhiteSpace(item.Note))
-                WriteSpecRow(ctx, null, null, L.Note + item.Note);
+            WriteExtraSpecRows(ctx, L.Note, item.Note);
             EnsurePictureSpace(ctx, pictureStart, item.Quotation_logo);
             WriteBlank(ctx);
             return;
         }
         WriteSpecRow(ctx, null, null, L.WorkingTemperature + item.Working_Temperature);
         WriteSpecRow(ctx, null, null, L.NoOfChannels + item.NoOfChannels);
-        if (!string.IsNullOrWhiteSpace(item.Note))
-            WriteSpecRow(ctx, null, null, L.Note + item.Note);
+        WriteExtraSpecRows(ctx, L.Note, item.Note);
 
         EnsurePictureSpace(ctx, pictureStart, item.Quotation_logo);
         WriteBlank(ctx);
@@ -268,7 +265,7 @@ public class QuotationExcelService
     {
         var L = Labels.For(lang);
         var pictureStart = ctx.Row + 1;
-        BeginProduct(ctx, item, EstimateCbRows(item), out var seq);
+        BeginProduct(ctx, item, EstimateCbRows(item, L), out var seq);
 
         WriteSpecRow(ctx, seq, item.Part_No, L.RatedVoltage + item.Rated_Voltage, item, currencyUnit, priceTier: 1);
         TryAddPicture(ctx, pictureStart, item.Quotation_logo);
@@ -278,8 +275,7 @@ public class QuotationExcelService
         WriteSpecRow(ctx, null, null, L.OutputControl + item.Output_Control);
         WriteSpecRow(ctx, null, null, L.Sensor + item.Sensor);
         WriteSpecRow(ctx, null, null, L.ProtectionDegree + item.Protection_Degree);
-        if (!string.IsNullOrWhiteSpace(item.Note))
-            WriteSpecRow(ctx, null, null, L.Note + item.Note);
+        WriteExtraSpecRows(ctx, L.Note, item.Note);
 
         EnsurePictureSpace(ctx, pictureStart, item.Quotation_logo);
         WriteBlank(ctx);
@@ -289,14 +285,13 @@ public class QuotationExcelService
     {
         var L = Labels.For(lang);
         var pictureStart = ctx.Row + 1;
-        BeginProduct(ctx, item, EstimatePrRows(item), out var seq);
+        BeginProduct(ctx, item, EstimatePrRows(item, L), out var seq);
 
         WriteSpecRow(ctx, seq, item.Part_No, L.MaxLoading + item.Max_Loading, item, currencyUnit, priceTier: 1);
         WriteSpecRow(ctx, null, null, L.MaxStroke + item.Max_Stroke, item, currencyUnit, priceTier: 2);
         WriteSpecRow(ctx, null, null, L.ProtectionDegree2 + item.Protection_Degree2, item, currencyUnit, priceTier: 3);
         WriteSpecRow(ctx, null, null, L.Noise + item.Noise, item, currencyUnit, priceTier: 4);
-        if (!string.IsNullOrWhiteSpace(item.Note))
-            WriteSpecRow(ctx, null, null, L.Note + item.Note);
+        WriteExtraSpecRows(ctx, L.Note, item.Note);
 
         WriteBlank(ctx);
         EnsurePictureSpace(ctx, pictureStart, item.Quotation_logo);
@@ -312,15 +307,11 @@ public class QuotationExcelService
         WriteSpecRow(ctx, seq, item.Part_No, L.Adaptor + item.adaptor, item, currencyUnit, priceTier: 1);
 
         var nextTier = 2;
-        if (!string.IsNullOrWhiteSpace(item.Note))
+        foreach (var line in SplitLabeledDisplay(L.Note, item.Note, ExtraSpecMaxDisplayWidth))
         {
-            var note = L.Note + item.Note;
-            foreach (var line in SplitDisplay(note, 50))
-            {
-                var tier = nextTier <= 4 ? nextTier : 0;
-                WriteSpecRow(ctx, null, null, line, item, currencyUnit, priceTier: tier);
-                if (nextTier <= 4) nextTier++;
-            }
+            var tier = nextTier <= 4 ? nextTier : 0;
+            WriteSpecRow(ctx, null, null, line, item, currencyUnit, priceTier: tier);
+            if (nextTier <= 4) nextTier++;
         }
 
         for (; nextTier <= 4; nextTier++)
@@ -370,6 +361,56 @@ public class QuotationExcelService
         ctx.Advance();
     }
 
+    /// <summary>
+    /// 非基础规格：按 ExtraSpecMaxDisplayWidth 换行；续行用空格对齐到「字段名:」之后，避免看成新字段。
+    /// </summary>
+    private static void WriteExtraSpecRows(WriteContext ctx, string label, string? value)
+    {
+        foreach (var line in SplitLabeledDisplay(label, value, ExtraSpecMaxDisplayWidth))
+            WriteSpecRow(ctx, null, null, line);
+    }
+
+    private static int ExtraSpecDisplayLines(string label, string? value)
+        => SplitLabeledDisplay(label, value, ExtraSpecMaxDisplayWidth).Length;
+
+    /// <summary>
+    /// 首行 = 标签 + 内容；续行 = 与标签等显示宽度的空格 + 内容（对齐到冒号后）。
+    /// </summary>
+    private static string[] SplitLabeledDisplay(string label, string? value, int maxDisplayWidth)
+    {
+        label ??= "";
+        value = value ?? "";
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        if (GetDisplayWidth(label + value) <= maxDisplayWidth)
+            return [label + value];
+
+        var labelW = GetDisplayWidth(label);
+        var contentBudget = Math.Max(1, maxDisplayWidth - labelW);
+        var chunks = SplitDisplay(value, contentBudget);
+        if (chunks.Length == 0)
+            return [label];
+
+        // Excel 中文环境下半角空格偏窄，续行用全角空格对齐「字段名:」后的内容起点
+        var indent = BuildLabelIndent(label);
+        var result = new List<string>(chunks.Length) { label + chunks[0] };
+        for (var i = 1; i < chunks.Length; i++)
+            result.Add(indent + chunks[i]);
+        return result.ToArray();
+    }
+
+    /// <summary>按标签各字符宽度生成缩进：汉字用全角空格，其余用半角空格。</summary>
+    private static string BuildLabelIndent(string label)
+    {
+        if (string.IsNullOrEmpty(label))
+            return "";
+        var sb = new System.Text.StringBuilder(label.Length);
+        foreach (var ch in label)
+            sb.Append(ch > 127 ? '\u3000' : ' ');
+        return sb.ToString();
+    }
+
     private static void WritePrice(
         IXLWorksheet ws, int npoiRow, QuotationDetailLineDto item, string? currencyUnit, int tier = 1)
     {
@@ -385,10 +426,13 @@ public class QuotationExcelService
         ctx.InsertPageBreakIfNeeded(7);
         var npoiRow = ctx.Row + 12;
         // 对齐老系统签字锚点（约 3 行高），避免签名图过大压住签章区文字
-        TryAddPicture(ctx, npoiRow, signatureUrl, width: 90, height: 48);
+        TryAddPicture(ctx, npoiRow, signatureUrl, maxWidth: 90, maxHeight: 48);
     }
 
-    private void TryAddPicture(WriteContext ctx, int npoiRow, string? path, int width = 140, int height = 140)
+    /// <summary>
+    /// 插入图片：在 maxWidth×maxHeight 内等比缩放（对齐老系统 InsertImageToExcel 保比例），不强制方形拉伸。
+    /// </summary>
+    private void TryAddPicture(WriteContext ctx, int npoiRow, string? path, int maxWidth = 140, int maxHeight = 140)
     {
         var url = LegacyFileUrl.Resolve(path, _imageBase);
         if (url.Length == 0 || !ctx.Images.TryGetValue(url, out var bytes))
@@ -404,7 +448,13 @@ public class QuotationExcelService
                 : ctx.Ws.AddPicture(ms, format, name);
             var cell = ctx.Ws.Cell(npoiRow + 1, 2); // npoi col 1
             pic.MoveTo(cell);
-            pic.WithSize(width, height);
+
+            var imgW = Math.Max(1.0, pic.OriginalWidth);
+            var imgH = Math.Max(1.0, pic.OriginalHeight);
+            var scale = Math.Min(1.0, Math.Min(maxWidth / imgW, maxHeight / imgH));
+            var w = Math.Max(1, (int)Math.Round(imgW * scale));
+            var h = Math.Max(1, (int)Math.Round(imgH * scale));
+            pic.WithSize(w, h);
         }
         catch
         {
@@ -424,9 +474,9 @@ public class QuotationExcelService
     private static int EstimateMotorRows(QuotationDetailLineDto item, Labels L)
     {
         var text = 8;
-        if (!string.IsNullOrWhiteSpace(item.Battery_Capacity)) text++;
-        if (!string.IsNullOrWhiteSpace(item.Exclude_text)) text++;
-        if (!string.IsNullOrWhiteSpace(item.Note)) text++;
+        text += ExtraSpecDisplayLines(L.BatteryCapacity, item.Battery_Capacity);
+        text += ExtraSpecDisplayLines(L.Exclude, item.Exclude_text);
+        text += ExtraSpecDisplayLines(L.Note, item.Note);
         if (SplitDisplay(L.PowerSupply + item.Power_supply, 50).Length > 1) text++;
         var pic = LegacyFileUrl.IsBlankOrPlaceholder(item.Quotation_logo) ? 0 : PictureRows;
         return Math.Max(text, pic) + 1;
@@ -435,31 +485,29 @@ public class QuotationExcelService
     private static int EstimateRemoteRows(QuotationDetailLineDto item, Labels L)
     {
         var text = 5;
-        if (!string.IsNullOrWhiteSpace(item.Note)) text++;
+        text += ExtraSpecDisplayLines(L.Note, item.Note);
         if (SplitDisplay(L.RemoteType + item.Remote_controller_type, 50).Length > 1) text++;
         var pic = LegacyFileUrl.IsBlankOrPlaceholder(item.Quotation_logo) ? 0 : PictureRows;
         return Math.Max(text, pic) + 1;
     }
 
-    private static int EstimateCbRows(QuotationDetailLineDto item)
+    private static int EstimateCbRows(QuotationDetailLineDto item, Labels L)
     {
-        var text = 7 + (string.IsNullOrWhiteSpace(item.Note) ? 0 : 1);
+        var text = 7 + ExtraSpecDisplayLines(L.Note, item.Note);
         var pic = LegacyFileUrl.IsBlankOrPlaceholder(item.Quotation_logo) ? 0 : PictureRows;
         return Math.Max(text, pic) + 1;
     }
 
-    private static int EstimatePrRows(QuotationDetailLineDto item)
+    private static int EstimatePrRows(QuotationDetailLineDto item, Labels L)
     {
-        var text = 4 + (string.IsNullOrWhiteSpace(item.Note) ? 0 : 1);
+        var text = 4 + ExtraSpecDisplayLines(L.Note, item.Note);
         var pic = LegacyFileUrl.IsBlankOrPlaceholder(item.Quotation_logo) ? 0 : PictureRows;
         return Math.Max(text, pic) + 1;
     }
 
     private static int EstimateAccessoryRows(QuotationDetailLineDto item, Labels L)
     {
-        var text = 1;
-        if (!string.IsNullOrWhiteSpace(item.Note))
-            text += Math.Max(1, SplitDisplay(L.Note + item.Note, 50).Length);
+        var text = 1 + ExtraSpecDisplayLines(L.Note, item.Note);
         var pic = LegacyFileUrl.IsBlankOrPlaceholder(item.Quotation_logo) ? 0 : PictureRows;
         return Math.Max(text, pic) + 1;
     }

@@ -118,7 +118,8 @@ public class CentralUserInformationService
     }
 
     /// <summary>
-    /// 汇总所有已配置报价签名的人员，供报价录入下拉使用（替代旧 T_ZYQD_Quotation_signature 表）。
+    /// 汇总已配置报价签名的人员，供报价录入下拉使用（替代旧 T_ZYQD_Quotation_signature 表）。
+    /// 全员列表需 CentralUsersAdmin；业务员无权限时回退为仅本人中/英签名。
     /// </summary>
     public async Task<(bool Ok, List<QuotationSignatureOptionDto> List, string? Message)> ListSignatureOptionsAsync(
         CancellationToken ct = default)
@@ -130,21 +131,24 @@ public class CentralUserInformationService
         listReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var listResp = await client.SendAsync(listReq, ct);
         var listBody = await listResp.Content.ReadAsStringAsync(ct);
-        JcCommonApiEnvelope<List<UserSummaryApiDto>>? listEnv;
+        JcCommonApiEnvelope<List<UserSummaryApiDto>>? listEnv = null;
+        var listOk = false;
         try
         {
             listEnv = JsonSerializer.Deserialize<JcCommonApiEnvelope<List<UserSummaryApiDto>>>(listBody, JsonOptions);
+            listOk = listEnv is not null && listEnv.Code == 200 && listEnv.Data is not null;
         }
         catch
         {
-            return (false, [], "无法解析人员列表");
+            listOk = false;
         }
 
-        if (listEnv is null || listEnv.Code != 200 || listEnv.Data is null)
-            return (false, [], string.IsNullOrWhiteSpace(listEnv?.Message) ? "读取人员列表失败" : listEnv!.Message);
+        // 403 / 非 JSON / 无权限：业务员走本人档案，不再弹「无法解析人员列表」
+        if (!listOk)
+            return await ListCurrentUserSignatureOptionsAsync(ct);
 
         var result = new List<QuotationSignatureOptionDto>();
-        foreach (var u in listEnv.Data.Where(x => x.IsActive))
+        foreach (var u in listEnv!.Data!.Where(x => x.IsActive))
         {
             var (ok, displayName, info, _) = await GetAsync(u.EmpNo, ct);
             if (!ok || info is null) continue;
@@ -166,6 +170,36 @@ public class CentralUserInformationService
         return (true, result
             .OrderBy(x => x.Signature, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.Kind, StringComparer.OrdinalIgnoreCase)
+            .ToList(), null);
+    }
+
+    /// <summary>仅当前登录人已配置的中/英报价签名。</summary>
+    private async Task<(bool Ok, List<QuotationSignatureOptionDto> List, string? Message)> ListCurrentUserSignatureOptionsAsync(
+        CancellationToken ct)
+    {
+        var auth = await _localStorage.GetAsync<StoredCentralAuth?>(StorageKeys.CentralAuth, ct);
+        var empNo = (auth?.EmpNo ?? "").Trim();
+        if (empNo.Length == 0)
+            return (false, [], "未登录");
+
+        var (ok, displayName, info, msg) = await GetAsync(empNo, ct);
+        if (!ok || info is null)
+            return (false, [], msg ?? "读取本人档案失败");
+
+        var fallbackName = string.IsNullOrWhiteSpace(displayName) ? empNo : displayName;
+        var result = new List<QuotationSignatureOptionDto>();
+        TryAddSignatureOption(result, empNo, "cn", info.Signature, info.SignatureUrl, fallbackName);
+        TryAddSignatureOption(
+            result,
+            empNo,
+            "en",
+            info.SignatureEn,
+            info.SignatureUrlEn,
+            string.IsNullOrWhiteSpace(info.EnglishName) ? fallbackName : info.EnglishName!);
+
+        return (true, result
+            .OrderBy(x => x.Kind == "cn" ? 0 : 1)
+            .ThenBy(x => x.Signature, StringComparer.OrdinalIgnoreCase)
             .ToList(), null);
     }
 
