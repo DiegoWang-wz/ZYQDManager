@@ -142,7 +142,7 @@
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   InputType="InputType.Password"/>
-                    <MudSelect T="string" @bind-Value="_edit.Department" Label="部门" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                    <MudSelect T="string" @bind-Value="DepartmentBind" Label="部门" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
                         @foreach (var dept in ZyqdDepartments.Options(_edit.Department))
                         {
                             <MudSelectItem Value="@dept">@dept</MudSelectItem>
@@ -636,6 +636,17 @@
     {
         get => _edit.Role;
         set => OnRoleChanged(value);
+    }
+
+    private string DepartmentBind
+    {
+        get => _edit.Department ?? "";
+        set
+        {
+            _edit.Department = value ?? "";
+            if (_edit.IsCreate && !AppRoles.IsAdmin(_edit.Role))
+                OnRoleChanged(ZyqdDepartments.DefaultRole(_edit.Department));
+        }
     }
 
     private bool ViewAllCustomersSwitch

@@ -180,6 +180,9 @@ public sealed class JoinSystemRequestDto
     public string SystemName { get; set; } = CentralApiOptions.AppSystemKey;
     public string DisplayName { get; set; } = "";
     public ZyqdUserInformationDto? UserInformation { get; set; }
+    /// <summary>自助注册角色：仅 operator / inspector，不可为 admin。</summary>
+    public string Role { get; set; } = "operator";
+    public Dictionary<string, ControlPermissionApiDto>? Controls { get; set; }
 }
 
 public sealed class JoinSystemResponseDataDto

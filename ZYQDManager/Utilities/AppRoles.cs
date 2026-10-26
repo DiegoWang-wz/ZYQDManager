@@ -31,4 +31,19 @@ public static class AppRoles
 
     /// <summary>登录后默认首页（门户入口页）。</summary>
     public static string HomePath(string? role) => "/";
+
+    /// <summary>检测员仅开放检测报告；业务员注册时不写 Controls（沿用现有默认菜单）。</summary>
+    public static Dictionary<string, DataDtos.ControlPermissionApiDto>? DefaultJoinControls(string? role)
+    {
+        if (!IsInspector(role))
+            return null;
+        return new Dictionary<string, DataDtos.ControlPermissionApiDto>(StringComparer.OrdinalIgnoreCase)
+        {
+            [DataDtos.CentralApiOptions.SirRoute] = new DataDtos.ControlPermissionApiDto
+            {
+                Visible = true,
+                Disabled = false
+            }
+        };
+    }
 }

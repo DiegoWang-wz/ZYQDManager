@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ZYQDManager.DataDtos;
 using ZYQDManager.DataModels;
-using ZYQDManager.Services.Sir;
 
 namespace ZYQDManager.Services;
 
@@ -83,14 +82,14 @@ public class SirService
             main.product_type = productType;
         }
 
-        var details = await _db.SirDetails.AsNoTracking()
+        var dbDetails = await _db.SirDetails.AsNoTracking()
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
             .ToListAsync(ct);
-        // 历史连点保存可能留下重复序号：按 Specification_type 去重（保留 Id 最大）并按 M.n 排序
-        if (details.Count > 0)
-            details = DedupeAndSortDetails(details);
-        if (details.Count == 0)
-            details = BuildDefaultDetails(guid, reportType!, productType!);
+        if (dbDetails.Count > 0)
+            dbDetails = DedupeAndSortDetails(dbDetails);
+
+        var templates = await LoadTemplatesAsync(reportType!, productType!, ct);
+        var details = ApplyTemplates(guid, reportType!, templates, dbDetails);
 
         var samples = await _db.SirSamples.AsNoTracking()
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
@@ -160,20 +159,11 @@ public class SirService
             _db.Entry(existing).CurrentValues.SetValues(doc.Main);
         }
 
-        // 明细按 main_guid + Report_type 覆盖保存（写入前按序号去重，避免连点把双份写回）
+        // 明细按 Id / 序号合并实测结果，不整表删插，也不改模板文案列
         var oldDetails = await _db.SirDetails
             .Where(x => x.main_guid == guid && x.Report_type == reportType)
             .ToListAsync(ct);
-        _db.SirDetails.RemoveRange(oldDetails);
-
-        foreach (var d in DedupeAndSortDetails(doc.Details ?? []))
-        {
-            d.Id = 0;
-            d.main_guid = guid;
-            d.Report_type = reportType;
-            d.createTime ??= DateTime.Now;
-            _db.SirDetails.Add(d);
-        }
+        MergeDetails(oldDetails, guid, reportType, doc.Details ?? []);
 
         // 留样：按 Id 增删改（T_ZYQD_SIR_datail_SampleForFiling），不再整表删插
         var oldSamples = await _db.SirSamples
@@ -321,6 +311,66 @@ public class SirService
         }
     }
 
+    /// <summary>
+    /// 明细按 Id 更新实测；对不上 Id 时按序号匹配。模板里没有的旧行不删。
+    /// </summary>
+    private void MergeDetails(
+        List<ZyqdSirDetailModel> oldDetails,
+        string guid,
+        string reportType,
+        IReadOnlyList<ZyqdSirDetailModel> incoming)
+    {
+        var rows = DedupeAndSortDetails(incoming);
+        var oldById = oldDetails.Where(x => x.Id > 0).ToDictionary(x => x.Id);
+        var oldBySpec = oldDetails
+            .Where(x => !string.IsNullOrWhiteSpace(x.Specification_type))
+            .GroupBy(x => x.Specification_type!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var d in rows)
+        {
+            d.main_guid = guid;
+            d.Report_type = reportType;
+            var spec = (d.Specification_type ?? "").Trim();
+
+            ZyqdSirDetailModel? track = null;
+            if (d.Id > 0)
+                oldById.TryGetValue(d.Id, out track);
+            if (track is null && spec.Length > 0)
+                oldBySpec.TryGetValue(spec, out track);
+
+            if (track is not null)
+            {
+                ApplyDetailResultFields(track, d);
+                d.Id = track.Id;
+            }
+            else
+            {
+                d.Id = 0;
+                d.createTime ??= DateTime.Now;
+                _db.SirDetails.Add(d);
+            }
+        }
+    }
+
+    private static void ApplyDetailResultFields(ZyqdSirDetailModel target, ZyqdSirDetailModel source)
+    {
+        target.Specification_type = source.Specification_type;
+        target.Actual_Results1 = source.Actual_Results1;
+        target.Actual_Results2 = source.Actual_Results2;
+        target.Actual_Results3 = source.Actual_Results3;
+        target.Actual_Results4 = source.Actual_Results4;
+        target.Actual_Results5 = source.Actual_Results5;
+        target.Actual_Results6 = source.Actual_Results6;
+        target.Conclusion_A = source.Conclusion_A;
+        target.Conclusio_B = source.Conclusio_B;
+        target.Conclusion_C = source.Conclusion_C;
+        target.Conclusion_D = source.Conclusion_D;
+        target.Note = source.Note;
+        target.main_guid = source.main_guid;
+        target.Report_type = source.Report_type;
+    }
+
     private static void ApplySampleFields(ZyqdSirSampleForFilingModel target, ZyqdSirSampleForFilingModel source)
     {
         target.code = source.code;
@@ -412,11 +462,101 @@ public class SirService
         return int.MaxValue;
     }
 
-    private static List<ZyqdSirDetailModel> BuildDefaultDetails(string mainGuid, string reportType, string productType)
+    private async Task<List<ZyqdSirItemTemplateModel>> LoadTemplatesAsync(
+        string reportType, string productType, CancellationToken ct)
     {
-        var dict = new SirDictionary();
-        var specificationDescMap = dict._specificationDescMap_remote;
-        var criteriaMap = dict._criteriaMap_remote;
+        reportType = (reportType ?? "").Trim();
+        productType = (productType ?? "").Trim();
+        return await _db.SirItemTemplates.AsNoTracking()
+            .Where(x => x.Report_type == reportType
+                        && x.product_type == productType
+                        && x.Enabled)
+            .OrderBy(x => x.SortNo)
+            .ThenBy(x => x.Id)
+            .ToListAsync(ct);
+    }
+
+    private static List<ZyqdSirDetailModel> ApplyTemplates(
+        string guid,
+        string reportType,
+        List<ZyqdSirItemTemplateModel> templates,
+        List<ZyqdSirDetailModel> dbDetails)
+    {
+        var bySpec = dbDetails
+            .Where(x => !string.IsNullOrWhiteSpace(x.Specification_type))
+            .GroupBy(x => x.Specification_type!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase);
+
+        var list = new List<ZyqdSirDetailModel>(templates.Count);
+        foreach (var t in templates)
+        {
+            var code = (t.Specification_type ?? "").Trim();
+            if (code.Length == 0) continue;
+
+            if (!bySpec.TryGetValue(code, out var row))
+            {
+                row = new ZyqdSirDetailModel
+                {
+                    main_guid = guid,
+                    Report_type = reportType,
+                    Specification_type = code,
+                    createTime = DateTime.Now,
+                };
+            }
+
+            OverlayTemplate(row, t);
+            list.Add(row);
+        }
+
+        return list;
+    }
+
+    private static void OverlayTemplate(ZyqdSirDetailModel row, ZyqdSirItemTemplateModel t)
+    {
+        row.Specification_type = (t.Specification_type ?? "").Trim();
+        row.Specification = JoinBilingualHtml(t.Specification, t.Specification_EN);
+        row.Criteria = JoinBilingualHtml(t.Criteria, t.Criteria_EN);
+        row.filling_type = string.IsNullOrWhiteSpace(t.filling_type) ? "0" : t.filling_type.Trim();
+        row.GroupTitle = string.IsNullOrWhiteSpace(t.GroupTitle) ? null : t.GroupTitle.Trim();
+    }
+
+    private static string JoinBilingualHtml(string? cn, string? en)
+    {
+        cn = ToHtmlLine(cn);
+        en = ToHtmlLine(en);
+        if (cn.Length == 0) return en;
+        if (en.Length == 0) return cn;
+        return cn + "<br>" + en;
+    }
+
+    private static string ToHtmlLine(string? s)
+    {
+        s = (s ?? "").Trim();
+        if (s.Length == 0) return "";
+        return s.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "<br>");
+    }
+
+    private static List<ZyqdSirSampleForFilingModel> BuildDefaultSamples(string guid, string reportType, string _)
+    {
+        // 新建默认只给一行，其余由用户「添加样品记录」自行增加
+        return
+        [
+            new ZyqdSirSampleForFilingModel
+            {
+                main_guid = guid,
+                Report_type = reportType,
+                Specification_type = "S.1",
+                Note = "部件1",
+                Note1 = "",
+                createTime = DateTime.Now,
+                code = 1,
+                ImageUrls = "[]",
+            }
+        ];
+    }
+}
+
+#if false
         var fillingtypeMap = dict._fillingtype_remote;
 
         switch (productType)
@@ -559,23 +699,5 @@ public class SirService
 
         return list;
     }
+#endif
 
-    private static List<ZyqdSirSampleForFilingModel> BuildDefaultSamples(string guid, string reportType, string _)
-    {
-        // 新建默认只给一行，其余由用户「添加样品记录」自行增加
-        return
-        [
-            new ZyqdSirSampleForFilingModel
-            {
-                main_guid = guid,
-                Report_type = reportType,
-                Specification_type = "S.1",
-                Note = "部件1",
-                Note1 = "",
-                createTime = DateTime.Now,
-                code = 1,
-                ImageUrls = "[]",
-            }
-        ];
-    }
-}

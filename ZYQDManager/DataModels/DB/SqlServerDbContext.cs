@@ -21,6 +21,7 @@ public class SqlServerDbContext : DbContext
     public DbSet<ZyqdSirMainModel> SirMains => Set<ZyqdSirMainModel>();
     public DbSet<ZyqdSirDetailModel> SirDetails => Set<ZyqdSirDetailModel>();
     public DbSet<ZyqdSirSampleForFilingModel> SirSamples => Set<ZyqdSirSampleForFilingModel>();
+    public DbSet<ZyqdSirItemTemplateModel> SirItemTemplates => Set<ZyqdSirItemTemplateModel>();
     public DbSet<ZyqdQuotationBaseMotorModel> QuotationBaseMotors => Set<ZyqdQuotationBaseMotorModel>();
     public DbSet<ZyqdQuotationBaseRemoteModel> QuotationBaseRemotes => Set<ZyqdQuotationBaseRemoteModel>();
     public DbSet<ZyqdQuotationBaseAccessoryModel> QuotationBaseAccessories => Set<ZyqdQuotationBaseAccessoryModel>();
@@ -123,6 +124,17 @@ public class SqlServerDbContext : DbContext
         modelBuilder.Entity<ZyqdSirDetailModel>(entity =>
         {
             entity.ToTable("T_ZYQD_SIR_detail");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Ignore(e => e.Specification);
+            entity.Ignore(e => e.Criteria);
+            entity.Ignore(e => e.filling_type);
+            entity.Ignore(e => e.GroupTitle);
+        });
+
+        modelBuilder.Entity<ZyqdSirItemTemplateModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_SIR_item_template");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
         });

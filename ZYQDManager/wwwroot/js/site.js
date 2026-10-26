@@ -1,3 +1,50 @@
+window.zyqdRememberLogin = (function () {
+    const key = "zyqd_login_remember";
+    const days = 30;
+
+    function cookieFlags(maxAge) {
+        let s = "path=/; max-age=" + maxAge + "; SameSite=Lax";
+        if (location.protocol === "https:") s += "; Secure";
+        return s;
+    }
+
+    return {
+        save: function (empNo, password, remember) {
+            const keepPwd = !!remember;
+            const payload = encodeURIComponent(JSON.stringify({
+                empNo: empNo || "",
+                password: keepPwd ? (password || "") : "",
+                remember: keepPwd
+            }));
+            document.cookie = key + "=" + payload + "; " + cookieFlags(days * 24 * 60 * 60);
+        },
+        load: function () {
+            const prefix = key + "=";
+            const parts = (document.cookie || "").split(";");
+            for (let i = 0; i < parts.length; i++) {
+                const s = parts[i].trim();
+                if (s.indexOf(prefix) !== 0) continue;
+                try {
+                    const data = JSON.parse(decodeURIComponent(s.substring(prefix.length)));
+                    if (!data || typeof data !== "object") return null;
+                    const password = data.password || "";
+                    return {
+                        empNo: data.empNo || "",
+                        password: password,
+                        remember: !!data.remember || password.length > 0
+                    };
+                } catch (_) {
+                    return null;
+                }
+            }
+            return null;
+        },
+        clear: function () {
+            document.cookie = key + "=; path=/; max-age=0; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        }
+    };
+})();
+
 window.cpiOpenActiveDatePicker = function () {
     const el = document.activeElement;
     if (!el || el.type !== "date" || typeof el.showPicker !== "function") return;

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace ZYQDManager.DataModels;
 
 /// <summary>样品检验报告明细 T_ZYQD_SIR_detail</summary>
@@ -6,7 +8,13 @@ public class ZyqdSirDetailModel
     public int Id { get; set; }
     public string? main_guid { get; set; }
     public string? Specification_type { get; set; }
+
+    /// <summary>来自模板，不入库。</summary>
+    [NotMapped]
     public string? Specification { get; set; }
+
+    /// <summary>来自模板，不入库。</summary>
+    [NotMapped]
     public string? Criteria { get; set; }
 
     public string? Actual_Results1 { get; set; }
@@ -41,5 +49,11 @@ public class ZyqdSirDetailModel
     public string? Note { get; set; }
     public DateTime? createTime { get; set; }
     public string? Report_type { get; set; }
+    /// <summary>来自模板，不入库。</summary>
+    [NotMapped]
     public string? filling_type { get; set; }
+
+    /// <summary>来自模板，不入库；分组标题插在该行之前。</summary>
+    [NotMapped]
+    public string? GroupTitle { get; set; }
 }

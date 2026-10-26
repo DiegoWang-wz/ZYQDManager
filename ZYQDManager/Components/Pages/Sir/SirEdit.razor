@@ -53,10 +53,10 @@
                            OnClick="ExportExcelAsync" Disabled="_busy || !_loaded">导出Excel</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
                            StartIcon="@Icons.Material.Filled.Visibility"
-                           OnClick="() => ExportPdfAsync(preview: true)" Disabled="_busy || !_loaded">预览PDF</MudButton>
+                           OnClick="@(() => ExportPdfAsync(true))" Disabled="_busy || !_loaded">预览PDF</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info"
                            StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                           OnClick="() => ExportPdfAsync(preview: false)" Disabled="_busy || !_loaded">导出PDF</MudButton>
+                           OnClick="@(() => ExportPdfAsync(false))" Disabled="_busy || !_loaded">导出PDF</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
                            Class="zyqd-btn-save"
                            StartIcon="@Icons.Material.Filled.Save"
@@ -267,16 +267,12 @@
                             <col style="width:11%"/>
                         </colgroup>
                         <tbody>
-                        <tr class="sir-detail-subhead">
-                            <td colspan="14" class="sir-group-title">成品外观要求 / Finished product appearance requirements</td>
-                        </tr>
-
                         @foreach (var item in _details)
                         {
-                            @if (ShouldShowGroupHeader(item.Specification_type, out var groupTitle))
+                            @if (!string.IsNullOrWhiteSpace(item.GroupTitle))
                             {
                                 <tr class="sir-detail-subhead">
-                                    <td colspan="14" class="sir-group-title">@groupTitle</td>
+                                    <td colspan="14" class="sir-group-title">@item.GroupTitle</td>
                                 </tr>
                             }
                             <tr class="sir-detail-row">
@@ -292,8 +288,21 @@
                                 <td class="center sir-concl-cell">@ConclusionCheck(item, "B")</td>
                                 <td class="center sir-concl-cell">@ConclusionCheck(item, "C")</td>
                                 <td class="center sir-concl-cell">@ConclusionCheck(item, "D")</td>
-                                <td><MudTextField @bind-Value="item.Note" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
+                                <td>
+                                    <input class="sir-cell-input"
+                                           value="@(item.Note ?? "")"
+                                           readonly="@(!CanEditCore)"
+                                           @onchange="e => { if (CanEditCore) item.Note = e.Value?.ToString(); }"/>
+                                </td>
                             </tr>
+                            @if (ShouldShowInternalWarning(item))
+                            {
+                                <tr class="sir-detail-subhead">
+                                    <td colspan="14" class="sir-group-title">
+                                        以下测试内容仅供内部核查使用，不得外发，不得打印
+                                    </td>
+                                </tr>
+                            }
                         }
                         </tbody>
                     </table>
@@ -477,7 +486,9 @@
         align-items: center;
     }
     .sir-label { color: #374151; font-weight: 500; white-space: nowrap; font-size: 13px; }
-    .sir-type-select { width: 150px; min-width: 130px; }
+    .sir-type-select { width: 186px; min-width: 186px; flex: 0 0 186px; }
+    .sir-type-select .mud-input-slot,
+    .sir-type-select .mud-select-input { text-overflow: clip; overflow: visible; }
     .sir-product-select { width: 300px; min-width: 200px; }
     .sir-toolbar .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
     .sir-toolbar .mud-button-root { height: 32px; min-height: 32px; }
@@ -918,6 +929,40 @@
     .sir-form-table .mud-input-control { margin-top: 0 !important; margin-bottom: 0 !important; }
     .sir-form-table .mud-input > input.mud-input-slot,
     .sir-form-table .mud-input > input { font-size: 13px; }
+
+    .sir-cell-input {
+        width: 100%;
+        min-width: 0;
+        height: 28px;
+        padding: 0 4px;
+        border: 1px solid #c5c9d0;
+        border-radius: 4px;
+        font-size: 13px;
+        line-height: 28px;
+        box-sizing: border-box;
+        background: #fff;
+        color: #111;
+    }
+    .sir-cell-input:focus {
+        outline: none;
+        border-color: #165DFF;
+    }
+    .sir-cell-input[readonly] {
+        background: #fafafa;
+        color: #374151;
+    }
+    .sir-cell-check {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: #165DFF;
+        cursor: pointer;
+        vertical-align: middle;
+    }
+    .sir-cell-check:disabled {
+        cursor: default;
+        opacity: 0.65;
+    }
 
     .sir-sample-row-readonly td {
         background: #fafafa;
@@ -1555,6 +1600,39 @@
         _samples.RemoveAt(index);
     }
 
+    /// <summary>对齐老系统 showWarningConditions：指定产品某一行之后插入内部核查提示。</summary>
+    private static readonly (string ProductType, string SpecType)[] InternalWarningAfter =
+    [
+        ("JCA-无RF机械行程交流管状电机", "M.12"),
+        ("JCA-内置RF控制机械行程交流管状电机", "M.21"),
+        ("JCA-内置RF控制电子行程交流管状电机", "M.22"),
+        ("JCA-无RF电子行程交流管状电机", "M.19"),
+        ("JCC-锂电池款开合帘电机", "M.23"),
+        ("JCC-内置开关电源款开合帘电机", "M.22"),
+        ("JCC-内置开关电源款开合帘电机", "M.25"),
+        ("JCD-LE款直流管状电机", "M.26"),
+        ("JCD-TE款直流管状电机", "M.24"),
+        ("JCD-AE款直流管状电机", "M.24"),
+        ("常规JCV系列管状电机", "M.21"),
+        ("内置锂电池款JCV系列管状电机", "M.24"),
+        ("内置开关电源款JCV系列管状电机", "M.23"),
+        ("基础版电机", "M.24"),
+    ];
+
+    private bool ShouldShowInternalWarning(ZyqdSirDetailModel item)
+    {
+        var product = (_productType ?? "").Trim();
+        var spec = (item.Specification_type ?? "").Trim();
+        if (product.Length == 0 || spec.Length == 0) return false;
+        foreach (var (p, s) in InternalWarningAfter)
+        {
+            if (string.Equals(p, product, StringComparison.Ordinal)
+                && string.Equals(s, spec, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
     private RenderFragment CertTile(string label, bool active, Action<bool> set) => __builder =>
     {
         // 认证区业务员可改（图二）
@@ -1564,34 +1642,6 @@
             <span>@label</span>
         </div>
     };
-
-    private bool ShouldShowGroupHeader(string? specType, out string title)
-    {
-        title = "";
-        // 分组标题插在对应项之前（老系统是插在该项之后，这里按“下一组开始”更直观）
-        if (specType == "2.1")
-        {
-            title = "成品性能要求 / Performance requirements for finished products";
-            return true;
-        }
-        if (specType == "3.1")
-        {
-            title = "成品功能要求 / Functional requirements for finished products";
-            return true;
-        }
-        if (specType == "4.1")
-        {
-            title = "其他要求 / Other requirements";
-            return true;
-        }
-        // 遥控器：4.1 配件之后是半成品内部测试（序号 1~10），需单独成块
-        if (specType == "1")
-        {
-            title = "半成品测试，不提供给客户，内部测试记录。";
-            return true;
-        }
-        return false;
-    }
 
     private RenderFragment ConclusionCheck(ZyqdSirDetailModel row, string which) => __builder =>
     {
@@ -1605,13 +1655,15 @@
         };
         var checkedVal = IsTick(raw);
 
-        <MudCheckBox T="bool"
-                     Value="@checkedVal"
-                     ValueChanged="@(EventCallback.Factory.Create<bool>(this, v => SetConclusion(row, which, v ? "√" : "")))"
-                     Dense="true"
-                     Color="Color.Primary"
-                     Disabled="@(!CanEditCore)"/>
+        <input type="checkbox"
+               class="sir-cell-check"
+               checked="@checkedVal"
+               disabled="@(!CanEditCore)"
+               @onchange="e => OnConclusionChanged(row, which, e)"/>
     };
+
+    private void OnConclusionChanged(ZyqdSirDetailModel row, string which, ChangeEventArgs e)
+        => SetConclusion(row, which, e.Value is true ? TickMark : "");
 
     private void SetConclusion(ZyqdSirDetailModel row, string which, string? value)
     {
@@ -1633,15 +1685,16 @@
 
         if (filling == "1")
         {
-            // √/× 类型：用勾选框，勾选存 √，取消存空
+            // √/× 类型：勾选存 √，取消存空
             var checkedVal = IsTick(value);
-            builder.OpenComponent<MudCheckBox<bool>>(0);
-            builder.AddAttribute(1, "Value", checkedVal);
-            builder.AddAttribute(2, "ValueChanged", EventCallback.Factory.Create<bool>(this, v => SetResult(row, index, v ? "√" : "")));
-            builder.AddAttribute(3, "Dense", true);
-            builder.AddAttribute(4, "Color", Color.Primary);
-            builder.AddAttribute(5, "Disabled", !editable);
-            builder.CloseComponent();
+            builder.OpenElement(0, "input");
+            builder.AddAttribute(1, "type", "checkbox");
+            builder.AddAttribute(2, "class", "sir-cell-check");
+            builder.AddAttribute(3, "checked", checkedVal);
+            builder.AddAttribute(4, "disabled", !editable);
+            builder.AddAttribute(5, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                SetResult(row, index, e.Value is true ? TickMark : "")));
+            builder.CloseElement();
         }
         else if (filling == "2")
         {
@@ -1665,14 +1718,13 @@
         }
         else
         {
-            builder.OpenComponent<MudTextField<string>>(0);
-            builder.AddAttribute(1, "Value", value);
-            builder.AddAttribute(2, "ValueChanged", EventCallback.Factory.Create<string>(this, v => SetResult(row, index, v)));
-            builder.AddAttribute(3, "Dense", true);
-            builder.AddAttribute(4, "Margin", Margin.Dense);
-            builder.AddAttribute(5, "Variant", Variant.Outlined);
-            builder.AddAttribute(6, "ReadOnly", !editable);
-            builder.CloseComponent();
+            builder.OpenElement(0, "input");
+            builder.AddAttribute(1, "class", "sir-cell-input");
+            builder.AddAttribute(2, "value", value);
+            builder.AddAttribute(3, "readonly", !editable);
+            builder.AddAttribute(4, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+                SetResult(row, index, e.Value?.ToString())));
+            builder.CloseElement();
         }
     };
 
@@ -1689,10 +1741,12 @@
         SetResult(row, index, next);
     }
 
+    private const string TickMark = "\u221A";
+
     private static bool IsTick(string? value)
     {
         var v = (value ?? "").Trim();
-        return v is "√" or "✓" or "V" or "v" or "OK" or "ok" or "true" or "1";
+        return v is TickMark or "\u2713" or "V" or "v" or "OK" or "ok" or "true" or "1";
     }
 
     private static void AddOption(RenderTreeBuilder b, string v)

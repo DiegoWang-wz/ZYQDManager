@@ -106,13 +106,16 @@ public class CentralAuthService
         var path = _api.Relative("auth/join-system");
         try
         {
+            var role = ZyqdDepartments.DefaultRole(info.Department);
             using var resp = await _http.PostAsJsonAsync(path, new JoinSystemRequestDto
             {
                 EmpNo = empNo.Trim(),
                 Password = password,
                 SystemName = CentralApiOptions.AppSystemKey,
                 DisplayName = (displayName ?? "").Trim(),
-                UserInformation = info
+                UserInformation = info,
+                Role = role,
+                Controls = AppRoles.DefaultJoinControls(role)
             }, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
             var parsed = JsonSerializer.Deserialize<JcCommonApiEnvelope<JoinSystemResponseDataDto>>(body, JsonOptions);

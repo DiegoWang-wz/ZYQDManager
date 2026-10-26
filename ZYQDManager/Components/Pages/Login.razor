@@ -3,6 +3,7 @@
 @implements IDisposable
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject CentralAuthService Auth
+@inject LocalStorageHelper LocalStorage
 
 <PageTitle>登录 - 遮阳管理系统</PageTitle>
 
@@ -116,6 +117,14 @@
                                   Disabled="_busy"
                                   Immediate="true"
                                   OnKeyDown="OnKeyDown"/>
+                    <MudCheckBox T="bool"
+                                 Value="_rememberPassword"
+                                 ValueChanged="OnRememberChanged"
+                                 Label="记住密码"
+                                 Color="Color.Primary"
+                                 Dense="true"
+                                 Disabled="_busy"
+                                 Class="login-remember"/>
                 </div>
             }
             else
@@ -287,6 +296,17 @@
         gap: 0.5rem;
     }
 
+    .login-remember {
+        margin: -2px 0 2px !important;
+        align-self: flex-start;
+    }
+
+    .login-remember .mud-typography {
+        font-size: 0.875rem !important;
+        font-weight: 600;
+        color: #1976d2 !important;
+    }
+
     .login-fields .mud-input-outlined-border {
         border-width: 2px !important;
         border-color: #1976d2 !important;
@@ -433,6 +453,7 @@
     private int _panel = PanelLogin;
     private string _empNo = "";
     private string _password = "";
+    private bool _rememberPassword;
     private string? _error;
     private string? _info;
     private bool _busy;
@@ -506,11 +527,80 @@
             {
                 var auth = await Auth.GetStoredAsync();
                 NavManager.NavigateTo(AppRoles.HomePath(auth?.Role), replace: true);
+                return;
             }
         }
         catch
         {
         }
+
+        await RestoreLoginFieldsAsync();
+    }
+
+    private async Task RestoreLoginFieldsAsync()
+    {
+        var empNo = "";
+        var password = "";
+        var remember = false;
+        try
+        {
+            var remembered = await JS.InvokeAsync<RememberedLogin?>("zyqdRememberLogin.load");
+            if (remembered is not null)
+            {
+                empNo = (remembered.EmpNo ?? "").Trim();
+                remember = remembered.Remember || !string.IsNullOrEmpty(remembered.Password);
+                if (remember)
+                    password = remembered.Password ?? "";
+            }
+        }
+        catch
+        {
+        }
+
+        if (string.IsNullOrWhiteSpace(empNo))
+        {
+            try { empNo = await LocalStorage.GetStringOrDefaultAsync(StorageKeys.LastLoginEmpNo); }
+            catch { empNo = ""; }
+        }
+
+        if (string.IsNullOrWhiteSpace(empNo) && string.IsNullOrEmpty(password))
+            return;
+
+        _empNo = empNo;
+        _password = password;
+        _rememberPassword = remember;
+        StateHasChanged();
+    }
+
+    private async Task PersistLoginFieldsAsync()
+    {
+        var empNo = (_empNo ?? "").Trim();
+        try
+        {
+            if (empNo.Length > 0)
+                await LocalStorage.SetAsync(StorageKeys.LastLoginEmpNo, empNo);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "zyqdRememberLogin.save",
+                empNo,
+                _rememberPassword ? _password : "",
+                _rememberPassword);
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task OnRememberChanged(bool value)
+    {
+        _rememberPassword = value;
+        await PersistLoginFieldsAsync();
     }
 
     private static InputType PwdType(bool visible) => visible ? InputType.Text : InputType.Password;
@@ -698,6 +788,8 @@
                 Notify.Show(_error, Severity.Error);
                 return;
             }
+
+            await PersistLoginFieldsAsync();
 
             Notify.Show("登录成功", Severity.Success);
             var auth = await Auth.GetStoredAsync();
@@ -1058,6 +1150,13 @@
     {
         _cooldownCts?.Cancel();
         _cooldownCts?.Dispose();
+    }
+
+    private sealed class RememberedLogin
+    {
+        public string EmpNo { get; set; } = "";
+        public string Password { get; set; } = "";
+        public bool Remember { get; set; }
     }
 
     private sealed class RegisterForm
