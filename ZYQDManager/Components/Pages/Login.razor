@@ -79,13 +79,19 @@
                             @_sendCodeText
                         </MudButton>
                     </div>
-                    <MudTextField @bind-Value="_reg.Department"
-                                  Label="部门"
-                                  Variant="Variant.Outlined"
-                                  Margin="Margin.Dense"
-                                  Disabled="_busy"
-                                  Immediate="true"
-                                  OnKeyDown="OnKeyDown"/>
+                    <MudSelect T="string"
+                               @bind-Value="_reg.Department"
+                               Label="部门"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Disabled="_busy"
+                               AnchorOrigin="Origin.BottomCenter"
+                               TransformOrigin="Origin.TopCenter">
+                        @foreach (var dept in ZyqdDepartments.All)
+                        {
+                            <MudSelectItem Value="@dept">@dept</MudSelectItem>
+                        }
+                    </MudSelect>
                 </div>
             }
             else if (_panel == PanelLogin)
@@ -177,7 +183,7 @@
         @if (_panel == PanelRegister)
         {
             <MudText Typo="Typo.caption" Class="reg-hint">
-                请先完成邮箱验证。新账号注册后需管理员审核启用才能登录。
+                请先完成邮箱验证。注册成功后即可用员工号和密码登录。
             </MudText>
         }
 
@@ -765,37 +771,26 @@
                 return;
             }
 
-            var pending = data is null || !data.IsActive;
-            string tip;
-            if (pending)
-            {
-                tip = data?.Created == true
-                    ? "注册成功，请等待系统管理员审核启用后再登录。"
-                    : "账号已登记，请等待系统管理员审核启用后再登录。";
-            }
-            else
-            {
-                tip = data?.PermissionAdded == true
+            string tip = data?.Created == true
+                ? "注册成功，请直接登录。"
+                : data?.PermissionAdded == true
                     ? "该工号已有统一账号，已开通遮阳系统权限，请用原密码登录。"
                     : "该账号已开通本系统，档案已更新，请登录。";
-            }
 
             var mail = await EmailService.SendAsync(new SendEmailDto
             {
                 To = [_reg.Email.Trim()],
-                Subject = MailTemplate.Subject(pending ? "注册已提交" : "账号已开通"),
-                Body = pending
-                    ? MailTemplate.RegisterSubmitted(_reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, null)
-                    : MailTemplate.AccountOpened(
-                        _reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, null,
-                        NavManager.ToAbsoluteUri("login").AbsoluteUri),
+                Subject = MailTemplate.Subject("账号已开通"),
+                Body = MailTemplate.AccountOpened(
+                    _reg.DisplayName, _reg.EmpNo, _reg.Department, _reg.Email, null,
+                    NavManager.ToAbsoluteUri("login").AbsoluteUri),
                 IsHtml = true
             });
 
             if (mail.Code != 1)
                 tip += " （确认邮件发送失败：" + mail.Message + "）";
 
-            if (pending || data?.Created == true || data?.PermissionAdded == true)
+            if (data?.Created == true || data?.PermissionAdded == true)
             {
                 await AdminNotify.NotifyNewUserAsync(new NewUserNotifyDto
                 {
@@ -805,11 +800,11 @@
                     Email = _reg.Email,
                     PersonnelUrl = NavManager.ToAbsoluteUri("personnel").AbsoluteUri,
                     Source = "用户自助注册",
-                    PendingReview = pending
+                    PendingReview = false
                 });
             }
 
-            Notify.Show(tip, pending ? Severity.Info : Severity.Success);
+            Notify.Show(tip, Severity.Success);
             ResetCodeStore.Consume(_reg.EmpNo.Trim());
             _regEmailVerified = false;
             _empNo = _reg.EmpNo.Trim();

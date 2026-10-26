@@ -43,6 +43,16 @@
     </MudPaper>
 
     <MudPaper Class="personnel-table-wrap pa-0" Outlined="true">
+        @if (!_listLoaded)
+        {
+            <div class="personnel-loading">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large"/>
+                <MudText Typo="Typo.subtitle1" Class="mt-3">正在载入人员…</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">请稍候</MudText>
+            </div>
+        }
+        else
+        {
         <MudTable Items="FilteredRows"
                   Hover="true"
                   Dense="true"
@@ -51,8 +61,13 @@
                   Breakpoint="Breakpoint.None"
                   FixedHeader="true"
                   Class="personnel-table"
-                  Height="100%"
                   RowClassFunc="@InactiveRowClass">
+            <LoadingContent>
+                <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-8">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true"/>
+                    <MudText Typo="Typo.body2">正在载入人员…</MudText>
+                </MudStack>
+            </LoadingContent>
             <HeaderContent>
                 <MudTh>工号</MudTh>
                 <MudTh>姓名</MudTh>
@@ -67,7 +82,14 @@
             <RowTemplate>
                 <MudTd DataLabel="工号">@context.EmpNo</MudTd>
                 <MudTd DataLabel="姓名">@Dash(context.DisplayName)</MudTd>
-                <MudTd DataLabel="角色">@RoleText(context.Role, context.EmpNo)</MudTd>
+                <MudTd DataLabel="角色">
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@RoleChipColor(context.Role, context.EmpNo)"
+                             Variant="Variant.Filled">
+                        @RoleText(context.Role, context.EmpNo)
+                    </MudChip>
+                </MudTd>
                 <MudTd DataLabel="数据范围" Style="max-width:220px">
                     <MudTooltip Text="@context.DataScopeText">
                         <MudText Typo="Typo.body2">@context.DataScopeText</MudText>
@@ -76,10 +98,14 @@
                 <MudTd DataLabel="部门">@Dash(context.Department)</MudTd>
                 <MudTd DataLabel="邮箱">@Dash(context.Email)</MudTd>
                 <MudTd DataLabel="电话">@Dash(context.Phone)</MudTd>
-                <MudTd DataLabel="客户" Style="max-width:220px">
-                    <MudTooltip Text="@context.CustomersText">
-                        <MudText Typo="Typo.body2" Class="personnel-customers">@context.CustomersText</MudText>
-                    </MudTooltip>
+                <MudTd DataLabel="客户">
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@CustomerChipColor(context)"
+                             Variant="Variant.Outlined"
+                             OnClick="@(() => OpenCustomerDialog(context))">
+                        @CustomerCountText(context)
+                    </MudChip>
                 </MudTd>
                 <MudTd DataLabel="操作">
                     <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
@@ -95,9 +121,10 @@
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>
-                <MudText Class="pa-4">暂无人员</MudText>
+                <MudText Class="pa-4 mud-text-secondary">暂无人员</MudText>
             </NoRecordsContent>
         </MudTable>
+        }
     </MudPaper>
 </div>
 
@@ -115,7 +142,12 @@
                                   Variant="Variant.Outlined"
                                   Margin="Margin.Dense"
                                   InputType="InputType.Password"/>
-                    <MudTextField @bind-Value="_edit.Department" Label="部门" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudSelect T="string" @bind-Value="_edit.Department" Label="部门" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var dept in ZyqdDepartments.Options(_edit.Department))
+                        {
+                            <MudSelectItem Value="@dept">@dept</MudSelectItem>
+                        }
+                    </MudSelect>
                     <MudTextField @bind-Value="_edit.Email" Label="邮箱" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudTextField @bind-Value="_edit.Phone" Label="电话" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudSelect T="string" @bind-Value="RoleBind" Label="本系统角色" Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -287,6 +319,92 @@
     </div>
 </MudDrawer>
 
+<MudDialog @bind-Visible="_custDialogOpen"
+           Options="_custDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">分配客户 — @Dash(_custTarget?.DisplayName)（@_custTarget?.EmpNo）</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3" Class="personnel-cust-dialog">
+            @if (_custTarget?.ViewAllCustomers == true)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true">当前可查看全部客户；下面名单作为预分配，关闭「全部客户」后生效。</MudAlert>
+            }
+            <MudAutocomplete T="CustomerOptionDto"
+                             @bind-Value="_custPicked"
+                             SearchFunc="SearchCustomers"
+                             ToStringFunc="@(x => x?.Label ?? "")"
+                             Label="添加客户"
+                             Placeholder="输入客户编号搜索或回车新增"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             CoerceText="true"
+                             ResetValueOnEmptyText="true"
+                             TextChanged="OnCustTextChanged"
+                             OnKeyUp="OnCustKeyUp"
+                             Adornment="Adornment.End"
+                             AdornmentIcon="@Icons.Material.Filled.Add"
+                             OnAdornmentClick="AddCustPickedOrTypedAsync"/>
+            <MudTextField @bind-Value="_custBatchText"
+                          Label="批量导入客户"
+                          Placeholder="每行一个短号或完整号，短号自动加 10000000（如 12696→10012696）"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Lines="4"
+                          Immediate="true"/>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudTextField @bind-Value="_custFilter"
+                              Placeholder="筛选已分配"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              Class="personnel-cust-filter"/>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                           OnClick="BatchImportCustDialog" Disabled="_custBusy">
+                    识别并添加
+                </MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">已分配 @(_custList.Count) 个客户</MudText>
+            <MudTable Items="FilteredCustList"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Height="320px"
+                      FixedHeader="true"
+                      Breakpoint="Breakpoint.None">
+                <HeaderContent>
+                    <MudTh>客户编号</MudTh>
+                    <MudTh>客户名称</MudTh>
+                    <MudTh Style="width:72px">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Code</MudTd>
+                    <MudTd>@Dash(context.Name)</MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       Disabled="_custBusy"
+                                       OnClick="@(() => RemoveCustDialog(context))"/>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-3 mud-text-secondary">尚未分配客户</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _custDialogOpen = false)" Disabled="_custBusy">取消</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveCustDialogAsync" Disabled="_custBusy">
+            @(_custBusy ? "保存中…" : "保存")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
 <style>
     .personnel-page {
         flex: 1 1 0;
@@ -307,6 +425,32 @@
 
     .personnel-table {
         height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .personnel-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+    }
+
+    .personnel-table .mud-table-head .mud-table-cell {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--mud-palette-surface);
+    }
+
+    .personnel-loading {
+        flex: 1 1 0;
+        min-height: 280px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--mud-palette-text-secondary);
     }
 
     .personnel-customers {
@@ -314,6 +458,15 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         max-width: 220px;
+    }
+
+    .personnel-cust-dialog {
+        min-width: 520px;
+    }
+
+    .personnel-cust-filter {
+        width: 220px;
+        flex: 0 0 220px !important;
     }
 
     .personnel-filter {
@@ -407,7 +560,8 @@
 </style>
 
 @code {
-    private bool _busy;
+    private bool _busy = true;
+    private bool _listLoaded;
     private bool _dialogOpen;
     private bool _sigUploading;
     private bool _sigUploadingEn;
@@ -423,6 +577,37 @@
     private CustomerOptionDto? _picked;
     private string _typedCustomer = "";
     private string _batchCustomerText = "";
+    private bool _custDialogOpen;
+    private bool _custBusy;
+    private ManagedUserRowDto? _custTarget;
+    private List<CustomerOptionDto> _custList = [];
+    private CustomerOptionDto? _custPicked;
+    private string _custTyped = "";
+    private string _custBatchText = "";
+    private string _custFilter = "";
+    private readonly DialogOptions _custDialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true,
+        CloseOnEscapeKey = true
+    };
+
+    private IEnumerable<CustomerOptionDto> FilteredCustList
+    {
+        get
+        {
+            var k = (_custFilter ?? "").Trim();
+            IEnumerable<CustomerOptionDto> source = _custList;
+            if (k.Length > 0)
+            {
+                source = source.Where(x =>
+                    x.Code.Contains(k, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrWhiteSpace(x.Name) && x.Name.Contains(k, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            return source.OrderBy(x => x.Code);
+        }
+    }
 
     private IEnumerable<ManagedUserRowDto> FilteredRows
     {
@@ -489,6 +674,8 @@
         var auth = await Auth.GetStoredAsync();
         if (!Auth.CanManageUsers(auth))
         {
+            _busy = false;
+            _listLoaded = true;
             Notify.Show("没有人员管理权限", Severity.Warning);
             NavManager.NavigateTo("/contract-base");
             return;
@@ -567,6 +754,7 @@
         }
         finally
         {
+            _listLoaded = true;
             _busy = false;
             StateHasChanged();
         }
@@ -684,7 +872,9 @@
         return Task.CompletedTask;
     }
 
-    private void AddCustomer(CustomerOptionDto item)
+    private void AddCustomer(CustomerOptionDto item) => AddCustomerTo(_edit.Customers, item);
+
+    private void AddCustomerTo(List<CustomerOptionDto> list, CustomerOptionDto item)
     {
         var code = (item.Code ?? "").Trim();
         if (string.IsNullOrEmpty(code) || code.Length > 50)
@@ -693,10 +883,10 @@
             return;
         }
 
-        if (_edit.Customers.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+        if (list.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        _edit.Customers.Add(new CustomerOptionDto { Code = code, Name = item.Name });
+        list.Add(new CustomerOptionDto { Code = code, Name = item.Name });
         if (_catalog.All(x => !string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
             _catalog.Add(new CustomerOptionDto { Code = code, Name = item.Name });
     }
@@ -709,11 +899,18 @@
     /// </summary>
     private void BatchImportCustomers()
     {
-        var raw = _batchCustomerText ?? "";
+        var added = BatchImportTo(_edit.Customers, _batchCustomerText);
+        if (added > 0)
+            _batchCustomerText = "";
+    }
+
+    private int BatchImportTo(List<CustomerOptionDto> list, string? rawText)
+    {
+        var raw = rawText ?? "";
         if (string.IsNullOrWhiteSpace(raw))
         {
             Notify.Show("请先粘贴客户短号或完整客户号", Severity.Warning);
-            return;
+            return 0;
         }
 
         var tokens = raw
@@ -730,7 +927,7 @@
                 continue;
             }
 
-            if (_edit.Customers.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
+            if (list.Any(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)))
             {
                 skippedDup++;
                 continue;
@@ -738,17 +935,15 @@
 
             var existing = _catalog.FirstOrDefault(x =>
                 string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
-            AddCustomer(existing ?? new CustomerOptionDto { Code = code });
+            AddCustomerTo(list, existing ?? new CustomerOptionDto { Code = code });
             added++;
         }
-
-        if (added > 0)
-            _batchCustomerText = "";
 
         var parts = new List<string> { $"新增 {added} 个" };
         if (skippedDup > 0) parts.Add($"已存在跳过 {skippedDup}");
         if (invalid > 0) parts.Add($"无法识别 {invalid}");
         Notify.Show(string.Join("，", parts), added > 0 ? Severity.Success : Severity.Warning);
+        return added;
     }
 
     /// <summary>8888→10008888；12696→10012696；已是 10006111 这类则保留。</summary>
@@ -1062,6 +1257,119 @@
 
     private static string RoleText(string? role, string empNo)
         => AppRoles.Display(role, empNo);
+
+    private static Color RoleChipColor(string? role, string empNo)
+    {
+        var text = RoleText(role, empNo);
+        return text switch
+        {
+            "超级管理员" => Color.Error,
+            "管理员" => Color.Warning,
+            "检测员" => Color.Tertiary,
+            _ => Color.Info
+        };
+    }
+
+    private static string CustomerCountText(ManagedUserRowDto row)
+    {
+        if (row.ViewAllCustomers)
+            return "全部";
+        var n = row.Customers?.Count ?? 0;
+        return n == 0 ? "未分配" : $"{n} 个";
+    }
+
+    private static Color CustomerChipColor(ManagedUserRowDto row)
+    {
+        if (row.ViewAllCustomers) return Color.Success;
+        return (row.Customers?.Count ?? 0) == 0 ? Color.Default : Color.Primary;
+    }
+
+    private void OpenCustomerDialog(ManagedUserRowDto row)
+    {
+        _custTarget = row;
+        _custList = row.Customers.Select(x => new CustomerOptionDto { Code = x.Code, Name = x.Name }).ToList();
+        _custPicked = null;
+        _custTyped = "";
+        _custBatchText = "";
+        _custFilter = "";
+        _custDialogOpen = true;
+    }
+
+    private void OnCustTextChanged(string value) => _custTyped = value ?? "";
+
+    private async Task OnCustKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await AddCustPickedOrTypedAsync();
+    }
+
+    private Task AddCustPickedOrTypedAsync()
+    {
+        if (_custPicked is not null)
+        {
+            AddCustomerTo(_custList, _custPicked);
+            _custPicked = null;
+            return Task.CompletedTask;
+        }
+
+        var code = _custTyped.Trim();
+        if (string.IsNullOrEmpty(code))
+            return Task.CompletedTask;
+
+        var existing = _catalog.FirstOrDefault(x =>
+            string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase));
+        AddCustomerTo(_custList, existing ?? new CustomerOptionDto { Code = code });
+        _custTyped = "";
+        return Task.CompletedTask;
+    }
+
+    private void RemoveCustDialog(CustomerOptionDto item)
+        => _custList.RemoveAll(x => string.Equals(x.Code, item.Code, StringComparison.OrdinalIgnoreCase));
+
+    private void BatchImportCustDialog()
+    {
+        var added = BatchImportTo(_custList, _custBatchText);
+        if (added > 0)
+            _custBatchText = "";
+    }
+
+    private async Task SaveCustDialogAsync()
+    {
+        var empNo = (_custTarget?.EmpNo ?? "").Trim();
+        if (empNo.Length == 0)
+        {
+            _custDialogOpen = false;
+            return;
+        }
+
+        _custBusy = true;
+        try
+        {
+            var assign = await CustomerAssign.ReplaceAsync(empNo, _custList);
+            if (assign.Code != 1)
+            {
+                Notify.Show(assign.Message ?? "保存客户分配失败", Severity.Error);
+                return;
+            }
+
+            var saved = _custList.Select(x => new CustomerOptionDto { Code = x.Code, Name = x.Name }).ToList();
+            if (_custTarget is not null)
+                _custTarget.Customers = saved;
+            if (string.Equals(_edit.EmpNo, empNo, StringComparison.OrdinalIgnoreCase))
+                _edit.Customers = saved.Select(x => new CustomerOptionDto { Code = x.Code, Name = x.Name }).ToList();
+
+            _custDialogOpen = false;
+            Notify.Show("客户分配已保存", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存客户分配失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _custBusy = false;
+        }
+    }
 
     private static bool HasInvoiceKpVisible(SystemPermissionEntryApiDto? entry)
     {

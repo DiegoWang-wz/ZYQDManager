@@ -95,11 +95,17 @@
                                               Immediate="true"/>
                             </div>
                             <div class="profile-field">
-                                <MudTextField @bind-Value="_department"
-                                              Label="部门"
-                                              Variant="Variant.Outlined"
-                                              Disabled="@(_busy || _readOnly)"
-                                              Immediate="true"/>
+                                <MudSelect T="string"
+                                           @bind-Value="_department"
+                                           Label="部门"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(_busy || _readOnly)"
+                                           Clearable="true">
+                                    @foreach (var dept in ZyqdDepartments.Options(_department))
+                                    {
+                                        <MudSelectItem Value="@dept">@dept</MudSelectItem>
+                                    }
+                                </MudSelect>
                             </div>
                             <div class="profile-field">
                                 <MudTextField @bind-Value="_email"

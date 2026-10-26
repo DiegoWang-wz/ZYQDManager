@@ -68,9 +68,9 @@ public static class MailTemplate
     public static string RegisterSubmitted(
         string? displayName, string empNo, string? department, string? email, string? phone)
         => Wrap(
-            "您的账号已提交遮阳管理系统注册，当前待管理员审核启用后即可登录。",
+            "您的账号已提交遮阳管理系统注册。",
             UserRows(empNo, displayName, department, email, phone, DateTime.Now),
-            afterHtml: "<p>账号当前为<strong>未启用</strong>状态。请耐心等待管理员核验，启用后即可使用工号和密码登录。</p>",
+            afterHtml: "<p>请使用工号和密码登录。</p>",
             greetingHtml: Greeting(displayName));
 
     public static string AccountOpened(

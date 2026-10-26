@@ -153,7 +153,7 @@ public class AdminNotifyService
         var url = (info.PersonnelUrl ?? "").Trim();
         var action = info.PendingReview
             ? "该账号当前为<strong>未启用</strong>状态，请核验身份后启用，并按需分配角色与客户。启用后申请人方可登录。"
-            : "该账号已登记。请核验信息，并按需分配角色与客户。";
+            : "该账号已可登录。请核验信息，并按需分配角色与客户。";
         var source = string.IsNullOrWhiteSpace(info.Source) ? "用户自助注册" : info.Source.Trim();
         var time = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
 
