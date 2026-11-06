@@ -616,9 +616,9 @@ public class QuotationBaseExcelService
     {
         const double pad = 5;
         const double pxPerColChar = 7.0;
-        // 与老系统 SetPicture 一致：显示尺寸上限 500×400
-        const double maxDisplayW = 500;
-        const double maxDisplayH = 400;
+        // 显示尺寸上限 200×160
+        const double maxDisplayW = 200;
+        const double maxDisplayH = 160;
         const double maxColChars = 255;
         const double maxRowPts = 409;
 

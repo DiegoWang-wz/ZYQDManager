@@ -214,7 +214,8 @@ public class UserCustomerAssignService
             .Where(x => x.ClientNo != null
                         && x.ClientName != null
                         && x.ClientName != ""
-                        && missing.Contains(x.ClientNo))
+                        && missing.Contains(x.ClientNo)
+                        && (x.deleteSigh == null || x.deleteSigh != "X"))
             .Select(x => new { x.ClientNo, x.ClientName })
             .ToListAsync(ct);
 
@@ -222,7 +223,8 @@ public class UserCustomerAssignService
             .Where(x => x.ClientNo != null
                         && x.ClientName != null
                         && x.ClientName != ""
-                        && missing.Contains(x.ClientNo))
+                        && missing.Contains(x.ClientNo)
+                        && x.deleteSigh != "X")
             .Select(x => new { x.ClientNo, x.ClientName })
             .ToListAsync(ct);
 

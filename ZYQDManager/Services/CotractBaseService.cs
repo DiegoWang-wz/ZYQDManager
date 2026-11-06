@@ -140,7 +140,7 @@ public class CotractBaseService
     }
 
     public Task<int> CountAllAsync(CancellationToken ct = default)
-        => _db.CotractBases.AsNoTracking().CountAsync(ct);
+        => Alive(_db.CotractBases.AsNoTracking()).CountAsync(ct);
 
     public Task<ZyqdCotractBaseModel?> GetAsync(int id, CancellationToken ct = default)
         => _db.CotractBases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -159,7 +159,7 @@ public class CotractBaseService
             .ToList();
         if (mats.Count == 0) return;
 
-        var rows = await _db.CotractBases.AsNoTracking()
+        var rows = await Alive(_db.CotractBases.AsNoTracking())
             .Where(x => x.ClientNo == clientNo && x.materialNo != null && mats.Contains(x.materialNo))
             .Select(x => new { x.materialNo, x.nameplate_type, x.nameplate_type2 })
             .ToListAsync(ct);
@@ -187,8 +187,8 @@ public class CotractBaseService
         if (clientNo.Length == 0)
             return [];
 
-        return await _db.CotractBases.AsNoTracking()
-            .Where(x => x.ClientNo == clientNo && (x.deleteSigh == null || x.deleteSigh != "X"))
+        return await Alive(_db.CotractBases.AsNoTracking())
+            .Where(x => x.ClientNo == clientNo)
             .Where(x => (x.materialNo != null && x.materialNo != "")
                         || (x.materialModel != null && x.materialModel != "")
                         || (x.materiaCust != null && x.materiaCust != ""))
@@ -258,7 +258,8 @@ public class CotractBaseService
         }
         else
         {
-            var dbRow = await _db.CotractBases.FirstOrDefaultAsync(x => x.Id == model.Id, ct);
+            var dbRow = await _db.CotractBases.FirstOrDefaultAsync(
+                x => x.Id == model.Id && (x.deleteSigh == null || x.deleteSigh != "X"), ct);
             if (dbRow is null)
                 return (false, "记录不存在", model.Id);
 
@@ -272,12 +273,23 @@ public class CotractBaseService
         return (true, null, model.Id);
     }
 
-    public async Task<(bool Ok, string? Message)> DeleteAsync(int id, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Message)> DeleteAsync(
+        int id, string? empNo = null, CancellationToken ct = default)
     {
-        var row = await _db.CotractBases.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var row = await _db.CotractBases.FirstOrDefaultAsync(
+            x => x.Id == id && (x.deleteSigh == null || x.deleteSigh != "X"), ct);
         if (row is null)
-            return (false, "记录不存在");
-        _db.CotractBases.Remove(row);
+            return (false, "记录不存在或已删除");
+
+        var now = DateTime.Now;
+        var person = (empNo ?? "").Trim();
+        row.deleteSigh = "X";
+        row.deleteTime = now;
+        row.deletePerson = person;
+        row.UpdateTime = now;
+        if (person.Length > 0)
+            row.UpdatePerson = person;
+
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
@@ -772,12 +784,21 @@ public class CotractBaseService
     {
         const double pad = 5;
         const double pxPerColChar = 7.0;
+        const double maxDisplayW = 200;
+        const double maxDisplayH = 160;
         // Excel 极限约 255 列宽 / 409 行高，导出图压到约一半，避免单元格过大
         const double maxColChars = 255.0 / 2.0;
         const double maxRowPts = 409.0 / 2.0;
 
         foreach (var p in pending)
         {
+            if (p.ImgW > maxDisplayW || p.ImgH > maxDisplayH)
+            {
+                var fit = Math.Min(maxDisplayW / p.ImgW, maxDisplayH / p.ImgH);
+                p.ImgW *= fit;
+                p.ImgH *= fit;
+            }
+
             var needCol = (p.ImgW + 2 * pad) / pxPerColChar;
             var needRow = (p.ImgH + 2 * pad) * 72.0 / 96.0;
             if (needCol > maxColChars || needRow > maxRowPts)
@@ -1197,7 +1218,7 @@ public class CotractBaseService
 
     private IQueryable<ZyqdCotractBaseModel> BuildFiltered(CotractBaseQueryDto query)
     {
-        var q = ApplyScope(_db.CotractBases.AsNoTracking(), query);
+        var q = ApplyScope(Alive(_db.CotractBases.AsNoTracking()), query);
         // 没有物料明细的行不占列表位置
         q = q.Where(x =>
             (x.materialNo != null && x.materialNo.Trim() != "")
@@ -1344,6 +1365,9 @@ public class CotractBaseService
         return ordered.ThenByDescending(x => x.Id);
     }
 
+    private static IQueryable<ZyqdCotractBaseModel> Alive(IQueryable<ZyqdCotractBaseModel> q)
+        => q.Where(x => x.deleteSigh == null || x.deleteSigh != "X");
+
     private static IQueryable<ZyqdCotractBaseModel> ApplyScope(IQueryable<ZyqdCotractBaseModel> q, CotractBaseQueryDto query)
     {
         if (query.ViewAllCustomers)
@@ -1391,7 +1415,7 @@ public class CotractBaseService
         if (clientNo.Length == 0 || materialNo.Length == 0)
             return false;
 
-        var q = _db.CotractBases.AsNoTracking().Where(x =>
+        var q = Alive(_db.CotractBases.AsNoTracking()).Where(x =>
             x.ClientNo != null && x.materialNo != null
             && x.ClientNo.ToLower() == clientNo.ToLower()
             && x.materialNo.ToLower() == materialNo.ToLower());

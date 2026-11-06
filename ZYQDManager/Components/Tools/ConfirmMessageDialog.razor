@@ -1,0 +1,96 @@
+<MudDialog Class="zyqd-confirm-dialog">
+    <TitleContent>
+        <div class="zyqd-confirm-title">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small"/>
+            <span>@TitleText</span>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="zyqd-confirm-body">@Message</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Default"
+                   OnClick="Cancel">
+            @CancelText
+        </MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="Confirm">
+            @YesText
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .mud-dialog.zyqd-confirm-dialog {
+        border-radius: 12px;
+        overflow: hidden;
+        min-width: 420px;
+        max-width: 520px;
+    }
+
+    .mud-dialog.zyqd-confirm-dialog .mud-dialog-title {
+        padding: 16px 16px 0;
+    }
+
+    .zyqd-confirm-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        background: #eef2ff;
+        color: #1e3a8a;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.4;
+    }
+
+    .zyqd-confirm-body {
+        color: var(--mud-palette-text-secondary);
+        padding: 4px 4px 8px;
+        line-height: 1.6;
+    }
+
+    .mud-dialog.zyqd-confirm-dialog .mud-dialog-actions {
+        padding: 8px 16px 16px;
+        gap: 8px;
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string TitleText { get; set; } = "确认";
+    [Parameter] public string Message { get; set; } = "";
+    [Parameter] public string YesText { get; set; } = "确定";
+    [Parameter] public string CancelText { get; set; } = "取消";
+
+    public static async Task<bool> ShowAsync(
+        IDialogService dialog,
+        string title,
+        string message,
+        string yesText,
+        string cancelText)
+    {
+        var parameters = new DialogParameters<ConfirmMessageDialog>
+        {
+            { x => x.TitleText, title },
+            { x => x.Message, message },
+            { x => x.YesText, yesText },
+            { x => x.CancelText, cancelText }
+        };
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small
+        };
+        var instance = await dialog.ShowAsync<ConfirmMessageDialog>(title, parameters, options);
+        var result = await instance.Result;
+        return result is { Canceled: false, Data: true };
+    }
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+}

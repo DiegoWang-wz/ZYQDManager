@@ -56,4 +56,8 @@ public class ZyqdSirDetailModel
     /// <summary>来自模板，不入库；分组标题插在该行之前。</summary>
     [NotMapped]
     public string? GroupTitle { get; set; }
+
+    public string? deleteSigh { get; set; }
+    public DateTime? deleteTime { get; set; }
+    public string? deletePerson { get; set; }
 }

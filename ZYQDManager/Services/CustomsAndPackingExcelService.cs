@@ -18,6 +18,7 @@ namespace ZYQDManager.Services;
 public class CustomsAndPackingExcelService
 {
     private const string LegacyHttpClient = "LegacyFiles";
+    private readonly List<(string CellRef, double Value)> _formulaCache = [];
 
     /// <summary>有铭牌图但合同基础未维护类型，阻止报关/生产导出。</summary>
     public sealed record NameplateTypeExportIssue(
@@ -53,6 +54,13 @@ public class CustomsAndPackingExcelService
         if (lists.Count == 0)
             throw new InvalidOperationException("装箱单无数据，请先保存");
 
+        var missingSap = lists.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.SAP_order_NO));
+        if (missingSap is not null)
+        {
+            var name = string.IsNullOrWhiteSpace(missingSap.materialNo) ? "有明细行" : $"物料 {missingSap.materialNo}";
+            throw new InvalidOperationException($"{name} 未填 SAP订单，请补全后再导出");
+        }
+
         if (type is "报关" or "生产")
         {
             var issues = await FindMissingNameplateTypesAsync(lists, ct);
@@ -69,7 +77,10 @@ public class CustomsAndPackingExcelService
         var path = ResolveTemplatePath(type);
 
         using var wb = new XLWorkbook(path);
+        wb.CalculateMode = XLCalculateMode.Auto;
+        wb.FullCalculationOnLoad = true;
         var ws = wb.Worksheet(1);
+        _formulaCache.Clear();
 
         switch (type)
         {
@@ -87,7 +98,9 @@ public class CustomsAndPackingExcelService
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
         // ClosedXML 会丢掉 dxfs，若仍保留 tableStyles，Excel 会提示“内容有问题”
-        return StripOrphanTableStyles(ms.ToArray());
+        var bytes = StripOrphanTableStyles(ms.ToArray());
+        // WPS 不自动重算公式，必须把缓存结果写进 <v>，打开才能看到数字
+        return EmbedFormulaCachedValues(bytes, _formulaCache);
     }
 
     /// <summary>
@@ -136,6 +149,113 @@ public class CustomsAndPackingExcelService
         {
             return xlsx;
         }
+    }
+
+    /// <summary>
+    /// ClosedXML 写公式时通常不带缓存值。MS Excel 打开会重算，WPS 常显示空白。
+    /// 把导出时已算好的数字写回单元格的 &lt;v&gt;，公式仍保留，两边都能看到结果。
+    /// </summary>
+    private static byte[] EmbedFormulaCachedValues(
+        byte[] xlsx, IReadOnlyList<(string CellRef, double Value)> cache)
+    {
+        if (xlsx.Length == 0 || cache.Count == 0)
+            return xlsx;
+
+        var map = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (cellRef, value) in cache)
+        {
+            var key = (cellRef ?? "").Trim();
+            if (key.Length == 0 || !double.IsFinite(value))
+                continue;
+            map[key] = value;
+        }
+
+        if (map.Count == 0)
+            return xlsx;
+
+        try
+        {
+            using var output = new MemoryStream();
+            output.Write(xlsx);
+            output.Position = 0;
+            using (var zip = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+            {
+                PatchWorkbookCalcOnLoad(zip);
+
+                var sheetNames = zip.Entries
+                    .Where(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase)
+                                && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                    .Select(e => e.FullName)
+                    .ToList();
+
+                foreach (var name in sheetNames)
+                {
+                    var entry = zip.GetEntry(name);
+                    if (entry is null) continue;
+                    XDocument doc;
+                    using (var s = entry.Open())
+                        doc = XDocument.Load(s);
+
+                    XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                    var changed = false;
+                    foreach (var c in doc.Descendants(ns + "c"))
+                    {
+                        var r = (string?)c.Attribute("r");
+                        if (string.IsNullOrWhiteSpace(r) || !map.TryGetValue(r, out var val))
+                            continue;
+                        var f = c.Element(ns + "f");
+                        if (f is null) continue;
+
+                        c.Attribute("t")?.Remove();
+                        f.SetAttributeValue("ca", "1");
+                        var text = val.ToString("G15", CultureInfo.InvariantCulture);
+                        var v = c.Element(ns + "v");
+                        if (v is null)
+                            f.AddAfterSelf(new XElement(ns + "v", text));
+                        else
+                            v.Value = text;
+                        changed = true;
+                    }
+
+                    if (!changed) continue;
+                    entry.Delete();
+                    var neu = zip.CreateEntry(name);
+                    using var w = neu.Open();
+                    doc.Save(w);
+                }
+            }
+
+            return output.ToArray();
+        }
+        catch
+        {
+            return xlsx;
+        }
+    }
+
+    private static void PatchWorkbookCalcOnLoad(ZipArchive zip)
+    {
+        var entry = zip.GetEntry("xl/workbook.xml");
+        if (entry is null) return;
+        XDocument doc;
+        using (var s = entry.Open())
+            doc = XDocument.Load(s);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = doc.Root;
+        if (root is null) return;
+        var calcPr = root.Element(ns + "calcPr");
+        if (calcPr is null)
+        {
+            calcPr = new XElement(ns + "calcPr");
+            root.Add(calcPr);
+        }
+
+        calcPr.SetAttributeValue("fullCalcOnLoad", "1");
+        calcPr.SetAttributeValue("calcMode", "auto");
+        entry.Delete();
+        var neu = zip.CreateEntry("xl/workbook.xml");
+        using var w = neu.Open();
+        doc.Save(w);
     }
 
     public static string NormalizeType(string? type)
@@ -238,26 +358,7 @@ public class CustomsAndPackingExcelService
             Set(ws, r, 14, FormatPacking(item));
             Set(ws, r, 17, item.Carton_Size);
             Set(ws, r, 18, ExportPalletSizeText(item));
-            if (CustomsAndPackingCalc.IsMergeMember(item.var8))
-            {
-                Set(ws, r, 21, "");
-            }
-            else if (!string.IsNullOrWhiteSpace(item.var2))
-            {
-                var full = item.Pallet_qty == 0
-                    ? ""
-                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
-                Set(ws, r, 21, full + item.var4 + item.palletizing_method_unit + " 1托");
-            }
-            else
-            {
-                var dd = item.Pallet_qty == 0
-                    ? ""
-                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
-                if (!string.IsNullOrWhiteSpace(item.var4))
-                    dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
-                Set(ws, r, 21, dd);
-            }
+            Set(ws, r, 21, ExportPalletizingText(item));
 
             Set(ws, r, 28, item.Pallet_code);
             Set(ws, r, 29, item.emit);
@@ -386,26 +487,7 @@ public class CustomsAndPackingExcelService
 
             Set(ws, r, 16, Num(ExportDisplayPalletQty(item)));
             Set(ws, r, 18, ExportPalletSizeText(item));
-            if (CustomsAndPackingCalc.IsMergeMember(item.var8))
-            {
-                Set(ws, r, 19, "");
-            }
-            else if (!string.IsNullOrWhiteSpace(item.var2))
-            {
-                var full = item.Pallet_qty == 0
-                    ? ""
-                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
-                Set(ws, r, 19, full + item.var4 + item.palletizing_method_unit + " 1托");
-            }
-            else
-            {
-                var dd = item.Pallet_qty == 0
-                    ? ""
-                    : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
-                if (!string.IsNullOrWhiteSpace(item.var4))
-                    dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
-                Set(ws, r, 19, dd);
-            }
+            Set(ws, r, 19, ExportPalletizingText(item));
 
             Set(ws, r, 20, Num(item.Pallet_weight));
             Set(ws, r, 21, Num(item.Net_weight));
@@ -458,7 +540,8 @@ public class CustomsAndPackingExcelService
             return stored;
 
         var bas = await _db.CotractBases.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ClientNo == client && x.materialNo == mat, ct);
+            .FirstOrDefaultAsync(x => x.ClientNo == client && x.materialNo == mat
+                && (x.deleteSigh == null || x.deleteSigh != "X"), ct);
         if (bas is null) return stored;
         var raw = prefer2 ? bas.Box_label2 : bas.Box_label;
         return string.IsNullOrWhiteSpace(raw) ? stored : raw;
@@ -529,7 +612,8 @@ public class CustomsAndPackingExcelService
 
         var rows = await _db.CotractBases.AsNoTracking()
             .Where(x => x.ClientNo != null && x.materialNo != null
-                        && clientNos.Contains(x.ClientNo) && matNos.Contains(x.materialNo))
+                        && clientNos.Contains(x.ClientNo) && matNos.Contains(x.materialNo)
+                        && (x.deleteSigh == null || x.deleteSigh != "X"))
             .Select(x => new { x.Id, x.ClientNo, x.materialNo, x.nameplate_type, x.nameplate_type2 })
             .ToListAsync(ct);
 
@@ -585,7 +669,8 @@ public class CustomsAndPackingExcelService
         if (client.Length == 0 || mat.Length == 0)
             return item.Tuo_Mark;
         var bas = await _db.CotractBases.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ClientNo == client && x.materialNo == mat, ct);
+            .FirstOrDefaultAsync(x => x.ClientNo == client && x.materialNo == mat
+                && (x.deleteSigh == null || x.deleteSigh != "X"), ct);
         return string.IsNullOrWhiteSpace(bas?.Tuo_Mark) ? item.Tuo_Mark : bas.Tuo_Mark;
     }
 
@@ -635,6 +720,30 @@ public class CustomsAndPackingExcelService
 
         // 整托数 = 0
         return hasTail ? item.var2 : "";
+    }
+
+    /// <summary>
+    /// 打托方式列：拼托挂靠行导出尾托打托说明（var4）；其它行与页面一致。
+    /// </summary>
+    private static string ExportPalletizingText(ZyqdCustomsAndPackingModel item)
+    {
+        if (CustomsAndPackingCalc.IsMergeMember(item.var8))
+            return (item.var4 ?? "").Trim();
+
+        if (!string.IsNullOrWhiteSpace(item.var2))
+        {
+            var full = item.Pallet_qty == 0
+                ? ""
+                : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托\n";
+            return full + item.var4 + item.palletizing_method_unit + " 1托";
+        }
+
+        var dd = item.Pallet_qty == 0
+            ? ""
+            : $"{item.palletizing_method}{item.palletizing_method_unit} {Num(item.Pallet_qty)}托";
+        if (!string.IsNullOrWhiteSpace(item.var4))
+            dd = string.IsNullOrEmpty(dd) ? item.var4 : dd + "\n" + item.var4;
+        return dd ?? "";
     }
 
     private static double ExportDisplayPalletQty(ZyqdCustomsAndPackingModel item)
@@ -739,11 +848,11 @@ public class CustomsAndPackingExcelService
                 ? ws.AddPicture(ms, name)
                 : ws.AddPicture(ms, format, name);
 
-            // 对齐老系统：原图优先（上限 500×400），必要时撑开列/行，再居中放入单元格
+            // 原图优先（上限 200×160），必要时撑开列/行，再居中放入单元格
             const double pxPerColChar = 7.0;
             const double pad = 6;
-            const double maxPxW = 500;
-            const double maxPxH = 400;
+            const double maxPxW = 200;
+            const double maxPxH = 160;
             const double maxColChars = 255;
             const double maxRowPts = 409;
 
@@ -820,21 +929,27 @@ public class CustomsAndPackingExcelService
         cell.Value = value;
     }
 
-    private static void SetFormula(
+    private void SetFormula(
         IXLWorksheet ws, int npoiRow, int npoiCol, string formulaA1, double cachedValue, string numFmt = "0")
     {
         var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
         cell.Style.NumberFormat.Format = numFmt;
-        // 先写入缓存值再设公式：ClosedXML 会保留公式，打开 Excel/LibreOffice 后重算
-        cell.Value = cachedValue;
         cell.FormulaA1 = formulaA1.StartsWith('=') ? formulaA1 : "=" + formulaA1;
+        if (double.IsFinite(cachedValue))
+        {
+            var addr = cell.Address.ToStringRelative();
+            var bang = addr.LastIndexOf('!');
+            if (bang >= 0)
+                addr = addr[(bang + 1)..];
+            _formulaCache.Add((addr, cachedValue));
+        }
     }
 
     /// <summary>
     /// 报关明细：输入写数值，结果写公式（对齐 CustomsAndPackingCalc）。
     /// 隐藏辅助列：打包数/打托数/拼托标记/尺寸拆分。
     /// </summary>
-    private static void WriteCustomsCalcRow(IXLWorksheet ws, int npoiRow, ZyqdCustomsAndPackingModel item)
+    private void WriteCustomsCalcRow(IXLWorksheet ws, int npoiRow, ZyqdCustomsAndPackingModel item)
     {
         var excelRow = npoiRow + 1;
         var dto = CustomsAndPackingService.ToLineDto(item, 0);
@@ -916,7 +1031,7 @@ public class CustomsAndPackingExcelService
             item.volume, "0.00");
     }
 
-    private static void WriteCustomsTotalFormulas(
+    private void WriteCustomsTotalFormulas(
         IXLWorksheet ws,
         int totalNpoiRow,
         int firstExcelRow,

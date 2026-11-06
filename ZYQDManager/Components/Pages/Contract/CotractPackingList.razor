@@ -463,7 +463,8 @@
         _busy = true;
         try
         {
-            var (success, msg) = await Packing.DeleteByGuidAsync(guid);
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
+            var (success, msg) = await Packing.DeleteByGuidAsync(guid, empNo);
             if (!success) { Notify.Show(msg ?? "删除失败", Severity.Error); return; }
             Notify.Show("已删除", Severity.Success);
             _selected.Remove(row);

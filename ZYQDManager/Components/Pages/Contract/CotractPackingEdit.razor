@@ -162,7 +162,7 @@
                     <MudTh>客户外箱标识</MudTh>
                     <MudTh>客户PO号</MudTh>
                     <MudTh>客户型号</MudTh>
-                    <MudTh>SAP订单</MudTh>
+                    <MudTh>SAP订单*</MudTh>
                     <MudTh>铭牌1</MudTh>
                     <MudTh>铭牌1类型</MudTh>
                     <MudTh>铭牌2</MudTh>
@@ -1487,7 +1487,7 @@
 
     private async Task SaveAsync() => await SaveCoreAsync(showSuccess: true);
 
-    private async Task<bool> SaveCoreAsync(bool showSuccess)
+    private bool ValidateLines(string action)
     {
         if (_lines.Count == 0)
         {
@@ -1495,23 +1495,42 @@
             return false;
         }
 
+        foreach (var line in _lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.SAP_order_NO))
+            {
+                var name = string.IsNullOrWhiteSpace(line.materialNo) ? "有明细行" : $"物料 {line.materialNo}";
+                Notify.Show($"{name} 未填 SAP订单，请补全后再{action}", Severity.Warning);
+                return false;
+            }
+        }
+
         foreach (var line in _lines.Where(x => CustomsAndPackingCalc.IsMergePrimary(x.var8)
                                                || CustomsAndPackingCalc.IsMergeMember(x.var8)))
         {
             if (string.IsNullOrWhiteSpace(line.Pallet_code))
             {
-                Notify.Show($"物料 {line.materialNo} 已拼托但未填托盘编号，请补全后再保存", Severity.Warning);
+                Notify.Show($"物料 {line.materialNo} 已拼托但未填托盘编号，请补全后再{action}", Severity.Warning);
                 return false;
             }
         }
+
         foreach (var primary in _lines.Where(x => CustomsAndPackingCalc.IsMergePrimary(x.var8)))
         {
             if (string.IsNullOrWhiteSpace(primary.var2))
             {
-                Notify.Show($"托主 {primary.materialNo} 未填尾托尺寸，请补全后再保存", Severity.Warning);
+                Notify.Show($"托主 {primary.materialNo} 未填尾托尺寸，请补全后再{action}", Severity.Warning);
                 return false;
             }
         }
+
+        return true;
+    }
+
+    private async Task<bool> SaveCoreAsync(bool showSuccess)
+    {
+        if (!ValidateLines("保存"))
+            return false;
 
         CustomsAndPackingCalc.RecalcAllLines(_lines);
         RefreshSummary();
@@ -1543,6 +1562,8 @@
 
     private async Task ExportExcelAsync(string type)
     {
+        if (!ValidateLines("导出"))
+            return;
         if (!await ConfirmSaveBeforeExportAsync())
             return;
 

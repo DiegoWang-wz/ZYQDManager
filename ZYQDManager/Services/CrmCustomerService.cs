@@ -14,6 +14,42 @@ public class CrmCustomerService
         _logger = logger;
     }
 
+    /// <summary>CRM 价格组折扣乘数；查不到或异常返回 1。</summary>
+    public async Task<double> GetClientPercentAsync(string? clientNo, CancellationToken ct = default)
+    {
+        clientNo = CotractPiTypes.NormalizeClientNo(clientNo);
+        if (clientNo.Length == 0)
+            return 1;
+        EnsureConn();
+
+        const string sql = """
+            SELECT TOP(1) b.new_pricegroup
+            FROM dbo.Account AS a
+            LEFT JOIN dbo.new_accountorganization AS b
+                ON b.new_account_id = a.accountid
+               AND b.new_Deliveryfactory = 2001
+            WHERE b.new_pricegroup IS NOT NULL
+              AND a.AccountNumber = @ClientNo
+            """;
+
+        try
+        {
+            await using var conn = new SqlConnection(_conn);
+            await conn.OpenAsync(ct);
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@ClientNo", clientNo);
+            var raw = await cmd.ExecuteScalarAsync(ct);
+            var group = raw?.ToString();
+            var percent = CotractPiTypes.MapCrmPriceGroup(group);
+            return percent <= 0 ? 1 : percent;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CRM GetClientPercent failed, ClientNo={ClientNo}", clientNo);
+            return 1;
+        }
+    }
+
     public async Task<CrmClientDto?> GetBillToAsync(string? clientNo, CancellationToken ct = default)
     {
         clientNo = CotractPiTypes.NormalizeClientNo(clientNo);

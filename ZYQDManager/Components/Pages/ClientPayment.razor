@@ -1,0 +1,591 @@
+@page "/client-payment"
+@rendermode InteractiveServer
+@inject ClientPaymentService PayApi
+
+<PageTitle>客户付款方式</PageTitle>
+
+<div class="personnel-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+            <MudTabs @bind-ActivePanelIndex="_tab" Rounded="true" PanelClass="pa-0">
+                <MudTabPanel Text="客户付款方式"/>
+                <MudTabPanel Text="付款方式列表"/>
+            </MudTabs>
+            <MudSpacer/>
+            @if (_tab == 0)
+            {
+                <MudTextField @bind-Value="_keyword"
+                              Label="客户编号 / 付款方式"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="personnel-filter-input"
+                              OnKeyUp="OnKeywordKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="ReloadClientAsync" Disabled="_busy">查询</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearFilter" Disabled="_busy">清空</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadClientAsync" Disabled="_busy">刷新</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateClient" Disabled="_busy">新增客户付款</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportClientsExcel" Disabled="_busy">导出Excel</MudButton>
+                <MudText Typo="Typo.subtitle2" Class="ml-2">共 @_clients.Count 项</MudText>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadTypesAsync" Disabled="_busy">刷新</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportPayTypesExcel" Disabled="_busy">导出Excel</MudButton>
+                @if (_isAdmin)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateType" Disabled="_busy">新增付款方式</MudButton>
+                }
+                <MudText Typo="Typo.subtitle2" Class="ml-2">共 @_types.Count 项</MudText>
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="personnel-table-wrap pa-0" Outlined="true">
+        @if (!_listLoaded)
+        {
+            <div class="personnel-loading">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large"/>
+                <MudText Typo="Typo.subtitle1" Class="mt-3">正在载入…</MudText>
+            </div>
+        }
+        else if (_tab == 0)
+        {
+            <MudTable Items="_clients"
+                      Hover="true"
+                      Dense="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      Class="personnel-table pay-table">
+            <HeaderContent>
+                <MudTh Class="pay-col-seq">序号</MudTh>
+                <MudTh Class="pay-col-no">客户编号</MudTh>
+                    <MudTh Class="pay-col-dep">定金</MudTh>
+                    <MudTh Class="pay-col-pay">付款方式</MudTh>
+                    <MudTh Class="pay-col-user">修改人</MudTh>
+                    <MudTh Class="pay-col-time">修改时间</MudTh>
+                    <MudTh Class="pay-col-ops">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="pay-col-seq">@(_clients.IndexOf(context) + 1)</MudTd>
+                    <MudTd Class="pay-col-no">@Dash(context.ClientNo)</MudTd>
+                    <MudTd Class="pay-col-dep">@Dash(context.Deposit)</MudTd>
+                    <MudTd Class="pay-col-pay">@ClientPaymentService.FormatPayType(context.BalancePayTypeId, context.BalancePayType?.Description)</MudTd>
+                    <MudTd Class="pay-col-user">@Dash(context.UpdatePerson)</MudTd>
+                    <MudTd Class="pay-col-time">@(context.UpdateTime?.ToString("yyyy-MM-dd HH:mm") ?? "—")</MudTd>
+                    <MudTd Class="pay-col-ops">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenEditClient(context))" Disabled="_busy">编辑</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="@(() => DeleteClientAsync(context))" Disabled="_busy">删除</MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4 mud-text-secondary">暂无客户付款记录</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        }
+        else
+        {
+            <MudTable Items="_types"
+                      Hover="true"
+                      Dense="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      Class="personnel-table pay-table">
+                <HeaderContent>
+                    <MudTh Class="pay-col-id">编号</MudTh>
+                    <MudTh Class="pay-col-pay">描述</MudTh>
+                    <MudTh Class="pay-col-user">修改人</MudTh>
+                    <MudTh Class="pay-col-time">修改时间</MudTh>
+                    @if (_isAdmin)
+                    {
+                        <MudTh Class="pay-col-ops">操作</MudTh>
+                    }
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="pay-col-id">@context.Id</MudTd>
+                    <MudTd Class="pay-col-pay">@Dash(context.Description)</MudTd>
+                    <MudTd Class="pay-col-user">@Dash(context.UpdatePerson)</MudTd>
+                    <MudTd Class="pay-col-time">@(context.UpdateTime?.ToString("yyyy-MM-dd HH:mm") ?? "—")</MudTd>
+                    @if (_isAdmin)
+                    {
+                        <MudTd Class="pay-col-ops">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" OnClick="@(() => OpenEditType(context))" Disabled="_busy">编辑</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="@(() => DeleteTypeAsync(context))" Disabled="_busy">删除</MudButton>
+                        </MudTd>
+                    }
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4 mud-text-secondary">暂无付款方式</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<MudDialog @bind-Visible="_clientDialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_editClientId <= 0 ? "新增客户付款" : "编辑客户付款")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2" Style="min-width:420px">
+            <MudTextField @bind-Value="_editClientNo"
+                          Label="客户编号"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Disabled="@(_editClientId > 0)"/>
+            <MudNumericField T="decimal" @bind-Value="_editDeposit" Label="定金" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="100" HideSpinButtons="true"/>
+            <MudSelect T="int" @bind-Value="_editPayTypeId" Label="付款方式" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var t in _types)
+                {
+                    <MudSelectItem Value="@t.Id">@ClientPaymentService.FormatPayType(t.Id, t.Description)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Close" OnClick="@(() => _clientDialogOpen = false)" Disabled="_busy">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveClientAsync" Disabled="_busy">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<MudDialog @bind-Visible="_typeDialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_editTypeId <= 0 ? "新增付款方式" : "编辑付款方式")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2" Style="min-width:420px">
+            @if (_editTypeId > 0)
+            {
+                <MudTextField Value="@_editTypeId.ToString()" Label="编号" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="true"/>
+            }
+            <MudTextField @bind-Value="_editTypeDesc" Label="描述" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="4"/>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Close" OnClick="@(() => _typeDialogOpen = false)" Disabled="_busy">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveTypeAsync" Disabled="_busy">保存</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private int _tab;
+    private bool _busy;
+    private bool _listLoaded;
+    private bool _isAdmin;
+    private string _keyword = "";
+    private string _empNo = "";
+    private List<string>? _allowedClientNos;
+    private List<ZyqdClientPaymentModel> _clients = [];
+    private List<ZyqdBalancePayTypeModel> _types = [];
+
+    private bool _clientDialogOpen;
+    private int _editClientId;
+    private string _editClientNo = "";
+    private decimal _editDeposit;
+    private int _editPayTypeId;
+
+    private bool _typeDialogOpen;
+    private int _editTypeId;
+    private string _editTypeDesc = "";
+    private readonly DialogOptions _dialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true,
+        CloseOnEscapeKey = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        if (auth is null || AppRoles.IsInspector(auth.Role))
+        {
+            _busy = false;
+            _listLoaded = true;
+            Notify.Show("没有客户付款维护权限", Severity.Warning);
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        _empNo = auth.EmpNo ?? "";
+        _isAdmin = Auth.CanManageUsers(auth);
+        var viewAll = _isAdmin;
+        if (!viewAll)
+        {
+            var (ok, _, info, _) = await UserInfo.GetAsync(_empNo);
+            viewAll = ok && Auth.CanViewAllCustomers(auth, info);
+        }
+
+        if (viewAll)
+        {
+            _allowedClientNos = null;
+        }
+        else
+        {
+            var codes = await CustomerAssign.GetCodesByEmpNoAsync(_empNo);
+            _allowedClientNos = codes
+                .Select(CotractPiTypes.NormalizeClientNo)
+                .Where(x => x.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        await ReloadAllAsync();
+    }
+
+    private async Task ReloadAllAsync()
+    {
+        await ReloadTypesAsync();
+        await ReloadClientAsync();
+    }
+
+    private async Task ReloadTypesAsync()
+    {
+        _busy = true;
+        try
+        {
+            _types = await PayApi.ListPayTypesAsync();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载付款方式失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            _listLoaded = true;
+        }
+    }
+
+    private async Task ReloadClientAsync()
+    {
+        _busy = true;
+        try
+        {
+            _clients = await PayApi.ListClientPaymentsAsync(_keyword, _allowedClientNos);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载客户付款失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            _listLoaded = true;
+        }
+    }
+
+    private async Task ClearFilter()
+    {
+        _keyword = "";
+        await ReloadClientAsync();
+    }
+
+    private async Task ExportClientsExcel()
+    {
+        if (_clients.Count == 0)
+        {
+            Notify.Show("没有可导出的数据", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = ClientPaymentService.BuildClientPaymentExcel(_clients);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                $"客户付款_{DateTime.Now:yyyyMMddHHmmss}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportPayTypesExcel()
+    {
+        if (_types.Count == 0)
+        {
+            Notify.Show("没有可导出的数据", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = ClientPaymentService.BuildPayTypeExcel(_types);
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBase64",
+                $"付款方式列表_{DateTime.Now:yyyyMMddHHmmss}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnKeywordKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await ReloadClientAsync();
+    }
+
+    private void OpenCreateClient()
+    {
+        _editClientId = 0;
+        _editClientNo = "";
+        _editDeposit = 0m;
+        _editPayTypeId = _types.FirstOrDefault()?.Id ?? 0;
+        _clientDialogOpen = true;
+    }
+
+    private void OpenEditClient(ZyqdClientPaymentModel row)
+    {
+        _editClientId = row.Id;
+        _editClientNo = row.ClientNo ?? "";
+        _editDeposit = ClientPaymentService.ParseDeposit(row.Deposit);
+        _editPayTypeId = row.BalancePayTypeId;
+        _clientDialogOpen = true;
+    }
+
+    private async Task SaveClientAsync()
+    {
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await PayApi.SaveClientPaymentAsync(
+                _editClientId, _editClientNo, _editDeposit, _editPayTypeId, _empNo,
+                _allowedClientNos);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Warning);
+                return;
+            }
+
+            Notify.Show("已保存", Severity.Success);
+            _clientDialogOpen = false;
+            await ReloadClientAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteClientAsync(ZyqdClientPaymentModel row)
+    {
+        var yes = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"删除客户 {row.ClientNo} 的付款方式？",
+            yesText: "删除",
+            cancelText: "取消");
+        if (yes != true) return;
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await PayApi.DeleteClientPaymentAsync(row.Id, _empNo, _allowedClientNos);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Warning);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            await ReloadClientAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void OpenCreateType()
+    {
+        if (!_isAdmin) return;
+        _editTypeId = 0;
+        _editTypeDesc = "";
+        _typeDialogOpen = true;
+    }
+
+    private void OpenEditType(ZyqdBalancePayTypeModel row)
+    {
+        if (!_isAdmin) return;
+        _editTypeId = row.Id;
+        _editTypeDesc = row.Description ?? "";
+        _typeDialogOpen = true;
+    }
+
+    private async Task SaveTypeAsync()
+    {
+        if (!_isAdmin)
+        {
+            Notify.Show("只有管理员可以维护付款方式列表", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await PayApi.SavePayTypeAsync(_editTypeId, _editTypeDesc, _empNo);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "保存失败", Severity.Warning);
+                return;
+            }
+
+            Notify.Show("已保存", Severity.Success);
+            _typeDialogOpen = false;
+            await ReloadTypesAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteTypeAsync(ZyqdBalancePayTypeModel row)
+    {
+        if (!_isAdmin)
+        {
+            Notify.Show("只有管理员可以维护付款方式列表", Severity.Warning);
+            return;
+        }
+
+        var yes = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"删除付款方式 {row.Id}？已被客户使用的不能删除。",
+            yesText: "删除",
+            cancelText: "取消");
+        if (yes != true) return;
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await PayApi.DeletePayTypeAsync(row.Id, _empNo);
+            if (!ok)
+            {
+                Notify.Show(msg ?? "删除失败", Severity.Warning);
+                return;
+            }
+
+            Notify.Show("已删除", Severity.Success);
+            await ReloadTypesAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Dash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+}
+
+<style>
+    .personnel-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .personnel-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .personnel-table {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .personnel-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+        scrollbar-gutter: stable;
+        padding-bottom: 1px;
+    }
+
+    .personnel-table .mud-table-head .mud-table-cell {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--mud-palette-surface);
+    }
+
+    .personnel-loading {
+        flex: 1 1 0;
+        min-height: 280px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .personnel-filter-input {
+        width: 240px;
+        flex: 0 0 240px !important;
+    }
+
+    .pay-table table {
+        table-layout: fixed;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .pay-table .mud-table-cell {
+        vertical-align: middle;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .pay-table .mud-table-body .mud-table-row:last-child > .mud-table-cell {
+        border-bottom: 1px solid var(--mud-palette-lines-default) !important;
+    }
+
+    .pay-col-seq { width: 56px; white-space: nowrap; text-align: center; }
+    .pay-col-no { width: 110px; white-space: nowrap; }
+    .pay-col-dep { width: 72px; white-space: nowrap; }
+    .pay-col-id { width: 72px; white-space: nowrap; }
+    .pay-col-user { width: 88px; white-space: nowrap; }
+    .pay-col-time { width: 148px; white-space: nowrap; }
+    .pay-col-ops {
+        width: 168px;
+        min-width: 168px;
+        white-space: nowrap;
+        overflow: visible;
+    }
+    .pay-col-pay {
+        white-space: normal;
+        word-break: break-word;
+        overflow: visible;
+    }
+</style>

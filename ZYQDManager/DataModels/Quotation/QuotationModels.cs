@@ -23,6 +23,9 @@ public sealed class ZyqdQuotationMainModel
     public string? rate { get; set; }
     public DateTime? createTime { get; set; }
     public string? currencyUnit { get; set; }
+    public string? deleteSigh { get; set; }
+    public DateTime? deleteTime { get; set; }
+    public string? deletePerson { get; set; }
 }
 
 /// <summary>统一报价明细：物料 + 最多 4 档阶梯数量/单价/折扣/金额 + 可选备注。</summary>
@@ -52,4 +55,7 @@ public sealed class ZyqdQuotationDetailModel
     public string? Note { get; set; }
     public int SortOrder { get; set; }
     public DateTime? createTime { get; set; }
+    public string? deleteSigh { get; set; }
+    public DateTime? deleteTime { get; set; }
+    public string? deletePerson { get; set; }
 }

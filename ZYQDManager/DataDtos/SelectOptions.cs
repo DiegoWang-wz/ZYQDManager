@@ -82,7 +82,6 @@ public sealed class SelectOptions
             ["寄售订单（1300-2001）"] = "JS"
         },
         TradeTerms = ["EXW", "FOB", "C&F", "CIF", "DAP", "DDU", "DDP"],
-        SplitBalancePaymentMethod = "UPON DESPATCH 50%，WITHIN 10 DAYS AFTER ARRIVAL 50%",
-        SplitBalancePaymentClientNos = ["10008021", "10011057", "10011830", "10011386"]
+        SplitBalancePaymentMethod = "UPON DESPATCH 50%，WITHIN 10 DAYS AFTER ARRIVAL 50%"
     };
 }

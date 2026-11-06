@@ -47,13 +47,59 @@ public static class CotractPiTypes
     public static string NormalizeClientNo(string? clientNo)
         => ClientCodeHelper.Expand(clientNo);
 
-    public static string ResolveTemplateType(string? orderType, string? clientNo)
+    public static bool IsForceJckClient(string? clientNo)
     {
         var force = (Opt.ForceJckClientNo ?? "").Trim();
-        if (force.Length > 0 && NormalizeClientNo(clientNo) == force)
+        return force.Length > 0 && NormalizeClientNo(clientNo) == NormalizeClientNo(force);
+    }
+
+    /// <summary>10008831：强制贸易订单（1300）/ 进出口模板。报关 PI、客户 CI 带对应后缀。</summary>
+    public static string ForceJckOrderType(string? currentOrderType)
+    {
+        const string trade = "贸易订单（1300）";
+        if (IsCustomerCi(currentOrderType)) return ToCustomerCiType(trade);
+        if (IsCustomsPi(currentOrderType)) return ToCustomsPiType(trade);
+        return trade;
+    }
+
+    public const string OrderStandard = "标准订单";
+    public const string OrderTrade1300 = "贸易订单（1300）";
+    public const string OrderTrade1300_2001 = "贸易订单（1300-2001）";
+    public const string OrderConsignment1300_2001 = "寄售订单（1300-2001）";
+    /// <summary>与老系统报关 PI 写死的 J-star Bill To / Ship To 一致。</summary>
+    public const string JstarPartyName = "J-Star Motion Corporation";
+    public const string JstarPartyAddress = "13617 Woodlawn Hills DrCedar Springs, Ml 49319";
+    public const string JstarPartyTel = "Attn:Nelly Li/Tel: 6162168596";
+    public const string ConsignmentCustomsInvoiceName = "JS21(J-Star Motion Corporation)";
+
+    public static bool IsJsTradeOrder(string? orderType)
+    {
+        var key = BaseOrderType(orderType);
+        return key.Contains("1300-2001", StringComparison.Ordinal)
+               && key.Contains("贸易", StringComparison.Ordinal)
+               && !key.Contains("寄售", StringComparison.Ordinal);
+    }
+
+    public static bool IsJsConsignmentOrder(string? orderType)
+    {
+        var key = BaseOrderType(orderType);
+        return key.Contains("寄售", StringComparison.Ordinal)
+               && key.Contains("1300-2001", StringComparison.Ordinal);
+    }
+
+    public static bool IsJstarFamilyOrder(string? orderType)
+        => IsJsTradeOrder(orderType) || IsJsConsignmentOrder(orderType);
+
+    public static string ResolveTemplateType(string? orderType, string? clientNo)
+    {
+        if (IsForceJckClient(clientNo))
             return "JCK";
 
         var key = BaseOrderType(orderType);
+        // 报关 PI：J-star 两类抬头改为捷昌进出口
+        if (IsCustomsPi(orderType) && IsJstarFamilyOrder(orderType))
+            return "JCK";
+
         if (key.Length > 0 && Opt.OrderTypeTemplates.TryGetValue(key, out var mapped) && !string.IsNullOrWhiteSpace(mapped))
             return mapped.Trim();
 
@@ -108,8 +154,82 @@ public static class CotractPiTypes
     public static string InvoiceTitle(string? orderType)
         => IsCustomerCi(orderType) ? "COMMERCIAL INVOICE" : "PROFORMA INVOICE";
 
-    public static string InvoicePrefix(string templateType)
-        => templateType == "JCK" ? "JC" : templateType;
+    /// <summary>发票号前缀一律 JC（含 J-star / 进出口订单）。</summary>
+    public static string InvoicePrefix(string? templateType = null)
+        => "JC";
+
+    public static string InvoiceNamePart(string? orderType, string? clientName)
+    {
+        if (IsCustomsPi(orderType) && IsJsConsignmentOrder(orderType))
+            return ConsignmentCustomsInvoiceName;
+        return (clientName ?? "").Trim();
+    }
+
+    /// <summary>老数据 24JS / 24JCK 前缀统一成 24JC。</summary>
+    public static string WithJcInvoicePrefix(string? invoiceNo)
+    {
+        var s = (invoiceNo ?? "").Trim();
+        if (s.Length < 4 || !char.IsDigit(s[0]) || !char.IsDigit(s[1]))
+            return s;
+        var yy = s[..2];
+        var rest = s[2..];
+        if (rest.StartsWith("JCK", StringComparison.OrdinalIgnoreCase))
+            return yy + "JC" + rest[3..];
+        if (rest.StartsWith("JS", StringComparison.OrdinalIgnoreCase))
+            return yy + "JC" + rest[2..];
+        return s;
+    }
+
+    public static bool NeedsCustomsDiscount(string? orderType)
+        => IsCustomsPi(orderType) && IsJstarFamilyOrder(orderType);
+
+    public static double MapCrmPriceGroup(string? priceGroup)
+        => (priceGroup ?? "").Trim() switch
+        {
+            "10" => 0.68,
+            "20" => 0.70,
+            "30" => 0.72,
+            "40" => 0.92,
+            "50" => 0.98,
+            "80" => 0.95,
+            _ => 1
+        };
+
+    public static bool CustomsUsesJstarBill(string? orderType)
+        => IsCustomsPi(orderType) && IsJstarFamilyOrder(orderType);
+
+    public static bool CustomsUsesJstarShip(string? orderType)
+        => IsCustomsPi(orderType) && IsJsConsignmentOrder(orderType);
+
+    public static void ApplyJstarPartyToBill(ZyqdCotractPiModel row)
+    {
+        row.BILL_TO_info1 = JstarPartyName;
+        row.BILL_TO_info3 = JstarPartyAddress;
+        row.BILL_TO_info4 = JstarPartyTel;
+    }
+
+    public static void ApplyJstarPartyToShip(ZyqdCotractPiModel row)
+    {
+        row.SHIP_TO_info1 = JstarPartyName;
+        row.SHIP_TO_info3 = JstarPartyAddress;
+        row.SHIP_TO_info4 = JstarPartyTel;
+    }
+
+    public static void ApplyCustomsPartyOverrides(ZyqdCotractPiModel row, bool forceCustoms = false)
+    {
+        if (!forceCustoms && !IsCustomsPi(row.var6))
+            return;
+        if (IsJsTradeOrder(row.var6))
+        {
+            ApplyJstarPartyToBill(row);
+            return;
+        }
+        if (IsJsConsignmentOrder(row.var6))
+        {
+            ApplyJstarPartyToBill(row);
+            ApplyJstarPartyToShip(row);
+        }
+    }
 
     public static string ResolveVar12(string templateType)
         => templateType is "JCK" or "JC" ? "JC" : "JS";
@@ -187,6 +307,9 @@ public static class CotractPiTypes
         return false;
     }
 
+    /// <summary>第 15 条：发货 50% / 到货 10 天 50%，走特殊两行布局。</summary>
+    public const int SplitBalancePayTypeId = 15;
+
     public static string SplitBalancePaymentMethod
     {
         get
@@ -196,16 +319,6 @@ public static class CotractPiTypes
                 ? v
                 : "UPON DESPATCH 50%，WITHIN 10 DAYS AFTER ARRIVAL 50%";
         }
-    }
-
-    public static bool IsSplitBalancePaymentClient(string? clientNo)
-    {
-        var code = NormalizeClientNo(clientNo);
-        if (code.Length == 0) return false;
-        var list = Opt.SplitBalancePaymentClientNos;
-        if (list is null || list.Count == 0)
-            list = SelectOptions.Defaults.SplitBalancePaymentClientNos;
-        return list.Any(x => string.Equals(NormalizeClientNo(x), code, StringComparison.OrdinalIgnoreCase));
     }
 
     public static bool IsSplitBalancePaymentMethod(string? paymentMethod)
@@ -218,13 +331,15 @@ public static class CotractPiTypes
                    && selected.Contains("WITHIN10DAYSAFTERARRIVAL", StringComparison.Ordinal));
     }
 
-    /// <summary>指定客户：自动第 15 条付款条件，隐藏定金行，按总金额拆两行各 50%。</summary>
-    public static bool ShouldSplitBalancePayment(string? clientNo)
-        => IsSplitBalancePaymentClient(clientNo);
+    public static bool IsSplitBalancePayType(int payTypeId, string? description)
+        => payTypeId == SplitBalancePayTypeId || IsSplitBalancePaymentMethod(description);
 
-    /// <summary>兼容旧调用；以客户名单为准。</summary>
+    /// <summary>付款方式为第 15 条时拆两行各 50%；不再按客户编号判断。</summary>
+    public static bool ShouldSplitBalancePayment(string? paymentMethod)
+        => IsSplitBalancePaymentMethod(paymentMethod);
+
     public static bool ShouldSplitBalancePayment(string? clientNo, string? paymentMethod)
-        => ShouldSplitBalancePayment(clientNo);
+        => IsSplitBalancePaymentMethod(paymentMethod);
 
     public static (double First, double Second) SplitBalanceAmounts(double total)
     {
@@ -233,11 +348,10 @@ public static class CotractPiTypes
         return (first, second);
     }
 
-    /// <summary>特殊客户落库时固定付款条件与定金比例。</summary>
+    /// <summary>第 15 条付款方式落库时定金为 0，尾款按总金额。</summary>
     public static void ApplySplitPaymentDefaults(ZyqdCotractPiModel header)
     {
-        if (!IsSplitBalancePaymentClient(header.ClientNo)) return;
-        header.var3 = SplitBalancePaymentMethod;
+        if (!IsSplitBalancePaymentMethod(header.var3)) return;
         header.Payment_ratio = 0;
         header.Payment_ratio_Ext = 0;
         header.balance_before_delivery = Math.Round(header.TOTAL, 2);

@@ -9,12 +9,11 @@ window.zyqdRememberLogin = (function () {
     }
 
     return {
-        save: function (empNo, password, remember) {
-            const keepPwd = !!remember;
+        save: function (empNo) {
             const payload = encodeURIComponent(JSON.stringify({
                 empNo: empNo || "",
-                password: keepPwd ? (password || "") : "",
-                remember: keepPwd
+                password: "",
+                remember: false
             }));
             document.cookie = key + "=" + payload + "; " + cookieFlags(days * 24 * 60 * 60);
         },
@@ -27,12 +26,7 @@ window.zyqdRememberLogin = (function () {
                 try {
                     const data = JSON.parse(decodeURIComponent(s.substring(prefix.length)));
                     if (!data || typeof data !== "object") return null;
-                    const password = data.password || "";
-                    return {
-                        empNo: data.empNo || "",
-                        password: password,
-                        remember: !!data.remember || password.length > 0
-                    };
+                    return { empNo: data.empNo || "" };
                 } catch (_) {
                     return null;
                 }

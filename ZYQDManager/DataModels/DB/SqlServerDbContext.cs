@@ -17,6 +17,8 @@ public class SqlServerDbContext : DbContext
     public DbSet<ApprovalFlowModel> ApprovalFlows => Set<ApprovalFlowModel>();
     public DbSet<ZyqdCotractBaseModel> CotractBases => Set<ZyqdCotractBaseModel>();
     public DbSet<ZyqdCotractPiModel> CotractPis => Set<ZyqdCotractPiModel>();
+    public DbSet<ZyqdBalancePayTypeModel> BalancePayTypes => Set<ZyqdBalancePayTypeModel>();
+    public DbSet<ZyqdClientPaymentModel> ClientPayments => Set<ZyqdClientPaymentModel>();
     public DbSet<ZyqdCustomsAndPackingModel> CustomsAndPackings => Set<ZyqdCustomsAndPackingModel>();
     public DbSet<ZyqdSirMainModel> SirMains => Set<ZyqdSirMainModel>();
     public DbSet<ZyqdSirDetailModel> SirDetails => Set<ZyqdSirDetailModel>();
@@ -114,11 +116,37 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.DocumentGuid).HasColumnName("Guid");
         });
 
+        modelBuilder.Entity<ZyqdBalancePayTypeModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Balance_PayType");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.UpdatePerson).HasMaxLength(50);
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
+        });
+
+        modelBuilder.Entity<ZyqdClientPaymentModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Client_Payment");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.ClientNo).HasMaxLength(50);
+            entity.Property(e => e.Deposit).HasMaxLength(50);
+            entity.Property(e => e.UpdatePerson).HasMaxLength(50);
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
+            entity.HasOne(e => e.BalancePayType)
+                .WithMany()
+                .HasForeignKey(e => e.BalancePayTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<ZyqdSirMainModel>(entity =>
         {
             entity.ToTable("T_ZYQD_SIR_main");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
         });
 
         modelBuilder.Entity<ZyqdSirDetailModel>(entity =>
@@ -130,6 +158,7 @@ public class SqlServerDbContext : DbContext
             entity.Ignore(e => e.Criteria);
             entity.Ignore(e => e.filling_type);
             entity.Ignore(e => e.GroupTitle);
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
         });
 
         modelBuilder.Entity<ZyqdSirItemTemplateModel>(entity =>
@@ -144,6 +173,7 @@ public class SqlServerDbContext : DbContext
             entity.ToTable("T_ZYQD_SIR_datail_SampleForFiling");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
         });
 
         ConfigureQuotationBase<ZyqdQuotationBaseMotorModel>(modelBuilder, "T_ZYQD_Quotation_Base_Motor");
@@ -158,6 +188,7 @@ public class SqlServerDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.DATE).HasColumnName("DATE");
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
             entity.HasIndex(e => e.guid).IsUnique();
         });
 
@@ -183,6 +214,7 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.Discount4).HasPrecision(18, 4);
             entity.Property(e => e.Amount4).HasPrecision(18, 4);
             entity.HasIndex(e => e.main_guid);
+            entity.Property(e => e.deleteSigh).HasMaxLength(1);
         });
     }
 

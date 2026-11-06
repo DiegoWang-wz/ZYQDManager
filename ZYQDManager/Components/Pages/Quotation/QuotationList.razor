@@ -424,7 +424,8 @@
         _busy = true;
         try
         {
-            var (success, msg) = await Quotation.DeleteAsync(row.Guid);
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
+            var (success, msg) = await Quotation.DeleteAsync(row.Guid, empNo);
             if (!success)
             {
                 Notify.Show(msg ?? "删除失败", Severity.Error);
@@ -453,7 +454,8 @@
         _busy = true;
         try
         {
-            var (success, msg) = await Quotation.DeleteManyAsync(_selected.Select(x => x.Guid));
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
+            var (success, msg) = await Quotation.DeleteManyAsync(_selected.Select(x => x.Guid), empNo);
             if (!success)
             {
                 Notify.Show(msg ?? "删除失败", Severity.Error);

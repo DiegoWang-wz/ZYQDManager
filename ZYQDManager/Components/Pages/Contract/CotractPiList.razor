@@ -120,6 +120,10 @@
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="var6">订单类型</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="Person">需求人</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="INVOICE_NO">发票号</MudTableSortLabel></MudTh>
+                    @if (ShowsSourcePi)
+                    {
+                        <MudTh>来源客户PI</MudTh>
+                    }
                     <MudTh Class="cpi-po-cell"><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="BILL_TO_PO_REF">PO号</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="UpdatePerson">修改人</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdCotractPiModel" SortLabel="UpdateTime">修改时间</MudTableSortLabel></MudTh>
@@ -134,6 +138,27 @@
                     <MudTd>@context.var6</MudTd>
                     <MudTd>@context.Person</MudTd>
                     <MudTd>@context.INVOICE_NO</MudTd>
+                    @if (ShowsSourcePi)
+                    {
+                        <MudTd>
+                            @{
+                                var srcLabel = (context.var13 ?? "").Trim();
+                                var srcGuid = FirstCsv(context.var14);
+                            }
+                            @if (srcGuid.Length > 0)
+                            {
+                                <MudLink Href="@($"/contract-pi/{srcGuid}")">@(srcLabel.Length > 0 ? srcLabel : "打开来源")</MudLink>
+                            }
+                            else if (srcLabel.Length > 0)
+                            {
+                                @srcLabel
+                            }
+                            else
+                            {
+                                <text>-</text>
+                            }
+                        </MudTd>
+                    }
                     <MudTd Class="cpi-po-cell">
                         @{
                             var po = (context.BILL_TO_PO_REF ?? "").Trim();
@@ -539,6 +564,14 @@
 
     private bool IsCustomerPi => _documentType == "客户PI";
     private bool IsCustomsPi => _documentType == "报关PI";
+    private bool ShowsSourcePi => _documentType is "报关PI" or "客户CI";
+
+    private static string FirstCsv(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var part = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return part.Length == 0 ? "" : part[0];
+    }
     private bool IsPackingList => _documentType == "装箱单";
     private string OpsCellClass => IsCustomerPi || IsCustomsPi
         ? "cpi-ops-cell"
@@ -880,9 +913,10 @@
         _busy = true;
         try
         {
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
             foreach (var row in _selected.ToList())
             {
-                var (success, msg) = await CotractPi.DeleteByGuidAsync(row.DocumentGuid);
+                var (success, msg) = await CotractPi.DeleteByGuidAsync(row.DocumentGuid, empNo);
                 if (!success)
                 {
                     Notify.Show(msg ?? "删除失败", Severity.Error);
@@ -914,7 +948,8 @@
         _busy = true;
         try
         {
-            var (success, msg) = await CotractPi.DeleteByGuidAsync(row.DocumentGuid);
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
+            var (success, msg) = await CotractPi.DeleteByGuidAsync(row.DocumentGuid, empNo);
             if (!success)
             {
                 Notify.Show(msg ?? "删除失败", Severity.Error);

@@ -164,6 +164,7 @@ builder.Services.AddScoped<ProjectListService>();
 builder.Services.AddScoped<MotorLxService>();
 builder.Services.AddScoped<FileOperationService>();
 builder.Services.AddScoped<CotractBaseService>();
+builder.Services.AddScoped<ClientPaymentService>();
 builder.Services.AddScoped<CrmCustomerService>();
 builder.Services.AddScoped<CotractPiExcelService>();
 builder.Services.AddScoped<LibreOfficePdfService>();

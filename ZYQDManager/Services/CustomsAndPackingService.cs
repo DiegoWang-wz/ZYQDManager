@@ -60,17 +60,31 @@ public class CustomsAndPackingService
         return (headers, total);
     }
 
-    public async Task<(bool Ok, string? Message)> DeleteByGuidAsync(string? guid, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Message)> DeleteByGuidAsync(
+        string? guid, string? empNo = null, CancellationToken ct = default)
     {
         guid = (guid ?? "").Trim();
         if (guid.Length == 0)
             return (false, "单据编号为空");
 
-        var rows = await _db.CustomsAndPackings.Where(x => x.DocumentGuid == guid).ToListAsync(ct);
+        var rows = await _db.CustomsAndPackings
+            .Where(x => x.DocumentGuid == guid && x.deleteSigh != "X")
+            .ToListAsync(ct);
         if (rows.Count == 0)
-            return (false, "记录不存在");
+            return (false, "记录不存在或已删除");
 
-        _db.CustomsAndPackings.RemoveRange(rows);
+        var now = DateTime.Now;
+        var person = (empNo ?? "").Trim();
+        foreach (var row in rows)
+        {
+            row.deleteSigh = "X";
+            row.deleteTime = now;
+            row.deletePerson = person;
+            row.UpdateTime = now;
+            if (person.Length > 0)
+                row.UpdatePerson = person;
+        }
+
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
@@ -167,7 +181,8 @@ public class CustomsAndPackingService
             if (clientNo.Length > 0 && materialNo.Length > 0)
             {
                 var bas = await _db.CotractBases.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.ClientNo == clientNo && x.materialNo == materialNo, ct);
+                    .FirstOrDefaultAsync(x => x.ClientNo == clientNo && x.materialNo == materialNo
+                        && (x.deleteSigh == null || x.deleteSigh != "X"), ct);
                 if (bas is not null)
                 {
                     model.ClientNo = bas.ClientNo;
@@ -224,6 +239,14 @@ public class CustomsAndPackingService
             return (false, "无法获取当前登录工号，请重新登录后再保存", null);
         if (lines.Count == 0)
             return (false, "请至少保留一行明细", null);
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.SAP_order_NO))
+            {
+                var name = string.IsNullOrWhiteSpace(line.materialNo) ? "有明细行" : $"物料 {line.materialNo}";
+                return (false, $"{name} 未填 SAP订单，请补全后再保存", null);
+            }
+        }
 
         var now = DateTime.Now;
         var guid = (header.DocumentGuid ?? "").Trim();

@@ -27,21 +27,24 @@ public class SirService
         return (rows, total);
     }
 
-    public async Task<(bool Ok, string? Message)> DeleteByGuidAsync(string? guid, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Message)> DeleteByGuidAsync(
+        string? guid, string? empNo = null, CancellationToken ct = default)
     {
         guid = (guid ?? "").Trim();
         if (guid.Length == 0)
             return (false, "单据编号为空");
 
-        var mains = await _db.SirMains.Where(x => x.guid == guid).ToListAsync(ct);
-        var details = await _db.SirDetails.Where(x => x.main_guid == guid).ToListAsync(ct);
-        var samples = await _db.SirSamples.Where(x => x.main_guid == guid).ToListAsync(ct);
+        var mains = await _db.SirMains.Where(x => x.guid == guid && x.deleteSigh != "X").ToListAsync(ct);
+        var details = await _db.SirDetails.Where(x => x.main_guid == guid && x.deleteSigh != "X").ToListAsync(ct);
+        var samples = await _db.SirSamples.Where(x => x.main_guid == guid && x.deleteSigh != "X").ToListAsync(ct);
         if (mains.Count == 0 && details.Count == 0 && samples.Count == 0)
-            return (false, "记录不存在");
+            return (false, "记录不存在或已删除");
 
-        _db.SirMains.RemoveRange(mains);
-        _db.SirDetails.RemoveRange(details);
-        _db.SirSamples.RemoveRange(samples);
+        var now = DateTime.Now;
+        var person = (empNo ?? "").Trim();
+        MarkDeleted(mains, now, person);
+        MarkDeleted(details, now, person);
+        MarkDeleted(samples, now, person);
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
@@ -62,7 +65,8 @@ public class SirService
         if (string.IsNullOrWhiteSpace(productType))
             productType = SirReportTypes.DefaultProduct(reportType);
 
-        var main = await _db.SirMains.AsNoTracking().FirstOrDefaultAsync(x => x.guid == guid, ct);
+        var main = await _db.SirMains.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.guid == guid && x.deleteSigh != "X", ct);
         if (main is null)
         {
             main = new ZyqdSirMainModel
@@ -83,7 +87,7 @@ public class SirService
         }
 
         var dbDetails = await _db.SirDetails.AsNoTracking()
-            .Where(x => x.main_guid == guid && x.Report_type == reportType)
+            .Where(x => x.main_guid == guid && x.Report_type == reportType && x.deleteSigh != "X")
             .ToListAsync(ct);
         if (dbDetails.Count > 0)
             dbDetails = DedupeAndSortDetails(dbDetails);
@@ -92,7 +96,7 @@ public class SirService
         var details = ApplyTemplates(guid, reportType!, templates, dbDetails);
 
         var samples = await _db.SirSamples.AsNoTracking()
-            .Where(x => x.main_guid == guid && x.Report_type == reportType)
+            .Where(x => x.main_guid == guid && x.Report_type == reportType && x.deleteSigh != "X")
             .OrderBy(x => x.code)
             .ToListAsync(ct);
         // 遥控器测试(remote)：不留样，只上传附图
@@ -146,28 +150,32 @@ public class SirService
             return (false, "认证测试要求必选");
 
         var existing = await _db.SirMains.FirstOrDefaultAsync(x => x.guid == guid, ct);
+        if (existing is not null && existing.deleteSigh == "X")
+            return (false, "记录已删除");
         if (existing is null)
         {
             doc.Main.createTime ??= DateTime.Now;
             doc.Main.Id = 0;
+            doc.Main.deleteSigh = "N";
             _db.SirMains.Add(doc.Main);
         }
         else
         {
             doc.Main.Id = existing.Id;
             doc.Main.createTime ??= existing.createTime;
+            doc.Main.deleteSigh = existing.deleteSigh ?? "N";
             _db.Entry(existing).CurrentValues.SetValues(doc.Main);
         }
 
         // 明细按 Id / 序号合并实测结果，不整表删插，也不改模板文案列
         var oldDetails = await _db.SirDetails
-            .Where(x => x.main_guid == guid && x.Report_type == reportType)
+            .Where(x => x.main_guid == guid && x.Report_type == reportType && x.deleteSigh != "X")
             .ToListAsync(ct);
         MergeDetails(oldDetails, guid, reportType, doc.Details ?? []);
 
         // 留样：按 Id 增删改（T_ZYQD_SIR_datail_SampleForFiling），不再整表删插
         var oldSamples = await _db.SirSamples
-            .Where(x => x.main_guid == guid && x.Report_type == reportType)
+            .Where(x => x.main_guid == guid && x.Report_type == reportType && x.deleteSigh != "X")
             .ToListAsync(ct);
         MergeSamples(oldSamples, guid, reportType, doc.Samples ?? [], createPersonOverride: null);
 
@@ -221,7 +229,7 @@ public class SirService
         if (!doc.Main.UL && !doc.Main.FCC && !doc.Main.CE && !doc.Main.RoHS && !doc.Main.REACH && !doc.Main.Certification_None)
             return (false, "认证测试要求必选");
 
-        var existing = await _db.SirMains.FirstOrDefaultAsync(x => x.guid == guid, ct);
+        var existing = await _db.SirMains.FirstOrDefaultAsync(x => x.guid == guid && x.deleteSigh != "X", ct);
         if (existing is null)
             return (false, "报告不存在，业务员不能新建检测报告，请联系检测员或管理员");
 
@@ -237,7 +245,7 @@ public class SirService
         if (NeedsSampleFiling(reportType))
         {
             var oldSamples = await _db.SirSamples
-                .Where(x => x.main_guid == guid && x.Report_type == reportType)
+                .Where(x => x.main_guid == guid && x.Report_type == reportType && x.deleteSigh != "X")
                 .ToListAsync(ct);
             var oldOwnedIds = oldSamples
                 .Where(x => IsSampleOwnedBy(x.CreatePerson, empNo))
@@ -286,7 +294,7 @@ public class SirService
             return deleteScopeIds.Contains(x.Id);
         }).ToList();
         if (toRemove.Count > 0)
-            _db.SirSamples.RemoveRange(toRemove);
+            MarkDeleted(toRemove, DateTime.Now, (createPersonOverride ?? "").Trim());
 
         var oldById = oldSamples.ToDictionary(x => x.Id);
         foreach (var s in incoming)
@@ -306,6 +314,7 @@ public class SirService
             {
                 s.Id = 0;
                 s.createTime ??= DateTime.Now;
+                s.deleteSigh = "N";
                 _db.SirSamples.Add(s);
             }
         }
@@ -348,6 +357,7 @@ public class SirService
             {
                 d.Id = 0;
                 d.createTime ??= DateTime.Now;
+                d.deleteSigh = "N";
                 _db.SirDetails.Add(d);
             }
         }
@@ -388,8 +398,36 @@ public class SirService
         target.Report_type = source.Report_type;
     }
 
+    private static void MarkDeleted<T>(IEnumerable<T> rows, DateTime now, string person)
+        where T : class
+    {
+        foreach (var row in rows)
+        {
+            switch (row)
+            {
+                case ZyqdSirMainModel m:
+                    m.deleteSigh = "X";
+                    m.deleteTime = now;
+                    m.deletePerson = person;
+                    break;
+                case ZyqdSirDetailModel d:
+                    d.deleteSigh = "X";
+                    d.deleteTime = now;
+                    d.deletePerson = person;
+                    break;
+                case ZyqdSirSampleForFilingModel s:
+                    s.deleteSigh = "X";
+                    s.deleteTime = now;
+                    s.deletePerson = person;
+                    break;
+            }
+        }
+    }
+
     private static IQueryable<ZyqdSirMainModel> ApplyFilter(IQueryable<ZyqdSirMainModel> q, SirQueryDto query)
     {
+        q = q.Where(x => x.deleteSigh != "X");
+
         if (query.DateStart is { } ds)
         {
             var start = ds.Date;

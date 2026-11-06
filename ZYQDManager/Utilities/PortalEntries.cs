@@ -98,6 +98,15 @@ public static class PortalEntries
                     Color = "#6a1b9a"
                 });
             }
+
+            list.Add(new PortalEntry
+            {
+                Key = "client-payment",
+                Title = "客户付款方式",
+                Href = "/client-payment",
+                Icon = Icons.Material.Filled.Payments,
+                Color = "#5d4037"
+            });
         }
 
         list.Add(new PortalEntry

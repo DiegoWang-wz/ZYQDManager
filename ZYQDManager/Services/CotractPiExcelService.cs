@@ -150,12 +150,14 @@ public class CotractPiExcelService
             var item = rows[i];
             var r = 12 + 6 * i;
             var percent = item.percent == 0 ? 1 : item.percent;
+            var origin = ParseNum(item.var9);
+            if (origin == 0) origin = item.price;
             Set(ws, r, 2, item.materiaCust);
             Set(ws, r, 8, FmtQty(item.qty));
             Set(ws, r, 9, item.var7);
             Set(ws, r, 11, item.var8);
-            Money(ws, r, 10, item.price * percent, curr);
-            Money(ws, r, 12, item.ext, curr);
+            Money(ws, r, 10, origin * percent, curr);
+            Money(ws, r, 12, origin * item.qty * percent, curr);
             MergeSeq(ws, r, r + 5, 0, (i + 1).ToString());
             Set(ws, r + 1, 2, item.materialModel);
             var (first, last) = SplitSpecs(item.materiaSpecs);
@@ -181,12 +183,12 @@ public class CotractPiExcelService
     }
 
     /// <summary>
-    /// 英文模板：定金行 + 付款行。特殊客户改为 UPON DESPATCH / WITHIN 10 DAYS 各 50%（按总金额）。
+    /// 英文模板：定金行 + 付款行。第 15 条改为 UPON DESPATCH / WITHIN 10 DAYS 各 50%（按总金额）。
     /// </summary>
     private static void WritePaymentBlockEnglish(
         IXLWorksheet ws, int depositRow, int paymentRow, ZyqdCotractPiModel main, string curr)
     {
-        if (CotractPiTypes.ShouldSplitBalancePayment(main.ClientNo))
+        if (CotractPiTypes.ShouldSplitBalancePayment(main.var3))
         {
             WriteSplitPaymentRows(ws, depositRow, paymentRow, main.TOTAL, curr, percentCol: 11);
             return;
@@ -202,7 +204,7 @@ public class CotractPiExcelService
     private static void WritePaymentBlockChinese(
         IXLWorksheet ws, int depositRow, int paymentRow, ZyqdCotractPiModel main, string curr)
     {
-        if (CotractPiTypes.ShouldSplitBalancePayment(main.ClientNo))
+        if (CotractPiTypes.ShouldSplitBalancePayment(main.var3))
         {
             WriteSplitPaymentRows(ws, depositRow, paymentRow, main.TOTAL, curr, percentCol: 11);
             return;
@@ -215,7 +217,7 @@ public class CotractPiExcelService
     }
 
     /// <summary>
-    /// 特殊客户：定金行改成 UPON DESPATCH + 50%，付款行 WITHIN 10 DAYS AFTER ARRIVAL + 50%。
+    /// 第 15 条：定金行改成 UPON DESPATCH + 50%，付款行 WITHIN 10 DAYS AFTER ARRIVAL + 50%。
     /// 保留模板合并格与边框，标题右对齐贴着百分比列。
     /// </summary>
     private static void WriteSplitPaymentRows(

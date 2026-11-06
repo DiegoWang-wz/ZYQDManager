@@ -432,7 +432,7 @@ public class QuotationExcelService
     /// <summary>
     /// 插入图片：在 maxWidth×maxHeight 内等比缩放（对齐老系统 InsertImageToExcel 保比例），不强制方形拉伸。
     /// </summary>
-    private void TryAddPicture(WriteContext ctx, int npoiRow, string? path, int maxWidth = 140, int maxHeight = 140)
+    private void TryAddPicture(WriteContext ctx, int npoiRow, string? path, int maxWidth = 200, int maxHeight = 160)
     {
         var url = LegacyFileUrl.Resolve(path, _imageBase);
         if (url.Length == 0 || !ctx.Images.TryGetValue(url, out var bytes))

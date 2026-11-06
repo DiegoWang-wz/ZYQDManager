@@ -10,6 +10,7 @@
 @inject LibreOfficePdfService LibreOffice
 @inject CotractBaseService CotractBase
 @inject CrmCustomerService Crm
+@inject ClientPaymentService ClientPay
 @inject IJSRuntime JS
 
 <PageTitle>@Title</PageTitle>
@@ -37,7 +38,7 @@
         </button>
         <span class="cpi-topbar-spacer"></span>
         <div class="cpi-picker-group">
-            <input class="cpi-cell cpi-edit cpi-picker-client cpi-lookup" placeholder="选择客户编号" @bind="_productClientNo" @bind:event="oninput" @onkeydown="OnProductKey" @onblur="LoadProductsAsync"/>
+            <input class="cpi-cell cpi-edit cpi-picker-client cpi-lookup" placeholder="选择客户编号" @bind="_productClientNo" @bind:event="oninput" @onkeydown="OnProductKey" @onblur="@(() => LoadProductsAsync(true))"/>
             <label>选择产品信息</label>
             <div class="cpi-picker-product-wrap">
                 <MudAutocomplete T="ZyqdCotractBaseModel"
@@ -85,14 +86,24 @@
 
             <tr class="cpi-stick cpi-stick-5">
                 <td colspan="2">
-                    <input class="cpi-cell cpi-edit cpi-lookup" placeholder="付款客户编号 *" @bind="_billClientNo" @bind:event="oninput" @onkeydown="OnBillKey"/>
+                    <input class="cpi-cell cpi-edit cpi-lookup" placeholder="付款客户编号 *" @bind="_billClientNo" @bind:event="oninput" @onkeydown="OnBillKey" @onblur="OnBillBlur"/>
                 </td>
                 <td colspan="16">
                     <input class="cpi-cell cpi-edit" placeholder="付款客户名称" @bind="_header.BILL_TO_info1" @bind:event="oninput"/>
                 </td>
                 <td colspan="4" class="cpi-label">INVOICE NO.:</td>
                 <td colspan="6">
-                    <input class="cpi-cell cpi-edit" placeholder="INVOICE NO" @bind="_header.INVOICE_NO" @bind:event="oninput"/>
+                    <input class="cpi-cell cpi-edit" placeholder="INVOICE NO" value="@_header.INVOICE_NO" @oninput="OnInvoiceInput"/>
+                    @if (IsDerivedDoc && SourcePiLinks.Count > 0)
+                    {
+                        <div class="cpi-source-pi">
+                            来源客户PI：
+                            @foreach (var src in SourcePiLinks)
+                            {
+                                <a href="@($"/contract-pi/{src.Guid}")" @onclick:preventDefault @onclick="@(() => OpenSourcePi(src.Guid))">@src.Label</a>
+                            }
+                        </div>
+                    }
                 </td>
             </tr>
             <tr class="cpi-stick cpi-stick-6">
@@ -183,11 +194,24 @@
                     <td colspan="1" class="cpi-label">Model#:</td>
                     <td colspan="7"><input class="cpi-cell" readonly value="@line.materialModel"/></td>
                     <td colspan="2">
-                        <input class="cpi-cell cpi-edit cpi-center" type="number" step="@QtyStep(line.var7)" min="0" value="@QtyText(line.qty, line.var7)" @onchange="e => OnNativeQty(e, idx)"/>
+                        <input class="cpi-cell cpi-edit cpi-center"
+                               type="@(IsPieceQty(line.var7) ? "text" : "number")"
+                               inputmode="@(IsPieceQty(line.var7) ? "numeric" : "decimal")"
+                               step="@QtyStep(line.var7)"
+                               min="0"
+                               value="@QtyText(line.qty, line.var7)"
+                               @oninput="e => OnQtyInput(e, idx)"
+                               @onchange="e => OnNativeQty(e, idx)"/>
                     </td>
                     <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@line.var7"/></td>
                     <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
-                    <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.price.ToString("0.00")"/></td>
+                    <td colspan="2" class="cpi-unit-cell">
+                        <input class="cpi-cell cpi-center" readonly value="@line.price.ToString("0.00")"/>
+                        @if (ShowDiscountHint)
+                        {
+                            <div class="cpi-discount-hint">原 @line.origin_price.ToString("0.00")</div>
+                        }
+                    </td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.var8"/></td>
                     <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.ext.ToString("0.00")"/></td>
@@ -250,9 +274,24 @@
                 </td>
             </tr>
             }
+            @if (ShowDiscountHint)
+            {
+            <tr class="cpi-discount-row">
+                <td colspan="18"></td>
+                <td colspan="6" class="cpi-right cpi-discount-hint">原价（未折）</td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
+                <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@OriginLineTotal.ToString("0.00")"/></td>
+            </tr>
+            }
             <tr>
                 <td colspan="18"></td>
-                <td colspan="6" class="cpi-right">SUB-TOTAL</td>
+                <td colspan="6" class="cpi-right">
+                    SUB-TOTAL
+                    @if (ShowDiscountHint)
+                    {
+                        <div class="cpi-discount-hint">@DiscountHintText</div>
+                    }
+                </td>
                 <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                 <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@_header.TOTAL.ToString("0.00")"/></td>
             </tr>
@@ -267,7 +306,22 @@
                 </tr>
                 <tr>
                     <td colspan="18" class="cpi-bank">@_company.Bank2</td>
-                    <td colspan="4" class="cpi-right">WITHIN 10 DAYS AFTER ARRIVAL</td>
+                    <td colspan="4" class="cpi-pay-cell">
+                        <div class="cpi-pay-full">
+                            @SelectedPaymentDisplay
+                            @if (string.IsNullOrWhiteSpace(_header.var3))
+                            {
+                                <span class="cpi-req">*</span>
+                            }
+                        </div>
+                        <select class="cpi-pay-ghost" value="@_header.var3" title="@SelectedPaymentDisplay" @onchange="OnPaymentNative">
+                            <option value="">请选择付款方式</option>
+                            @foreach (var p in PaymentOptions)
+                            {
+                                <option value="@p.Value">@p.Display</option>
+                            }
+                        </select>
+                    </td>
                     <td colspan="2" class="cpi-center">50%</td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@SplitBalanceSecond.ToString("0.00")"/></td>
@@ -295,9 +349,9 @@
                                 <span class="cpi-req">*</span>
                             }
                         </div>
-                        <select class="cpi-pay-ghost" @bind="_header.var3" title="@SelectedPaymentDisplay">
+                        <select class="cpi-pay-ghost" value="@_header.var3" title="@SelectedPaymentDisplay" @onchange="OnPaymentNative">
                             <option value="">请选择付款方式</option>
-                            @foreach (var p in CotractPiTypes.PaymentMethods)
+                            @foreach (var p in PaymentOptions)
                             {
                                 <option value="@p.Value">@p.Display</option>
                             }
@@ -518,6 +572,17 @@
         z-index: 2;
     }
     .cpi-foot-warn { text-align: center; color: #c62828; }
+    .cpi-discount-hint {
+        color: #d48806;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: normal !important;
+        line-height: 1.35;
+        margin-top: 2px;
+    }
+    .cpi-discount-row .cpi-discount-hint { margin-top: 0; }
+    .cpi-unit-cell { text-align: center; vertical-align: middle !important; }
+    .cpi-unit-cell .cpi-discount-hint { margin-top: 0; }
     .cpi-sheet tfoot .cpi-label,
     .cpi-sheet tfoot .cpi-right {
         white-space: normal !important;
@@ -702,6 +767,20 @@
         opacity: 0;
     }
     .cpi-remark { color: mediumvioletred; }
+    .cpi-source-pi {
+        margin-top: 2px;
+        font-size: 11px;
+        line-height: 1.3;
+        color: #606266;
+        white-space: normal;
+    }
+    .cpi-source-pi a {
+        color: #409eff;
+        margin-right: 8px;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .cpi-source-pi a:hover { text-decoration: underline; }
     .cpi-frozen thead {
         position: sticky;
         top: 0;
@@ -733,6 +812,7 @@
     private List<ZyqdCotractBaseModel> _products = [];
     private CotractPiCompanyInfo _company = CotractPiCompanyInfo.For("JC", "CNY");
     private string _billClientNo = "";
+    private string _lastBillFetched = "";
     private string _shipClientNo = "";
     private string _productClientNo = "";
     private int _shipIndex;
@@ -742,7 +822,9 @@
     private DateTime? _etcDate;
     private double _shipFeeAmt;
     private bool _invoiceLocked;
+    private bool _invoiceEdited;
     private string? _cleanFingerprint;
+    private List<SelectOptionItem> _payMethods = [];
 
     private bool IsCreate => string.IsNullOrWhiteSpace(DocumentGuid)
         || string.Equals(DocumentGuid, "new", StringComparison.OrdinalIgnoreCase);
@@ -752,6 +834,38 @@
     private bool IsCustomerCi => IsCiRoute || CotractPiTypes.IsCustomerCi(_header.var6);
     private bool IsCustomsPi => IsBgRoute || CotractPiTypes.IsCustomsPi(_header.var6);
     private bool IsDerivedDoc => IsCustomerCi || IsCustomsPi;
+
+    private List<(string Guid, string Label)> SourcePiLinks
+    {
+        get
+        {
+            var guids = SplitCsv(_header.var14);
+            if (guids.Count == 0) return [];
+            var labels = SplitCsv(_header.var13);
+            var list = new List<(string Guid, string Label)>(guids.Count);
+            for (var i = 0; i < guids.Count; i++)
+            {
+                var label = i < labels.Count && labels[i].Length > 0 ? labels[i] : guids[i];
+                list.Add((guids[i], label));
+            }
+            return list;
+        }
+    }
+
+    private static List<string> SplitCsv(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return [];
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void OpenSourcePi(string guid)
+    {
+        guid = (guid ?? "").Trim();
+        if (guid.Length == 0) return;
+        NavManager.NavigateTo($"/contract-pi/{guid}");
+    }
     private string Title => IsCustomerCi
         ? (IsCreate ? "生成客户CI" : "编辑客户CI")
         : IsCustomsPi
@@ -786,13 +900,16 @@
         {
             var v = (_header.var3 ?? "").Trim();
             if (v.Length == 0) return "请选择付款方式";
-            var hit = CotractPiTypes.PaymentMethods.FirstOrDefault(p => p.Value == v);
+            var hit = PaymentOptions.FirstOrDefault(p => p.Value == v);
             return string.IsNullOrWhiteSpace(hit?.Display) ? v : hit.Display;
         }
     }
 
+    private IReadOnlyList<SelectOptionItem> PaymentOptions
+        => _payMethods.Count > 0 ? _payMethods : CotractPiTypes.PaymentMethods;
+
     private bool ShowSplitBalancePayment
-        => CotractPiTypes.ShouldSplitBalancePayment(_header.ClientNo);
+        => CotractPiTypes.ShouldSplitBalancePayment(_header.var3);
 
     private double SplitBalanceFirst => CotractPiTypes.SplitBalanceAmounts(_header.TOTAL).First;
 
@@ -852,6 +969,8 @@
     {
         if (!RendererInfo.IsInteractive) return;
 
+        await EnsurePayMethodsAsync();
+
         var routeKind = IsCiRoute ? "ci" : IsBgRoute ? "bg" : "pi";
         var key = $"{routeKind}|{DocumentGuid ?? "new"}|{SourceGuids}|{CiOrderType}";
         if (_loadedKey == key) return;
@@ -874,6 +993,7 @@
             _header = NewHeader();
             _lines = [];
             _invoiceLocked = false;
+            _invoiceEdited = false;
             try
             {
                 var empNo = await Auth.GetCurrentEmpNoAsync();
@@ -909,6 +1029,7 @@
 
         ApplyRows(rows);
         _invoiceLocked = true;
+        _invoiceEdited = false;
         try
         {
             if (string.IsNullOrWhiteSpace(_header.email))
@@ -955,7 +1076,9 @@
 
         ApplyRows(rows);
         _invoiceLocked = false;
+        _invoiceEdited = false;
         _header.DocumentGuid = null;
+        await ApplyDerivedCustomsRulesAsync();
         try
         {
             if (string.IsNullOrWhiteSpace(_header.email))
@@ -967,9 +1090,9 @@
         catch (InvalidOperationException)
         {
         }
-        await RefreshInvoiceNoAsync();
         await LoadProductsAsync();
-        await LoadShipToAsync(applyFirst: false);
+        if (!CotractPiTypes.CustomsUsesJstarShip(_header.var6))
+            await LoadShipToAsync(applyFirst: false);
         RefreshCompany();
     }
 
@@ -1014,6 +1137,7 @@
     {
         _header = rows[0];
         _billClientNo = _header.ClientNo ?? "";
+        _lastBillFetched = CotractPiTypes.NormalizeClientNo(_billClientNo);
         _shipClientNo = _header.ClientNo ?? "";
         _productClientNo = _header.ClientNo ?? "";
         _billDate = ParseDate(_header.BILL_TO_DATE) ?? DateTime.Today;
@@ -1065,6 +1189,16 @@
             await LoadBillToAsync();
     }
 
+    private async Task OnBillBlur()
+    {
+        if (_busy) return;
+        var no = CotractPiTypes.NormalizeClientNo(_billClientNo);
+        if (no.Length == 0) return;
+        if (string.Equals(no, _lastBillFetched, StringComparison.OrdinalIgnoreCase))
+            return;
+        await LoadBillToAsync();
+    }
+
     private async Task OnShipKey(KeyboardEventArgs e)
     {
         if (e.Key is "Enter" or "NumpadEnter")
@@ -1074,7 +1208,7 @@
     private async Task OnProductKey(KeyboardEventArgs e)
     {
         if (e.Key is "Enter" or "NumpadEnter")
-            await LoadProductsAsync();
+            await LoadProductsAsync(notify: true);
     }
 
     private static string ProductLabel(ZyqdCotractBaseModel p)
@@ -1128,10 +1262,33 @@
         OnQtyChanged(idx, q);
     }
 
+    private void OnQtyInput(ChangeEventArgs e, int idx)
+    {
+        if (idx < 0 || idx >= _lines.Count) return;
+        if (!IsPieceQty(_lines[idx].var7)) return;
+        var raw = (e.Value?.ToString() ?? "").Trim();
+        if (raw.Length == 0)
+        {
+            OnQtyChanged(idx, 0);
+            return;
+        }
+
+        var cut = raw.IndexOfAny(['.', ',', 'e', 'E']);
+        if (cut >= 0)
+            raw = raw[..cut];
+        if (!double.TryParse(raw, out var q))
+            q = 0;
+        OnQtyChanged(idx, q);
+    }
+
     private static bool IsPieceQty(string? unit)
     {
-        var u = (unit ?? "").Trim().ToUpperInvariant().Replace(" ", "").Replace(".", "");
-        return u is "" or "PC" or "PCS" or "PC(S)" or "PC（S）" or "PCE" or "只" or "件" or "个";
+        var u = (unit ?? "").Trim().ToUpperInvariant()
+            .Replace(" ", "").Replace(".", "")
+            .Replace("（", "(").Replace("）", ")");
+        if (u is "" or "PC" or "PCS" or "PCE" or "只" or "件" or "个")
+            return true;
+        return u.StartsWith("PC(", StringComparison.Ordinal);
     }
 
     private static string QtyStep(string? unit) => IsPieceQty(unit) ? "1" : "0.01";
@@ -1174,28 +1331,58 @@
         try
         {
             _billClientNo = CotractPiTypes.NormalizeClientNo(_billClientNo);
+            _header.ClientNo = _billClientNo;
+            _productClientNo = _billClientNo;
+            await InvokeAsync(StateHasChanged);
             var data = await Crm.GetBillToAsync(_billClientNo);
+            var oks = new List<string>();
+            var warns = new List<string>();
             if (data is null || string.IsNullOrWhiteSpace(data.ClientName))
             {
-                Notify.Show("CRM 未找到该客户", Severity.Warning);
-                return;
+                warns.Add($"未获取到付款客户 {_billClientNo} 的 CRM 资料");
+            }
+            else
+            {
+                _header.BILL_TO_info1 = data.ClientName;
+                _header.ClientName_old = data.ClientName;
+                _header.ClientName = data.ClientName;
+                _header.BILL_TO_info3 = data.CombinedAddress;
+                _header.BILL_TO_info4 = data.CombinedTel;
+                oks.Add($"付款客户 {data.ClientName}");
             }
 
-            _header.ClientNo = _billClientNo;
-            _header.BILL_TO_info1 = data.ClientName;
-            _header.ClientName_old = data.ClientName;
-            _header.ClientName = data.ClientName;
-            _header.BILL_TO_info3 = data.CombinedAddress;
-            _header.BILL_TO_info4 = data.CombinedTel;
-            if (string.IsNullOrWhiteSpace(_shipClientNo))
-                _shipClientNo = _billClientNo;
-            if (string.IsNullOrWhiteSpace(_productClientNo))
-                _productClientNo = _billClientNo;
-            ApplySplitPaymentDefaults();
-            await LoadShipToAsync();
-            await LoadProductsAsync();
-            await RefreshInvoiceNoAsync();
+            ApplyForceJckOrderType();
+            if (await ApplyClientPaymentAsync(notify: false))
+                oks.Add("定金和付款方式");
+            else
+                warns.Add("未获取到该客户的付款方式，请手动选择");
+
+            if (!IsDerivedDoc)
+                await RefreshInvoiceNoAsync();
             RefreshCompany();
+            _shipClientNo = _billClientNo;
+            var (shipOk, shipCount, shipErr) = await LoadShipToAsync(applyFirst: true, notify: false);
+            CotractPiTypes.ApplyCustomsPartyOverrides(_header, forceCustoms: IsCustomsPi);
+            if (shipOk)
+                oks.Add($"收货地址 {shipCount} 条");
+            else if (!string.IsNullOrWhiteSpace(shipErr))
+                warns.Add(shipErr);
+
+            await LoadProductsAsync(notify: false);
+            if (_billClientNo.Length > 0)
+            {
+                if (_products.Count > 0)
+                    oks.Add($"产品 {_products.Count} 条");
+                else
+                    warns.Add($"未获取到客户 {_billClientNo} 的合同基础数据");
+            }
+
+            _lastBillFetched = _billClientNo;
+
+            if (oks.Count > 0)
+                Notify.Show("已获取" + string.Join("，", oks), Severity.Success);
+            foreach (var w in warns)
+                Notify.Show(w, Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -1212,7 +1399,7 @@
             ? "从 CRM 选择该客户的收货地址"
             : (_shipIndex >= 0 && _shipIndex < _shipOptions.Count ? _shipOptions[_shipIndex].OptionLabel : "从 CRM 选择该客户的收货地址");
 
-    private async Task LoadShipToAsync(bool applyFirst = true)
+    private async Task<(bool Ok, int Count, string? Error)> LoadShipToAsync(bool applyFirst = true, bool notify = true)
     {
         var no = string.IsNullOrWhiteSpace(_shipClientNo) ? _billClientNo : _shipClientNo;
         no = CotractPiTypes.NormalizeClientNo(no);
@@ -1221,7 +1408,7 @@
         {
             _shipOptions = [];
             _shipIndex = 0;
-            return;
+            return (false, 0, null);
         }
         try
         {
@@ -1229,21 +1416,29 @@
             if (_shipOptions.Count == 0)
             {
                 _shipIndex = 0;
-                return;
+                var miss = $"未获取到收货客户 {no} 的地址";
+                if (applyFirst && notify)
+                    Notify.Show(miss, Severity.Warning);
+                return (false, 0, miss);
             }
 
             if (!applyFirst)
             {
                 _shipIndex = MatchShipIndex();
-                return;
+                return (true, _shipOptions.Count, null);
             }
 
             _shipIndex = 0;
             ApplyShip(_shipOptions[0]);
+            if (notify)
+                Notify.Show($"已获取收货地址 {_shipOptions.Count} 条", Severity.Success);
+            return (true, _shipOptions.Count, null);
         }
         catch (Exception ex)
         {
-            Notify.Show(ex.Message, Severity.Error);
+            if (notify)
+                Notify.Show(ex.Message, Severity.Error);
+            return (false, 0, ex.Message);
         }
     }
 
@@ -1275,9 +1470,10 @@
         _header.SHIP_TO_info1 = data.ClientName;
         _header.SHIP_TO_info3 = data.CombinedAddress;
         _header.SHIP_TO_info4 = data.CombinedTel;
+        CotractPiTypes.ApplyCustomsPartyOverrides(_header, forceCustoms: IsCustomsPi);
     }
 
-    private async Task LoadProductsAsync()
+    private async Task LoadProductsAsync(bool notify = false)
     {
         var no = string.IsNullOrWhiteSpace(_productClientNo) ? _billClientNo : _productClientNo;
         no = CotractPiTypes.NormalizeClientNo(no);
@@ -1289,8 +1485,11 @@
             return;
         }
         _products = await CotractBase.ListByClientNoAsync(no);
+        if (!notify) return;
         if (_products.Count == 0)
-            Notify.Show("该客户没有合同基础数据", Severity.Info);
+            Notify.Show($"未获取到客户 {no} 的合同基础数据", Severity.Warning);
+        else
+            Notify.Show($"已获取产品 {_products.Count} 条", Severity.Success);
     }
 
     private async Task AddLineAsync()
@@ -1321,7 +1520,7 @@
             origin_price = origin,
             price = origin,
             var8 = row.price_unit,
-            ext = Math.Round(qty * origin, 2)
+            ext = 0
         });
         _header.currency_unit = row.currency_unit;
         _selectedProduct = null;
@@ -1341,7 +1540,6 @@
     {
         var line = _lines[idx];
         line.qty = NormalizeQty(line.var7, qty);
-        line.ext = Math.Round(line.qty * line.price, 2);
         RecalcTotals();
     }
 
@@ -1397,40 +1595,156 @@
         RecalcTotals();
     }
 
-    private void ApplySplitPaymentDefaults()
+    private async Task EnsurePayMethodsAsync()
     {
-        if (!CotractPiTypes.IsSplitBalancePaymentClient(_header.ClientNo)) return;
-        _header.var3 = CotractPiTypes.SplitBalancePaymentMethod;
-        _header.Payment_ratio = 0;
+        if (_payMethods.Count > 0) return;
+        try
+        {
+            _payMethods = await ClientPay.ListPaymentOptionsAsync();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载付款方式失败：" + ex.Message, Severity.Warning);
+        }
+    }
+
+    private void ApplyForceJckOrderType()
+    {
+        if (!CotractPiTypes.IsForceJckClient(_header.ClientNo)) return;
+        _header.var6 = CotractPiTypes.ForceJckOrderType(_header.var6);
+    }
+
+    private async Task<bool> ApplyClientPaymentAsync(bool notify = true)
+    {
+        var row = await ClientPay.GetActiveByClientNoAsync(_header.ClientNo);
+        if (row is null)
+        {
+            if (notify)
+                Notify.Show("未获取到该客户的付款方式，请手动选择", Severity.Warning);
+            return false;
+        }
+
+        var desc = (row.BalancePayType?.Description ?? "").Trim();
+        if (desc.Length > 0)
+            _header.var3 = desc;
+
+        if (CotractPiTypes.IsSplitBalancePayType(row.BalancePayTypeId, desc))
+            _header.Payment_ratio = 0;
+        else
+            _header.Payment_ratio = (double)ClientPaymentService.ParseDeposit(row.Deposit);
+
         RecalcTotals();
+        if (notify)
+            Notify.Show("已带出定金和付款方式", Severity.Success);
+        return true;
+    }
+
+    private void OnPaymentNative(ChangeEventArgs e)
+    {
+        _header.var3 = e.Value?.ToString() ?? "";
+        RecalcTotals();
+    }
+
+    private bool ShowDiscountHint
+    {
+        get
+        {
+            var p = _header.percent;
+            return p > 0 && p < 1;
+        }
+    }
+
+    private double OriginLineTotal
+        => Math.Round(_lines.Sum(x => x.origin_price * x.qty), 2);
+
+    private double DiscountLineTotal
+        => Math.Round(_lines.Sum(x => x.ext), 2);
+
+    private string DiscountHintText
+    {
+        get
+        {
+            if (!ShowDiscountHint) return "";
+            var p = _header.percent;
+            var zhe = (p * 10).ToString("0.##");
+            return $"已折扣 {zhe}折（×{p:0.##}）  {Curr}{OriginLineTotal:0.00} → {Curr}{DiscountLineTotal:0.00}";
+        }
     }
 
     private void RecalcTotals()
     {
-        if (CotractPiTypes.IsSplitBalancePaymentClient(_header.ClientNo))
-        {
-            _header.var3 = CotractPiTypes.SplitBalancePaymentMethod;
+        if (CotractPiTypes.IsSplitBalancePaymentMethod(_header.var3))
             _header.Payment_ratio = 0;
+
+        var p = _header.percent == 0 ? 1 : _header.percent;
+        foreach (var line in _lines)
+        {
+            // 单价/小计存实际折扣结果，界面再用 0.00 显示
+            line.price = line.origin_price * p;
+            line.ext = line.origin_price * line.qty * p;
         }
 
         var ship = ShowShipping ? _shipFeeAmt : 0;
         var insure = ShowInsurance ? _header.Insurance_premium : 0;
         var total = _lines.Sum(x => x.ext) + ship + insure;
-        _header.TOTAL = Math.Round(total, 2);
-        _header.Payment_ratio_Ext = Math.Round(total * _header.Payment_ratio / 100.0, 2);
-        _header.balance_before_delivery = Math.Round(total - _header.Payment_ratio_Ext, 2);
+        _header.TOTAL = total;
+        _header.Payment_ratio_Ext = total * _header.Payment_ratio / 100.0;
+        _header.balance_before_delivery = total - _header.Payment_ratio_Ext;
         _header.var10 = ShowShipping ? _shipFeeAmt.ToString("0.##") : "0";
     }
 
     private void RefreshCompany()
-        => _company = CotractPiCompanyInfo.For(TemplateType, _header.currency_unit ?? _lines.FirstOrDefault()?.currency_unit);
+    {
+        var type = TemplateType;
+        if (IsCustomsPi && CotractPiTypes.IsJstarFamilyOrder(_header.var6))
+            type = "JCK";
+        _company = CotractPiCompanyInfo.For(type, _header.currency_unit ?? _lines.FirstOrDefault()?.currency_unit);
+    }
+
+    private async Task ApplyDerivedCustomsRulesAsync()
+    {
+        if (!IsCustomsPi)
+            return;
+
+        if (!CotractPiTypes.IsCustomsPi(_header.var6))
+            _header.var6 = CotractPiTypes.ToCustomsPiType(_header.var6);
+        _header.var11 = "报关PI";
+        _header.Cotract_PI_type = CotractPiTypes.ResolveTemplateType(_header.var6, _header.ClientNo);
+        CotractPiTypes.ApplyCustomsPartyOverrides(_header, forceCustoms: true);
+        if (CotractPiTypes.IsJsConsignmentOrder(_header.var6))
+        {
+            _header.INVOICE_NO = await CotractPi.BuildInvoiceNoAsync(
+                _header.ClientNo,
+                CotractPiTypes.ConsignmentCustomsInvoiceName,
+                _header.var6,
+                _header.DocumentGuid);
+        }
+        else
+        {
+            _header.INVOICE_NO = CotractPiTypes.WithJcInvoicePrefix(_header.INVOICE_NO);
+        }
+
+        _invoiceEdited = false;
+        RecalcTotals();
+        RefreshCompany();
+        if (ShowDiscountHint)
+            Notify.Show(DiscountHintText, Severity.Info);
+    }
 
     private async Task RefreshInvoiceNoAsync(bool force = false)
     {
         if (_invoiceLocked && !force) return;
         if (string.IsNullOrWhiteSpace(_header.ClientNo) || string.IsNullOrWhiteSpace(_header.ClientName_old))
             return;
-        _header.INVOICE_NO = await CotractPi.BuildInvoiceNoAsync(_header.ClientNo, _header.ClientName_old, _header.var6);
+        _header.INVOICE_NO = await CotractPi.BuildInvoiceNoAsync(
+            _header.ClientNo, _header.ClientName_old, _header.var6, _header.DocumentGuid);
+        _invoiceEdited = false;
+    }
+
+    private void OnInvoiceInput(ChangeEventArgs e)
+    {
+        _header.INVOICE_NO = e.Value?.ToString();
+        _invoiceEdited = true;
     }
 
     private void MarkClean() => _cleanFingerprint = BuildFingerprint();
@@ -1543,13 +1857,44 @@
 
         if (string.IsNullOrWhiteSpace(_header.BILL_TO_PO_REF))
         {
-            var confirmPo = await DialogService.ShowMessageBoxAsync(
+            var confirmPo = await ConfirmMessageDialog.ShowAsync(
+                DialogService,
                 "确认 PO 号",
                 "当前未填写 PO 号。部分客户确实没有 PO，请确认是否继续保存？",
-                yesText: "确认无 PO，继续保存",
-                cancelText: "返回填写");
-            if (confirmPo != true)
+                "确认无 PO，继续保存",
+                "返回填写");
+            if (!confirmPo)
                 return false;
+        }
+
+        var invoiceNo = (_header.INVOICE_NO ?? "").Trim();
+        if (invoiceNo.Length > 0)
+        {
+            var exists = await CotractPi.InvoiceNoExistsAsync(invoiceNo, _header.var6, _header.DocumentGuid);
+            if (exists)
+            {
+                if (_invoiceEdited)
+                {
+                    var confirmDup = await ConfirmMessageDialog.ShowAsync(
+                        DialogService,
+                        "发票号已存在",
+                        $"发票号「{invoiceNo}」已有重复，是否仍要保存？",
+                        "仍要保存",
+                        "返回修改");
+                    if (!confirmDup)
+                        return false;
+                }
+                else if (IsCreate)
+                {
+                    var next = await CotractPi.EnsureUniqueInvoiceNoAsync(
+                        invoiceNo, _header.var6, _header.DocumentGuid);
+                    if (!string.Equals(next, invoiceNo, StringComparison.Ordinal))
+                    {
+                        _header.INVOICE_NO = next;
+                        Notify.Show($"发票号已占用，已自动改为 {next}", Severity.Info);
+                    }
+                }
+            }
         }
 
         _busy = true;
@@ -1568,6 +1913,7 @@
             if (showSuccess)
                 Notify.Show("保存成功", Severity.Success);
             _invoiceLocked = true;
+            _invoiceEdited = false;
             MarkClean();
             if (IsCreate && !string.IsNullOrWhiteSpace(guid))
             {

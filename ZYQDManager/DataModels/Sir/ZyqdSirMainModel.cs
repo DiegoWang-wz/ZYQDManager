@@ -43,4 +43,7 @@ public class ZyqdSirMainModel
     public string? Note { get; set; }
     public DateTime? createTime { get; set; }
     public string? ImageUrls { get; set; }
+    public string? deleteSigh { get; set; }
+    public DateTime? deleteTime { get; set; }
+    public string? deletePerson { get; set; }
 }

@@ -22,7 +22,8 @@ public class QuotationService
         if (take <= 0) take = 20;
         if (skip < 0) skip = 0;
 
-        IQueryable<ZyqdQuotationMainModel> q = _db.QuotationMains.AsNoTracking();
+        IQueryable<ZyqdQuotationMainModel> q = _db.QuotationMains.AsNoTracking()
+            .Where(x => x.deleteSigh != "X");
 
         var kw = (query.Keyword ?? "").Trim();
         if (kw.Length > 0)
@@ -84,11 +85,11 @@ public class QuotationService
         if (guid.Length == 0) return null;
 
         var main = await _db.QuotationMains.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.guid == guid, ct);
+            .FirstOrDefaultAsync(x => x.guid == guid && x.deleteSigh != "X", ct);
         if (main is null) return null;
 
         var details = await _db.QuotationDetails.AsNoTracking()
-            .Where(x => x.main_guid == guid)
+            .Where(x => x.main_guid == guid && x.deleteSigh != "X")
             .OrderBy(x => x.SortOrder).ThenBy(x => x.Id)
             .ToListAsync(ct);
 
@@ -177,21 +178,32 @@ public class QuotationService
                 {
                     guid = guid,
                     createTime = DateTime.Now,
+                    deleteSigh = "N",
                 };
                 _db.QuotationMains.Add(row);
             }
             else
             {
-                row = await _db.QuotationMains.FirstOrDefaultAsync(x => x.guid == guid, ct)
+                row = await _db.QuotationMains.FirstOrDefaultAsync(x => x.guid == guid && x.deleteSigh != "X", ct)
                       ?? throw new InvalidOperationException("报价单不存在");
             }
 
             CopyMain(main, row);
             if (isCreate && row.createTime is null)
                 row.createTime = DateTime.Now;
+            if (row.deleteSigh != "X")
+                row.deleteSigh = "N";
 
-            var old = await _db.QuotationDetails.Where(x => x.main_guid == guid).ToListAsync(ct);
-            _db.QuotationDetails.RemoveRange(old);
+            var old = await _db.QuotationDetails
+                .Where(x => x.main_guid == guid && x.deleteSigh != "X")
+                .ToListAsync(ct);
+            var now = DateTime.Now;
+            foreach (var d in old)
+            {
+                d.deleteSigh = "X";
+                d.deleteTime = now;
+                d.deletePerson = empNo;
+            }
 
             var order = 0;
             foreach (var line in validLines)
@@ -224,6 +236,7 @@ public class QuotationService
                     Note = line.Note,
                     SortOrder = order,
                     createTime = DateTime.Now,
+                    deleteSigh = "N",
                 });
             }
 
@@ -238,25 +251,39 @@ public class QuotationService
         }
     }
 
-    public async Task<(bool Ok, string? Message)> DeleteAsync(string? guid, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Message)> DeleteAsync(
+        string? guid, string? empNo = null, CancellationToken ct = default)
     {
         guid = (guid ?? "").Trim();
         if (guid.Length == 0)
             return (false, "参数无效");
 
-        var main = await _db.QuotationMains.FirstOrDefaultAsync(x => x.guid == guid, ct);
+        var main = await _db.QuotationMains.FirstOrDefaultAsync(x => x.guid == guid && x.deleteSigh != "X", ct);
         if (main is null)
-            return (false, "记录不存在");
+            return (false, "记录不存在或已删除");
 
-        var details = await _db.QuotationDetails.Where(x => x.main_guid == guid).ToListAsync(ct);
-        _db.QuotationDetails.RemoveRange(details);
-        _db.QuotationMains.Remove(main);
+        var now = DateTime.Now;
+        var person = (empNo ?? "").Trim();
+        main.deleteSigh = "X";
+        main.deleteTime = now;
+        main.deletePerson = person;
+
+        var details = await _db.QuotationDetails
+            .Where(x => x.main_guid == guid && x.deleteSigh != "X")
+            .ToListAsync(ct);
+        foreach (var d in details)
+        {
+            d.deleteSigh = "X";
+            d.deleteTime = now;
+            d.deletePerson = person;
+        }
+
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
 
     public async Task<(bool Ok, string? Message)> DeleteManyAsync(
-        IEnumerable<string> guids, CancellationToken ct = default)
+        IEnumerable<string> guids, string? empNo = null, CancellationToken ct = default)
     {
         var list = guids.Select(x => (x ?? "").Trim()).Where(x => x.Length > 0).Distinct().ToList();
         if (list.Count == 0)
@@ -265,7 +292,7 @@ public class QuotationService
         var fail = 0;
         foreach (var g in list)
         {
-            var (ok, _) = await DeleteAsync(g, ct);
+            var (ok, _) = await DeleteAsync(g, empNo, ct);
             if (!ok) fail++;
         }
 

@@ -551,7 +551,8 @@
         _busy = true;
         try
         {
-            var (success, msg) = await Sir.DeleteByGuidAsync(guid);
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
+            var (success, msg) = await Sir.DeleteByGuidAsync(guid, empNo);
             if (!success)
             {
                 Notify.Show(msg ?? "删除失败", Severity.Error);
@@ -580,11 +581,12 @@
         _busy = true;
         try
         {
+            var empNo = (await Auth.GetStoredAsync())?.EmpNo;
             var guids = _selected.Select(x => (x.guid ?? "").Trim()).Where(x => x.Length > 0).Distinct().ToList();
             var fail = 0;
             foreach (var guid in guids)
             {
-                var (success, _) = await Sir.DeleteByGuidAsync(guid);
+                var (success, _) = await Sir.DeleteByGuidAsync(guid, empNo);
                 if (!success) fail++;
             }
 

@@ -101,6 +101,10 @@ else
                 <ChildContent>
                     <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo(_homePath))"/>
                     <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
+                    @if (_canSeeBusinessModules)
+                    {
+                        <MudMenuItem Label="客户付款方式" Icon="@Icons.Material.Filled.Payments" OnClick="@(() => GoTo("/client-payment"))"/>
+                    }
                     @if (_canManageUsers)
                     {
                         <MudMenuItem Label="人员管理" Icon="@Icons.Material.Filled.ManageAccounts" OnClick="@(() => GoTo("/personnel"))"/>
@@ -440,6 +444,7 @@ else
             if (Starts(path, "project/motor")) return "电机立项单";
             if (Starts(path, "project/")) return "立项单";
             if (Starts(path, "personnel") || Starts(path, "UserManagement")) return "人员管理";
+            if (Starts(path, "client-payment")) return "客户付款方式";
             if (Starts(path, "Profile")) return "个人信息";
             if (Starts(path, "tools/decrypt")) return "文件解密";
             return "遮阳管理系统";

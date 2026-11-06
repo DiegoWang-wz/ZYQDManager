@@ -7,10 +7,12 @@ namespace ZYQDManager.Services;
 public class CotractPiService
 {
     private readonly SqlServerDbContext _db;
+    private readonly CrmCustomerService _crm;
 
-    public CotractPiService(SqlServerDbContext db)
+    public CotractPiService(SqlServerDbContext db, CrmCustomerService crm)
     {
         _db = db;
+        _crm = crm;
     }
 
     public async Task<(List<ZyqdCotractPiModel> Rows, int Total)> QueryPageAsync(
@@ -40,6 +42,8 @@ public class CotractPiService
                 var6 = x.var6,
                 Person = x.Person,
                 INVOICE_NO = x.INVOICE_NO,
+                var13 = x.var13,
+                var14 = x.var14,
                 BILL_TO_DATE = x.BILL_TO_DATE,
                 CreateTime = x.CreateTime,
                 CreatePerson = x.CreatePerson,
@@ -52,17 +56,31 @@ public class CotractPiService
         return (rows, total);
     }
 
-    public async Task<(bool Ok, string? Message)> DeleteByGuidAsync(string? guid, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Message)> DeleteByGuidAsync(
+        string? guid, string? empNo = null, CancellationToken ct = default)
     {
         guid = (guid ?? "").Trim();
         if (guid.Length == 0)
             return (false, "单据编号为空");
 
-        var rows = await _db.CotractPis.Where(x => x.DocumentGuid == guid).ToListAsync(ct);
+        var rows = await _db.CotractPis
+            .Where(x => x.DocumentGuid == guid && x.deleteSigh != "X")
+            .ToListAsync(ct);
         if (rows.Count == 0)
-            return (false, "记录不存在");
+            return (false, "记录不存在或已删除");
 
-        _db.CotractPis.RemoveRange(rows);
+        var now = DateTime.Now;
+        var person = (empNo ?? "").Trim();
+        foreach (var row in rows)
+        {
+            row.deleteSigh = "X";
+            row.deleteTime = now;
+            row.deletePerson = person;
+            row.UpdateTime = now;
+            if (person.Length > 0)
+                row.UpdatePerson = person;
+        }
+
         await _db.SaveChangesAsync(ct);
         return (true, null);
     }
@@ -74,7 +92,7 @@ public class CotractPiService
             return [];
 
         return await _db.CotractPis.AsNoTracking()
-            .Where(x => x.DocumentGuid == guid)
+            .Where(x => x.DocumentGuid == guid && x.deleteSigh != "X")
             .OrderBy(x => x.Id)
             .ToListAsync(ct);
     }
@@ -86,7 +104,7 @@ public class CotractPiService
             return [];
 
         var rows = await _db.CotractPis.AsNoTracking()
-            .Where(x => x.DocumentGuid != null && ids.Contains(x.DocumentGuid))
+            .Where(x => x.DocumentGuid != null && ids.Contains(x.DocumentGuid) && x.deleteSigh != "X")
             .ToListAsync(ct);
 
         var map = rows
@@ -100,11 +118,8 @@ public class CotractPiService
                 list.AddRange(group);
         }
 
-        return list
-            .OrderBy(x => x.INVOICE_NO)
-            .ThenBy(x => x.materiaCust)
-            .ThenBy(x => x.Id)
-            .ToList();
+        // 与来源客户PI一致：按勾选单据顺序，组内按 Id（录入顺序），不按料号重排
+        return list;
     }
 
     public Task<List<ZyqdCotractPiModel>> LoadCustomerCiDraftAsync(
@@ -134,10 +149,36 @@ public class CotractPiService
             .GroupBy(x => x.DocumentGuid ?? "", StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToList();
+        var sourceGuidCsv = string.Join(",", unique
+            .Select(x => (x.DocumentGuid ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+        var sourceInvoices = string.Join(",", unique
+            .Select(x => (x.INVOICE_NO ?? "").Trim())
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase));
         var ship = unique.Sum(ParseFee);
         var insure = unique.Sum(x => x.Insurance_premium);
         var ratioExt = unique.Sum(x => x.Payment_ratio_Ext);
         var balance = unique.Sum(x => x.balance_before_delivery);
+
+        var percent = 1d;
+        if (!isCi && CotractPiTypes.NeedsCustomsDiscount(targetType))
+        {
+            percent = await _crm.GetClientPercentAsync(rows[0].ClientNo, ct);
+            if (percent <= 0) percent = 1;
+        }
+
+        string? customsInvoice = null;
+        if (!isCi && CotractPiTypes.IsJsConsignmentOrder(targetType))
+        {
+            customsInvoice = await BuildInvoiceNoAsync(
+                rows[0].ClientNo,
+                CotractPiTypes.ConsignmentCustomsInvoiceName,
+                targetType,
+                excludeDocumentGuid: null,
+                ct);
+        }
 
         foreach (var row in rows)
         {
@@ -145,8 +186,8 @@ public class CotractPiService
             row.DocumentGuid = null;
             row.var6 = targetType;
             row.var11 = isCi ? "客户CI" : "报关PI";
-            if (string.IsNullOrWhiteSpace(row.var13))
-                row.var13 = row.INVOICE_NO;
+            row.var13 = sourceInvoices.Length > 0 ? sourceInvoices : row.INVOICE_NO;
+            row.var14 = sourceGuidCsv;
             row.BILL_TO_DATE = today;
             row.var5 = today;
             row.var10 = ship.ToString("0.##");
@@ -154,6 +195,17 @@ public class CotractPiService
             row.Payment_ratio_Ext = ratioExt;
             row.balance_before_delivery = balance;
             row.deleteSigh = "N";
+            row.percent = percent;
+            row.Cotract_PI_type = CotractPiTypes.ResolveTemplateType(targetType, row.ClientNo);
+            if (!isCi)
+            {
+                CotractPiTypes.ApplyCustomsPartyOverrides(row);
+                row.INVOICE_NO = customsInvoice ?? CotractPiTypes.WithJcInvoicePrefix(row.INVOICE_NO);
+            }
+            else
+            {
+                row.INVOICE_NO = CotractPiTypes.WithJcInvoicePrefix(row.INVOICE_NO);
+            }
         }
 
         return rows;
@@ -185,31 +237,37 @@ public class CotractPiService
     }
 
     public async Task<string> BuildInvoiceNoAsync(
-        string? clientNo, string? clientNameOld, string? orderType, CancellationToken ct = default)
+        string? clientNo, string? clientNameOld, string? orderType, string? excludeDocumentGuid = null, CancellationToken ct = default)
     {
         clientNo = CotractPiTypes.NormalizeClientNo(clientNo);
-        var name = (clientNameOld ?? "").Trim();
-        var template = CotractPiTypes.ResolveTemplateType(orderType, clientNo);
-        var prefix = CotractPiTypes.InvoicePrefix(template);
-        var var12 = CotractPiTypes.ResolveVar12(template);
-        var var11 = CotractPiTypes.DocumentKind(orderType);
+        var name = CotractPiTypes.InvoiceNamePart(orderType, clientNameOld);
+        var prefix = CotractPiTypes.InvoicePrefix();
         var today = DateTime.Today;
-
-        var count = await _db.CotractPis.AsNoTracking()
-            .Where(x => x.deleteSigh != "X"
-                        && x.ClientNo == clientNo
-                        && x.var12 == var12
-                        && x.var11 == var11
-                        && x.UpdateTime != null
-                        && x.UpdateTime.Value.Date == today)
-            .Select(x => x.DocumentGuid)
-            .Distinct()
-            .CountAsync(ct);
-
         var year = today.ToString("yy");
         var md = today.ToString("MMdd");
-        var hz = count == 0 ? "" : count == 1 ? "-1" : "-" + count;
-        return $"{year}{prefix}{md}-{name}{hz}";
+        var desired = $"{year}{prefix}{md}-{name}";
+        return await EnsureUniqueInvoiceNoAsync(desired, orderType, excludeDocumentGuid, ct);
+    }
+
+    public Task<bool> InvoiceNoExistsAsync(
+        string? invoiceNo, string? orderType, string? excludeDocumentGuid = null, CancellationToken ct = default)
+        => InvoiceNoTakenAsync(invoiceNo, orderType, excludeDocumentGuid, ct);
+
+    public async Task<string> EnsureUniqueInvoiceNoAsync(
+        string? invoiceNo, string? orderType, string? excludeDocumentGuid = null, CancellationToken ct = default)
+    {
+        var desired = (invoiceNo ?? "").Trim();
+        if (desired.Length == 0)
+            return "";
+
+        var candidate = desired;
+        var n = 0;
+        while (await InvoiceNoTakenAsync(candidate, orderType, excludeDocumentGuid, ct))
+        {
+            n++;
+            candidate = $"{desired}-{n}";
+        }
+        return candidate;
     }
 
     public async Task<(bool Ok, string? Message, string? Guid)> SaveAsync(
@@ -233,7 +291,10 @@ public class CotractPiService
         header.var11 = CotractPiTypes.DocumentKind(header.var6);
         header.var12 = CotractPiTypes.ResolveVar12(header.Cotract_PI_type);
         if (header.var11 == "PI")
+        {
             header.var13 = header.INVOICE_NO;
+            header.var14 = null;
+        }
         header.percent = header.percent == 0 ? 1 : header.percent;
         header.deleteSigh = "N";
         header.BILL_TO_DATE = CotractPiTypes.FormatDate(header.BILL_TO_DATE);
@@ -264,6 +325,8 @@ public class CotractPiService
             createTime = now;
             person = string.IsNullOrWhiteSpace(header.Person) ? empNo : header.Person.Trim();
         }
+
+        header.INVOICE_NO = (header.INVOICE_NO ?? "").Trim();
 
         var currency = lines.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.currency_unit))?.currency_unit
                        ?? header.currency_unit;
@@ -325,6 +388,7 @@ public class CotractPiService
                 var11 = header.var11,
                 var12 = header.var12,
                 var13 = header.var13,
+                var14 = header.var14,
                 ClientName_old = header.ClientName_old,
                 percent = header.percent,
                 Insurance_premium = header.Insurance_premium,
@@ -352,6 +416,8 @@ public class CotractPiService
             return "贸易方式为必填项";
         if (string.IsNullOrWhiteSpace(header.var3))
             return "付款条件为必填项";
+        if (string.IsNullOrWhiteSpace(header.INVOICE_NO))
+            return "请填写发票号";
         if (string.IsNullOrWhiteSpace(header.ClientNo))
             return "请填写付款客户编号";
         if (string.IsNullOrWhiteSpace(header.var6))
@@ -481,6 +547,32 @@ public class CotractPiService
             "BILL_TO_PO_REF" => desc ? q.OrderByDescending(x => x.BILL_TO_PO_REF) : q.OrderBy(x => x.BILL_TO_PO_REF),
             _ => desc ? q.OrderByDescending(x => x.CreateTime) : q.OrderBy(x => x.CreateTime)
         };
+    }
+
+    private async Task<bool> InvoiceNoTakenAsync(
+        string? invoiceNo, string? orderType, string? excludeDocumentGuid, CancellationToken ct)
+    {
+        var no = (invoiceNo ?? "").Trim();
+        if (no.Length == 0)
+            return false;
+
+        var skipGuid = (excludeDocumentGuid ?? "").Trim();
+        var kind = CotractPiTypes.DocumentKind(orderType);
+        var isCustoms = kind == "报关PI";
+        var isCi = kind == "客户CI";
+        var q = _db.CotractPis.AsNoTracking()
+            .Where(x => x.deleteSigh != "X"
+                        && x.INVOICE_NO == no
+                        && (isCustoms
+                            ? (x.var11 == "报关PI" || (x.var6 != null && x.var6.Contains("报关PI")))
+                            : isCi
+                                ? (x.var11 == "客户CI" || (x.var6 != null && x.var6.Contains("CI") && !x.var6.Contains("报关PI")))
+                                : (x.var11 == "PI" || x.var11 == "客户PI"
+                                   || ((x.var11 == null || x.var11 == "")
+                                       && (x.var6 == null || (!x.var6.Contains("报关PI") && !x.var6.Contains("CI")))))));
+        if (skipGuid.Length > 0)
+            q = q.Where(x => x.DocumentGuid != skipGuid);
+        return await q.AnyAsync(ct);
     }
 
     private static IReadOnlyList<string> OrderTypes(string? documentType)
