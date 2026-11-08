@@ -75,6 +75,10 @@
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
                 }
+                @if (_isAdmin)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Checklist" Href="/sir/items">检测项</MudButton>
+                }
             </div>
             <div class="sir-toolbar-right">
                 @if (_canManageReports)
@@ -118,6 +122,7 @@
                     <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="ProductName">产品名称</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="SoftwareVersion">软件版本</MudTableSortLabel></MudTh>
                     <MudTh Class="sir-date-cell"><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="IssuanceDate">签发日期</MudTableSortLabel></MudTh>
+                    <MudTh Class="sir-engineer-cell"><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Test_Engineer">检测员</MudTableSortLabel></MudTh>
                     <MudTh Class="sir-approver-cell"><MudTableSortLabel T="ZyqdSirMainModel" SortLabel="Test_Approved_By">批准人</MudTableSortLabel></MudTh>
                     <MudTh Class="sir-ops-cell">操作</MudTh>
                 </HeaderContent>
@@ -132,6 +137,7 @@
                     <MudTd>@Dash(context.ProductName)</MudTd>
                     <MudTd>@Dash(context.SoftwareVersion)</MudTd>
                     <MudTd Class="sir-date-cell">@FormatDate(context.IssuanceDate)</MudTd>
+                    <MudTd Class="sir-engineer-cell">@Dash(context.Test_Engineer)</MudTd>
                     <MudTd Class="sir-approver-cell">@Dash(context.Test_Approved_By)</MudTd>
                     <MudTd Class="sir-ops-cell">
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
@@ -281,8 +287,9 @@
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-no-cell {
         background-color: #eeeeee !important;
     }
-    /* 右侧固定：签发日期 | 批准人 | 操作 */
+    /* 右侧固定：签发日期 | 检测员 | 批准人 | 操作 */
     .sir-table .mud-table-cell.sir-date-cell,
+    .sir-table .mud-table-cell.sir-engineer-cell,
     .sir-table .mud-table-cell.sir-approver-cell,
     .sir-table .mud-table-cell.sir-ops-cell {
         position: sticky;
@@ -309,38 +316,50 @@
         max-width: 160px !important;
     }
 
-    .sir-table .mud-table-cell.sir-approver-cell {
-        right: 88px;
+    .sir-table .mud-table-cell.sir-approver-cell,
+    .sir-table .mud-table-cell.sir-engineer-cell {
         width: 88px;
         min-width: 88px;
         max-width: 88px;
         padding: 6px 8px !important;
     }
+    .sir-table .mud-table-cell.sir-approver-cell {
+        right: 88px;
+    }
     .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-approver-cell {
         right: 140px;
     }
+    .sir-table .mud-table-cell.sir-engineer-cell {
+        right: 176px; /* 88 + 88 */
+    }
+    .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-engineer-cell {
+        right: 228px; /* 140 + 88 */
+    }
 
     .sir-table .mud-table-cell.sir-date-cell {
-        right: 176px; /* 88 + 88 */
+        right: 264px; /* 88 + 88 + 88 */
         width: 156px;
         min-width: 156px;
         max-width: 156px;
         padding: 6px 8px !important;
     }
     .sir-table:not(.sir-table-no-select) .mud-table-cell.sir-date-cell {
-        right: 228px; /* 140 + 88 */
+        right: 316px; /* 140 + 88 + 88 */
     }
 
     .sir-table .mud-table-head .mud-table-cell.sir-date-cell,
+    .sir-table .mud-table-head .mud-table-cell.sir-engineer-cell,
     .sir-table .mud-table-head .mud-table-cell.sir-approver-cell,
     .sir-table .mud-table-head .mud-table-cell.sir-ops-cell { z-index: 6; }
 
     .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-date-cell,
+    .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-engineer-cell,
     .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-approver-cell,
     .sir-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.sir-ops-cell {
         background-color: #f5f5f5 !important;
     }
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-date-cell,
+    .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-engineer-cell,
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-approver-cell,
     .sir-table .mud-table-body .mud-table-row:hover .mud-table-cell.sir-ops-cell {
         background-color: #eeeeee !important;
@@ -355,6 +374,7 @@
     private bool _ready;
     private bool _busy;
     private bool _canManageReports = true;
+    private bool _isAdmin;
     private int _currentPage;
     private int _rowsPerPage = 20;
     private string _reportType = SirReportTypeAll;
@@ -372,7 +392,8 @@
 
         var auth = await Auth.GetStoredAsync();
         // 业务员可打开已有报告（仅改认证+本人留样）；新增/删除仍仅检测员/管理员
-        _canManageReports = !AppRoles.IsOperator(auth?.Role) || AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
+        _isAdmin = AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
+        _canManageReports = !AppRoles.IsOperator(auth?.Role) || _isAdmin;
 
         // 仅顶栏「返回」时恢复上一次筛选/分页
         RestoreFromReturn();

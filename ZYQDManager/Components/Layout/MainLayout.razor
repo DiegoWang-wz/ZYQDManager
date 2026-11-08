@@ -390,6 +390,7 @@ else
     {
         if (path.Length == 0) return true; // 门户首页 /
         if (Starts(path, "home")) return true;
+        if (Starts(path, "sir/items")) return false;
         if (Starts(path, "sir")) return true;
         if (Starts(path, "Profile")) return true;
         if (Starts(path, "login")) return true;
@@ -439,6 +440,7 @@ else
                 return "合同详情";
             }
             if (Starts(path, "invoice-kp")) return "开票管理";
+            if (Starts(path, "sir/items")) return "检测项维护";
             if (Starts(path, "sir")) return path is "sir" ? "检测报告管理" : "检测报告详情";
             if (path is "project" or "project-list") return "项目管理";
             if (Starts(path, "project/motor")) return "电机立项单";

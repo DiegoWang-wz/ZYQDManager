@@ -984,6 +984,8 @@
     private DateTime? _issuanceDate = DateTime.Today;
     private bool _busy;
     private bool _loaded;
+    private int _loadVersion;
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
     private bool _imgUploading;
     private bool _saving;
     private string? _cleanFingerprint;
@@ -1062,32 +1064,50 @@
 
     private async Task LoadAsync()
     {
-        _busy = true;
-        _loaded = false;
+        var version = ++_loadVersion;
+        await _loadLock.WaitAsync();
         try
         {
-            var doc = await Sir.GetDocumentAsync(_guid, _reportType, _productType);
-            _main = doc.Main;
-            _details = doc.Details;
-            _samples = ShowSampleFiling ? doc.Samples : [];
-            _images = ShowRemoteImages ? ParseImageUrls(_main.ImageUrls) : [];
-            if (ShowRemoteImages)
-                _main.ImageUrls = string.Join(",", _images);
-            _guid = _main.guid ?? _guid;
-            _reportType = _main.Report_type ?? _reportType;
-            _productType = _main.product_type ?? _productType;
-            _productOptions = SirReportTypes.ProductsFor(_reportType).ToList();
-            _issuanceDate = _main.IssuanceDate == default ? DateTime.Today : _main.IssuanceDate.Date;
-            _loaded = true;
-            MarkClean();
-        }
-        catch (Exception ex)
-        {
-            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+            if (version != _loadVersion)
+                return;
+
+            _busy = true;
+            _loaded = false;
+            try
+            {
+                var doc = await Sir.GetDocumentAsync(_guid, _reportType, _productType);
+                if (version != _loadVersion)
+                    return;
+
+                _main = doc.Main;
+                _details = doc.Details;
+                _samples = ShowSampleFiling ? doc.Samples : [];
+                _images = ShowRemoteImages ? ParseImageUrls(_main.ImageUrls) : [];
+                if (ShowRemoteImages)
+                    _main.ImageUrls = string.Join(",", _images);
+                _guid = _main.guid ?? _guid;
+                _reportType = _main.Report_type ?? _reportType;
+                _productType = _main.product_type ?? _productType;
+                _productOptions = SirReportTypes.ProductsFor(_reportType).ToList();
+                _issuanceDate = _main.IssuanceDate == default ? DateTime.Today : _main.IssuanceDate.Date;
+                _loaded = true;
+                MarkClean();
+            }
+            catch (Exception ex)
+            {
+                if (version != _loadVersion)
+                    return;
+                Notify.Show("加载失败：" + ex.Message, Severity.Error);
+            }
+            finally
+            {
+                if (version == _loadVersion)
+                    _busy = false;
+            }
         }
         finally
         {
-            _busy = false;
+            _loadLock.Release();
         }
     }
 

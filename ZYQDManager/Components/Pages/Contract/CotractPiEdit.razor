@@ -255,7 +255,7 @@
                     </td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                     <td colspan="2">
-                        <input class="cpi-cell cpi-edit cpi-center" value="@_shipFeeAmt" @onchange="OnNativeShipFee"/>
+                        <input class="cpi-cell cpi-edit cpi-center" value="@_shipFeeAmt.ToString("0.00")" @onchange="OnNativeShipFee"/>
                     </td>
                 }
                 else
@@ -270,7 +270,7 @@
                 <td colspan="6" class="cpi-right">Insurance premium</td>
                 <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                 <td colspan="2">
-                    <input class="cpi-cell cpi-edit cpi-center" value="@_header.Insurance_premium" @onchange="OnNativeInsurance"/>
+                    <input class="cpi-cell cpi-edit cpi-center" value="@_header.Insurance_premium.ToString("0.00")" @onchange="OnNativeInsurance"/>
                 </td>
             </tr>
             }

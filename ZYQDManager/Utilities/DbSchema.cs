@@ -114,5 +114,77 @@ public static class DbSchema
         {
             logger.LogError(ex, "Ensure T_ZYQD_Quotation_main/detail failed");
         }
+
+        try
+        {
+            await EnsureRemoteWalkTimerItemAsync(db, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Ensure remote walk-timer test item failed");
+        }
+    }
+
+    /// <summary>
+    /// 遥控器测试(新) 四类产品：在「定时设置」下插入「定时遥控器走时精度测试」，后续编号顺延。
+    /// 已有实测结果按原编号一起后移，避免挂到新项目上。
+    /// </summary>
+    private static async Task EnsureRemoteWalkTimerItemAsync(SqlServerDbContext db, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.T_ZYQD_SIR_item_template', N'U') IS NULL
+                RETURN;
+
+            IF EXISTS (
+                SELECT 1 FROM dbo.T_ZYQD_SIR_item_template
+                WHERE Report_type = N'remote_new'
+                  AND Specification = N'定时遥控器走时精度测试'
+            )
+                RETURN;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM dbo.T_ZYQD_SIR_item_template
+                WHERE Report_type = N'remote_new'
+                  AND product_type = N'充电款单向遥控器'
+                  AND Specification_type = N'M.22'
+                  AND Specification LIKE N'充电功能%'
+            )
+                RETURN;
+
+            UPDATE dbo.T_ZYQD_SIR_item_template
+            SET Specification_type = N'M.' + CAST(TRY_CAST(SUBSTRING(Specification_type, 3, 20) AS int) + 1 AS nvarchar(20)),
+                SortNo = (TRY_CAST(SUBSTRING(Specification_type, 3, 20) AS int) + 1) * 10
+            WHERE Report_type = N'remote_new'
+              AND product_type IN (N'充电款单向遥控器', N'充电款双向遥控器', N'一次电池款单向遥控器', N'一次电池款双向遥控器')
+              AND Specification_type LIKE N'M.%'
+              AND CHARINDEX(N'.', SUBSTRING(Specification_type, 3, 20)) = 0
+              AND TRY_CAST(SUBSTRING(Specification_type, 3, 20) AS int) >= 22;
+
+            UPDATE d
+            SET d.Specification_type = N'M.' + CAST(TRY_CAST(SUBSTRING(d.Specification_type, 3, 20) AS int) + 1 AS nvarchar(20))
+            FROM dbo.T_ZYQD_SIR_detail d
+            INNER JOIN dbo.T_ZYQD_SIR_main m ON m.guid = d.main_guid
+            WHERE m.Report_type = N'remote_new'
+              AND m.product_type IN (N'充电款单向遥控器', N'充电款双向遥控器', N'一次电池款单向遥控器', N'一次电池款双向遥控器')
+              AND ISNULL(d.deleteSigh, N'') <> N'X'
+              AND d.Specification_type LIKE N'M.%'
+              AND CHARINDEX(N'.', SUBSTRING(d.Specification_type, 3, 20)) = 0
+              AND TRY_CAST(SUBSTRING(d.Specification_type, 3, 20) AS int) >= 22;
+
+            INSERT INTO dbo.T_ZYQD_SIR_item_template
+                (Report_type, product_type, Specification_type, SortNo, Specification, Specification_EN, Criteria, Criteria_EN, filling_type, Enabled, createTime)
+            SELECT v.Report_type, v.product_type, N'M.22', 220,
+                   N'定时遥控器走时精度测试',
+                   N'Timed remote control precision test while walking',
+                   N'1. 以北京时间为基准，设置遥控器时间；' + NCHAR(10) + N'2.1h 后校对，时间差≤±1s；',
+                   N'1. Set the remote control time based on Beijing time;' + NCHAR(10) + N'2.1 hours, the time difference is ≤±1s.',
+                   N'0', 1, SYSUTCDATETIME()
+            FROM (VALUES
+                (N'remote_new', N'充电款单向遥控器'),
+                (N'remote_new', N'充电款双向遥控器'),
+                (N'remote_new', N'一次电池款单向遥控器'),
+                (N'remote_new', N'一次电池款双向遥控器')
+            ) v(Report_type, product_type);
+            """, ct);
     }
 }

@@ -173,6 +173,7 @@ builder.Services.AddScoped<CustomsAndPackingService>();
 builder.Services.AddScoped<CustomsAndPackingExcelService>();
 builder.Services.AddScoped<SirExcelService>();
 builder.Services.AddScoped<SirService>();
+builder.Services.AddScoped<SirTemplateService>();
 builder.Services.AddScoped<QuotationBaseService>();
 builder.Services.AddScoped<QuotationBaseExcelService>();
 builder.Services.AddScoped<QuotationService>();

@@ -1,0 +1,398 @@
+@page "/sir/items"
+@rendermode InteractiveServer
+@inject SirTemplateService Templates
+@inject CentralAuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>检测项维护</PageTitle>
+
+<div class="sir-items-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <div class="sir-items-toolbar">
+            <div class="sir-items-type">
+                <MudSelect T="string"
+                           Value="_reportType"
+                           ValueChanged="OnReportTypeChanged"
+                           Label="测试类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           FullWidth="true">
+                    @foreach (var t in SirReportTypes.Tests)
+                    {
+                        <MudSelectItem Value="@t.Value">@t.Label</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <div class="sir-items-product">
+                <MudSelect T="string"
+                           Value="_productType"
+                           ValueChanged="OnProductTypeChanged"
+                           Label="产品类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           FullWidth="true">
+                    @foreach (var p in _products)
+                    {
+                        <MudSelectItem Value="@p">@p</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Disabled="_busy || !_canEdit"
+                       OnClick="AddRow">新增</MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="_busy || !_canEdit"
+                       OnClick="SaveAsync">保存</MudButton>
+            <MudButton Variant="Variant.Outlined"
+                       Disabled="_busy || !_dirty"
+                       OnClick="ReloadAsync">放弃修改</MudButton>
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="sir-items-table-wrap pa-0" Outlined="true">
+        <table class="sir-items-table">
+            <thead>
+            <tr>
+                <th class="col-no">编号</th>
+                <th class="col-name">检测项</th>
+                <th class="col-criteria">判定标准</th>
+                <th class="col-fill">填写</th>
+                <th class="col-on">启用</th>
+                <th class="col-ops">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            @for (var i = 0; i < _rows.Count; i++)
+            {
+                var index = i;
+                var row = _rows[index];
+                <tr>
+                    <td class="col-no">
+                        @if (_sequential)
+                        {
+                            <span>M.@(index + 1)</span>
+                        }
+                        else
+                        {
+                            <input class="sir-items-input" value="@row.Specification_type" @onchange="e => SetCode(row, e)" disabled="@(!_canEdit)"/>
+                        }
+                    </td>
+                    <td class="col-name">
+                        <input class="sir-items-input" placeholder="分组标题（可空）" value="@row.GroupTitle" @onchange="e => SetGroup(row, e)" disabled="@(!_canEdit)"/>
+                        <input class="sir-items-input" placeholder="中文名称" value="@row.Specification" @onchange="e => SetSpec(row, e)" disabled="@(!_canEdit)"/>
+                        <input class="sir-items-input" placeholder="英文名称" value="@row.Specification_EN" @onchange="e => SetSpecEn(row, e)" disabled="@(!_canEdit)"/>
+                    </td>
+                    <td class="col-criteria">
+                        <textarea class="sir-items-area" rows="2" placeholder="中文标准" value="@row.Criteria" @onchange="e => SetCriteria(row, e)" disabled="@(!_canEdit)"></textarea>
+                        <textarea class="sir-items-area" rows="2" placeholder="英文标准" value="@row.Criteria_EN" @onchange="e => SetCriteriaEn(row, e)" disabled="@(!_canEdit)"></textarea>
+                    </td>
+                    <td class="col-fill">
+                        <select class="sir-items-input" value="@row.filling_type" @onchange="e => SetFilling(row, e)" disabled="@(!_canEdit)">
+                            <option value="0">数据</option>
+                            <option value="1">勾选</option>
+                            <option value="2">OK/NG</option>
+                        </select>
+                    </td>
+                    <td class="col-on">
+                        <input type="checkbox" checked="@row.Enabled" @onchange="e => SetEnabled(row, e)" disabled="@(!_canEdit)"/>
+                    </td>
+                    <td class="col-ops">
+                        <button type="button" class="sir-items-op" disabled="@(!_canEdit || index == 0)" @onclick="() => Move(index, -1)">上移</button>
+                        <button type="button" class="sir-items-op" disabled="@(!_canEdit || index == _rows.Count - 1)" @onclick="() => Move(index, 1)">下移</button>
+                        <button type="button" class="sir-items-op" disabled="@(!_canEdit)" @onclick="() => InsertAfter(index)">下方插入</button>
+                        <button type="button" class="sir-items-op danger" disabled="@(!_canEdit)" @onclick="() => RemoveAsync(index)">删除</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        @if (_ready && _rows.Count == 0)
+        {
+            <div class="sir-items-empty">当前产品还没有检测项，点「新增」开始维护。</div>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .sir-items-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+    .sir-items-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+    }
+    .sir-items-type { width: 200px; flex: 0 0 200px; }
+    .sir-items-product { width: 260px; flex: 0 0 260px; }
+    .sir-items-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: auto;
+    }
+    .sir-items-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .sir-items-table th,
+    .sir-items-table td {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 8px;
+        vertical-align: top;
+        text-align: left;
+    }
+    .sir-items-table th {
+        position: sticky;
+        top: 0;
+        background: #f8fafc;
+        z-index: 1;
+    }
+    .col-no { width: 88px; }
+    .col-fill { width: 110px; }
+    .col-on { width: 64px; text-align: center; }
+    .col-ops { width: 220px; }
+    .sir-items-input,
+    .sir-items-area {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 4px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        padding: 4px 6px;
+        font: inherit;
+    }
+    .sir-items-area { resize: vertical; }
+    .sir-items-op {
+        margin-right: 6px;
+        border: 0;
+        background: transparent;
+        color: #1d4ed8;
+        cursor: pointer;
+        padding: 0;
+    }
+    .sir-items-op.danger { color: #b91c1c; }
+    .sir-items-op:disabled { color: #9ca3af; cursor: default; }
+    .sir-items-empty {
+        padding: 24px;
+        color: #6b7280;
+    }
+</style>
+
+@code {
+    private string _reportType = "remote_new";
+    private string _productType = "充电款单向遥控器";
+    private List<string> _products = [];
+    private List<ZyqdSirItemTemplateModel> _rows = [];
+    private bool _sequential = true;
+    private bool _busy;
+    private bool _ready;
+    private bool _dirty;
+    private bool _canEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        _canEdit = AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
+        if (!_canEdit)
+        {
+            Nav.NavigateTo("/sir", replace: true);
+            return;
+        }
+
+        await LoadProductsAsync(resetProduct: false);
+        await ReloadAsync();
+    }
+
+    private async Task OnReportTypeChanged(string value)
+    {
+        if (!await ConfirmDiscardAsync()) return;
+        _reportType = value;
+        await LoadProductsAsync(resetProduct: true);
+        await ReloadAsync();
+    }
+
+    private async Task OnProductTypeChanged(string value)
+    {
+        if (!await ConfirmDiscardAsync()) return;
+        _productType = value;
+        await ReloadAsync();
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (!_dirty) return true;
+        var ok = await ConfirmMessageDialog.ShowAsync(
+            DialogService,
+            "放弃未保存修改",
+            "当前检测项还没保存，切换后修改会丢掉。",
+            "放弃并切换",
+            "留在当前");
+        return ok;
+    }
+
+    private async Task LoadProductsAsync(bool resetProduct)
+    {
+        _products = await Templates.ProductTypesAsync(_reportType);
+        if (_products.Count == 0)
+        {
+            _productType = "";
+            return;
+        }
+
+        if (resetProduct || !_products.Contains(_productType))
+            _productType = _products[0];
+    }
+
+    private async Task ReloadAsync()
+    {
+        _busy = true;
+        try
+        {
+            _rows = await Templates.ListAsync(_reportType, _productType);
+            _sequential = SirTemplateService.UsesSequentialCodes(_reportType, _rows);
+            _dirty = false;
+            _ready = true;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AddRow() => InsertAt(_rows.Count);
+
+    private void InsertAfter(int index) => InsertAt(index + 1);
+
+    private void InsertAt(int index)
+    {
+        if (!_canEdit) return;
+        var row = new ZyqdSirItemTemplateModel
+        {
+            Report_type = _reportType,
+            product_type = _productType,
+            filling_type = "1",
+            Enabled = true,
+        };
+        if (index < 0) index = 0;
+        if (index > _rows.Count) index = _rows.Count;
+        _rows.Insert(index, row);
+        _dirty = true;
+    }
+
+    private void Move(int index, int delta)
+    {
+        if (!_canEdit) return;
+        var target = index + delta;
+        if (target < 0 || target >= _rows.Count) return;
+        (_rows[index], _rows[target]) = (_rows[target], _rows[index]);
+        _dirty = true;
+    }
+
+    private async Task RemoveAsync(int index)
+    {
+        if (!_canEdit || index < 0 || index >= _rows.Count) return;
+        var row = _rows[index];
+        if (row.Id > 0)
+        {
+            var ok = await ConfirmMessageDialog.ShowAsync(
+                DialogService,
+                "删除检测项",
+                $"删除「{row.Specification}」后，这个产品已保存报告里的对应实测也会去掉。",
+                "确认删除",
+                "取消");
+            if (!ok) return;
+        }
+
+        _rows.RemoveAt(index);
+        _dirty = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_canEdit) return;
+        _busy = true;
+        try
+        {
+            var (ok, message) = await Templates.SaveAsync(_reportType, _productType, _rows);
+            if (!ok)
+            {
+                Notify.Show(message ?? "保存失败", Severity.Warning);
+                return;
+            }
+
+            Notify.Show("检测项已保存", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SetCode(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.Specification_type = e.Value?.ToString() ?? "";
+        _dirty = true;
+    }
+
+    private void SetGroup(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.GroupTitle = e.Value?.ToString();
+        _dirty = true;
+    }
+
+    private void SetSpec(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.Specification = e.Value?.ToString();
+        _dirty = true;
+    }
+
+    private void SetSpecEn(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.Specification_EN = e.Value?.ToString();
+        _dirty = true;
+    }
+
+    private void SetCriteria(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.Criteria = e.Value?.ToString();
+        _dirty = true;
+    }
+
+    private void SetCriteriaEn(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.Criteria_EN = e.Value?.ToString();
+        _dirty = true;
+    }
+
+    private void SetFilling(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.filling_type = e.Value?.ToString() ?? "0";
+        _dirty = true;
+    }
+
+    private void SetEnabled(ZyqdSirItemTemplateModel row, ChangeEventArgs e)
+    {
+        row.Enabled = e.Value is true;
+        _dirty = true;
+    }
+}

@@ -472,6 +472,7 @@ public class SirService
             "ProductName" => desc ? q.OrderByDescending(x => x.ProductName) : q.OrderBy(x => x.ProductName),
             "SoftwareVersion" => desc ? q.OrderByDescending(x => x.SoftwareVersion) : q.OrderBy(x => x.SoftwareVersion),
             "IssuanceDate" => desc ? q.OrderByDescending(x => x.IssuanceDate) : q.OrderBy(x => x.IssuanceDate),
+            "Test_Engineer" => desc ? q.OrderByDescending(x => x.Test_Engineer) : q.OrderBy(x => x.Test_Engineer),
             "Test_Approved_By" => desc ? q.OrderByDescending(x => x.Test_Approved_By) : q.OrderBy(x => x.Test_Approved_By),
             _ => desc ? q.OrderByDescending(x => x.Id) : q.OrderBy(x => x.Id),
         };

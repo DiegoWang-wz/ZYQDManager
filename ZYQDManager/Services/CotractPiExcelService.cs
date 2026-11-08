@@ -1,5 +1,8 @@
+using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using ZYQDManager.DataDtos;
 using ZYQDManager.DataModels;
@@ -9,6 +12,7 @@ namespace ZYQDManager.Services;
 public class CotractPiExcelService
 {
     private readonly IWebHostEnvironment _env;
+    private readonly List<(string CellRef, double Value)> _formulaCache = new();
 
     public CotractPiExcelService(IWebHostEnvironment env)
     {
@@ -27,6 +31,7 @@ public class CotractPiExcelService
         if (CotractPiTypes.NormalizeClientNo(main.ClientNo) == "10008831")
             type = "JCK";
 
+        _formulaCache.Clear();
         var path = ResolveTemplatePath(type);
         using var wb = new XLWorkbook(path);
         var ws = wb.Worksheet(1);
@@ -47,7 +52,7 @@ public class CotractPiExcelService
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
-        return ms.ToArray();
+        return EmbedFormulaCachedValues(ms.ToArray(), _formulaCache);
     }
 
     private static void ApplyInvoiceTitle(IXLWorksheet ws, bool english, string? orderType)
@@ -89,7 +94,7 @@ public class CotractPiExcelService
         throw new FileNotFoundException("未找到 PI 模板，请确认文件在 wwwroot/Templates/" + name);
     }
 
-    private static void FillEnglish(IXLWorksheet ws, ZyqdCotractPiModel main, List<ZyqdCotractPiModel> rows, string curr)
+    private void FillEnglish(IXLWorksheet ws, ZyqdCotractPiModel main, List<ZyqdCotractPiModel> rows, string curr)
     {
         Set(ws, 4, 1, main.BILL_TO_info1); Set(ws, 4, 10, main.INVOICE_NO);
         Set(ws, 5, 1, main.BILL_TO_info3); SetDate(ws, 5, 10, main.BILL_TO_DATE);
@@ -108,8 +113,7 @@ public class CotractPiExcelService
             Set(ws, r, 8, FmtQty(item.qty));
             Set(ws, r, 9, item.var7);
             Set(ws, r, 11, item.var8);
-            Money(ws, r, 10, item.price, curr);
-            Money(ws, r, 12, item.ext, curr);
+            WriteLineMoney(ws, r, item, curr);
             MergeSeq(ws, r, r + 5, 0, (i + 1).ToString());
             Set(ws, r + 1, 2, item.materialModel);
             var (first, last) = SplitSpecs(item.materiaSpecs);
@@ -134,7 +138,7 @@ public class CotractPiExcelService
         SetDate(ws, 28 + extra, 11, main.var5);
     }
 
-    private static void FillChinese(IXLWorksheet ws, ZyqdCotractPiModel main, List<ZyqdCotractPiModel> rows, string curr)
+    private void FillChinese(IXLWorksheet ws, ZyqdCotractPiModel main, List<ZyqdCotractPiModel> rows, string curr)
     {
         Set(ws, 5, 1, main.BILL_TO_info1); Set(ws, 5, 10, main.INVOICE_NO);
         Set(ws, 6, 1, main.BILL_TO_info3); SetDate(ws, 6, 10, main.BILL_TO_DATE);
@@ -149,15 +153,11 @@ public class CotractPiExcelService
         {
             var item = rows[i];
             var r = 12 + 6 * i;
-            var percent = item.percent == 0 ? 1 : item.percent;
-            var origin = ParseNum(item.var9);
-            if (origin == 0) origin = item.price;
             Set(ws, r, 2, item.materiaCust);
             Set(ws, r, 8, FmtQty(item.qty));
             Set(ws, r, 9, item.var7);
             Set(ws, r, 11, item.var8);
-            Money(ws, r, 10, origin * percent, curr);
-            Money(ws, r, 12, origin * item.qty * percent, curr);
+            WriteLineMoney(ws, r, item, curr);
             MergeSeq(ws, r, r + 5, 0, (i + 1).ToString());
             Set(ws, r + 1, 2, item.materialModel);
             var (first, last) = SplitSpecs(item.materiaSpecs);
@@ -508,17 +508,176 @@ public class CotractPiExcelService
             cell.Value = text;
     }
 
-    private static void Money(IXLWorksheet ws, int npoiRow, int npoiCol, double value, string curr)
+    /// <summary>
+    /// 单价写入原价*折扣公式，金额引用单价格。单元格格式显示两位，点进去仍是原值和公式。
+    /// </summary>
+    private void WriteLineMoney(IXLWorksheet ws, int npoiRow, ZyqdCotractPiModel item, string curr)
     {
-        var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
-        cell.Value = value;
-        cell.Style.NumberFormat.Format = curr switch
+        var percent = item.percent == 0 ? 1d : item.percent;
+        var origin = ParseNum(item.var9);
+        if (origin == 0) origin = item.price;
+
+        var excelRow = npoiRow + 1;
+        var qtyCell = ws.Cell(excelRow, 9);
+        var unitCell = ws.Cell(excelRow, 11);
+        var amountCell = ws.Cell(excelRow, 13);
+        var fmt = MoneyFormat(curr);
+        var unit = origin * percent;
+        var amount = origin * item.qty * percent;
+
+        if (Math.Abs(percent - 1d) > 1e-9)
+        {
+            unitCell.FormulaA1 = "=" + ExcelLiteral(origin) + "*" + ExcelLiteral(percent);
+            Remember(unitCell, unit);
+        }
+        else
+        {
+            unitCell.Value = origin;
+        }
+
+        unitCell.Style.NumberFormat.Format = fmt;
+
+        var unitRef = unitCell.Address.ColumnLetter + unitCell.Address.RowNumber;
+        var qtyRef = qtyCell.Address.ColumnLetter + qtyCell.Address.RowNumber;
+        amountCell.FormulaA1 = "=" + unitRef + "*" + qtyRef;
+        amountCell.Style.NumberFormat.Format = fmt;
+        Remember(amountCell, amount);
+    }
+
+    private void Remember(IXLCell cell, double value)
+    {
+        if (!double.IsFinite(value)) return;
+        var addr = cell.Address.ToString() ?? "";
+        var bang = addr.LastIndexOf('!');
+        if (bang >= 0)
+            addr = addr[(bang + 1)..];
+        if (addr.Length == 0) return;
+        _formulaCache.Add((addr, value));
+    }
+
+    private static string ExcelLiteral(double n)
+        => n.ToString("0.########", CultureInfo.InvariantCulture);
+
+    private static string MoneyFormat(string curr)
+        => curr switch
         {
             "$" => "\"$\"#,##0.00",
             "€" => "\"€\"#,##0.00",
             "C$" => "\"C$\"#,##0.00",
             _ => "\"¥\"#,##0.00"
         };
+
+    private static void Money(IXLWorksheet ws, int npoiRow, int npoiCol, double value, string curr)
+    {
+        var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
+        cell.Value = value;
+        cell.Style.NumberFormat.Format = MoneyFormat(curr);
+    }
+
+    /// <summary>
+    /// ClosedXML 写公式时通常不带缓存值。把已算好的原值写回 &lt;v&gt;，公式保留，WPS 打开也能看到两位结果。
+    /// </summary>
+    private static byte[] EmbedFormulaCachedValues(
+        byte[] xlsx, IReadOnlyList<(string CellRef, double Value)> cache)
+    {
+        if (xlsx.Length == 0 || cache.Count == 0)
+            return xlsx;
+
+        var map = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (cellRef, value) in cache)
+        {
+            var key = (cellRef ?? "").Trim();
+            if (key.Length == 0 || !double.IsFinite(value))
+                continue;
+            map[key] = value;
+        }
+
+        if (map.Count == 0)
+            return xlsx;
+
+        try
+        {
+            using var output = new MemoryStream();
+            output.Write(xlsx);
+            output.Position = 0;
+            using (var zip = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+            {
+                PatchWorkbookCalcOnLoad(zip);
+
+                var sheetNames = zip.Entries
+                    .Where(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase)
+                                && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                    .Select(e => e.FullName)
+                    .ToList();
+
+                foreach (var name in sheetNames)
+                {
+                    var entry = zip.GetEntry(name);
+                    if (entry is null) continue;
+                    XDocument doc;
+                    using (var s = entry.Open())
+                        doc = XDocument.Load(s);
+
+                    XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                    var changed = false;
+                    foreach (var c in doc.Descendants(ns + "c"))
+                    {
+                        var r = (string?)c.Attribute("r");
+                        if (string.IsNullOrWhiteSpace(r) || !map.TryGetValue(r, out var val))
+                            continue;
+                        var f = c.Element(ns + "f");
+                        if (f is null) continue;
+
+                        c.Attribute("t")?.Remove();
+                        f.SetAttributeValue("ca", "1");
+                        var text = val.ToString("G15", CultureInfo.InvariantCulture);
+                        var v = c.Element(ns + "v");
+                        if (v is null)
+                            f.AddAfterSelf(new XElement(ns + "v", text));
+                        else
+                            v.Value = text;
+                        changed = true;
+                    }
+
+                    if (!changed) continue;
+                    entry.Delete();
+                    var neu = zip.CreateEntry(name);
+                    using var w = neu.Open();
+                    doc.Save(w);
+                }
+            }
+
+            return output.ToArray();
+        }
+        catch
+        {
+            return xlsx;
+        }
+    }
+
+    private static void PatchWorkbookCalcOnLoad(ZipArchive zip)
+    {
+        var entry = zip.GetEntry("xl/workbook.xml");
+        if (entry is null) return;
+        XDocument doc;
+        using (var s = entry.Open())
+            doc = XDocument.Load(s);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = doc.Root;
+        if (root is null) return;
+        var calcPr = root.Element(ns + "calcPr");
+        if (calcPr is null)
+        {
+            calcPr = new XElement(ns + "calcPr");
+            root.Add(calcPr);
+        }
+
+        calcPr.SetAttributeValue("fullCalcOnLoad", "1");
+        calcPr.SetAttributeValue("calcMode", "auto");
+        entry.Delete();
+        var neu = zip.CreateEntry("xl/workbook.xml");
+        using var w = neu.Open();
+        doc.Save(w);
     }
 
     private static double ParseNum(string? s)
