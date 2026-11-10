@@ -25,13 +25,17 @@
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearFilter" Disabled="_busy">清空</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadClientAsync" Disabled="_busy">刷新</MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateClient" Disabled="_busy">新增客户付款</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportClientsExcel" Disabled="_busy">导出Excel</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                           StartIcon="@(_exporting ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.FileDownload)"
+                           OnClick="ExportClientsExcel" Disabled="_busy">@(_exporting ? "导出中…" : "导出Excel")</MudButton>
                 <MudText Typo="Typo.subtitle2" Class="ml-2">共 @_clients.Count 项</MudText>
             }
             else
             {
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadTypesAsync" Disabled="_busy">刷新</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.FileDownload" OnClick="ExportPayTypesExcel" Disabled="_busy">导出Excel</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                           StartIcon="@(_exporting ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.FileDownload)"
+                           OnClick="ExportPayTypesExcel" Disabled="_busy">@(_exporting ? "导出中…" : "导出Excel")</MudButton>
                 @if (_isAdmin)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateType" Disabled="_busy">新增付款方式</MudButton>
@@ -40,6 +44,18 @@
             }
         </MudStack>
     </MudPaper>
+
+    @if (_exporting)
+    {
+        <div class="pay-exporting">
+            <div class="pay-exporting-head">
+                <MudProgressLinear Indeterminate="@(_exportTotal <= 0)"
+                                   Value="@ExportPercent"
+                                   Color="Color.Primary"/>
+                <span>@_exportHint</span>
+            </div>
+        </div>
+    }
 
     <MudPaper Class="personnel-table-wrap pa-0" Outlined="true">
         @if (!_listLoaded)
@@ -56,7 +72,7 @@
                       Dense="true"
                       Striped="true"
                       Bordered="true"
-                      Loading="_busy"
+                      Loading="@(_busy && !_exporting)"
                       Breakpoint="Breakpoint.None"
                       FixedHeader="true"
                       Class="personnel-table pay-table">
@@ -93,7 +109,7 @@
                       Dense="true"
                       Striped="true"
                       Bordered="true"
-                      Loading="_busy"
+                      Loading="@(_busy && !_exporting)"
                       Breakpoint="Breakpoint.None"
                       FixedHeader="true"
                       Class="personnel-table pay-table">
@@ -176,6 +192,12 @@
 @code {
     private int _tab;
     private bool _busy;
+    private bool _exporting;
+    private string _exportHint = "";
+    private int _exportDone;
+    private int _exportTotal;
+    private DateTime _exportUiAt = DateTime.MinValue;
+    private double ExportPercent => _exportTotal <= 0 ? 0 : _exportDone * 100.0 / _exportTotal;
     private bool _listLoaded;
     private bool _isAdmin;
     private string _keyword = "";
@@ -294,10 +316,13 @@
             return;
         }
 
-        _busy = true;
+        _exportDone = 0;
+        _exportTotal = _clients.Count;
+        _exportUiAt = DateTime.MinValue;
+        await BeginExportAsync($"正在读取 {_clients.Count} 条客户付款…");
         try
         {
-            var bytes = ClientPaymentService.BuildClientPaymentExcel(_clients);
+            var bytes = await ClientPaymentService.BuildClientPaymentExcelAsync(_clients, OnExportProgressAsync);
             await JS.InvokeVoidAsync(
                 "downloadFileFromBase64",
                 $"客户付款_{DateTime.Now:yyyyMMddHHmmss}.xlsx",
@@ -310,6 +335,7 @@
         }
         finally
         {
+            _exporting = false;
             _busy = false;
         }
     }
@@ -322,10 +348,13 @@
             return;
         }
 
-        _busy = true;
+        _exportDone = 0;
+        _exportTotal = _types.Count;
+        _exportUiAt = DateTime.MinValue;
+        await BeginExportAsync($"正在读取 {_types.Count} 条付款方式…");
         try
         {
-            var bytes = ClientPaymentService.BuildPayTypeExcel(_types);
+            var bytes = await ClientPaymentService.BuildPayTypeExcelAsync(_types, OnExportProgressAsync);
             await JS.InvokeVoidAsync(
                 "downloadFileFromBase64",
                 $"付款方式列表_{DateTime.Now:yyyyMMddHHmmss}.xlsx",
@@ -338,7 +367,35 @@
         }
         finally
         {
+            _exporting = false;
             _busy = false;
+        }
+    }
+
+    private async Task BeginExportAsync(string hint)
+    {
+        _exportHint = hint;
+        _exporting = true;
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+    }
+
+    private async Task OnExportProgressAsync(int done, int total)
+    {
+        _exportDone = done;
+        _exportTotal = total;
+        if (total > 0 && done >= total)
+            _exportHint = $"已写入 {done} / {total}，正在生成 Excel 文件…";
+        else if (total > 0)
+            _exportHint = $"已导出 {done} / {total}";
+
+        var now = DateTime.UtcNow;
+        if (done == 0 || done == total || now - _exportUiAt >= TimeSpan.FromSeconds(1))
+        {
+            _exportUiAt = now;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50);
         }
     }
 
@@ -501,6 +558,31 @@
 }
 
 <style>
+    .pay-exporting {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        background: #e8f0fe;
+        border: 1px solid #c5d8f6;
+        border-radius: 6px;
+        color: #1a3a6b;
+        font-size: 14px;
+    }
+
+    .pay-exporting-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+    }
+
+    .pay-exporting .mud-progress-linear {
+        width: 220px;
+        flex: 0 0 220px;
+        border-radius: 4px;
+    }
+
     .personnel-page {
         flex: 1 1 0;
         display: flex;

@@ -770,6 +770,8 @@
     private bool _loading = true;
     private bool _busy;
     private bool _isCreate;
+    /// <summary>当前画面已经是这张单时，地址从 /new 换成正式 guid 不再整页拆掉重载。</summary>
+    private string? _residentGuid;
     private ZyqdCustomsAndPackingModel _header = new();
     private List<CustomsAndPackingLineDto> _lines = [];
     private string? _cleanFingerprint;
@@ -818,14 +820,25 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var pathGuid = (DocumentGuid ?? "").Trim();
+        // 新建单第一次保存后会 NavigateTo 正式地址。数据已在画面上，再进加载会把整张表拆掉，
+        // 异常又在保存的 try 外面，电路会被直接打成底部黄条。
+        if (pathGuid.Length > 0
+            && !string.Equals(pathGuid, "new", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(pathGuid, _residentGuid, StringComparison.OrdinalIgnoreCase))
+        {
+            _isCreate = false;
+            return;
+        }
+
         _loading = true;
         try
         {
-            var pathGuid = (DocumentGuid ?? "").Trim();
             var from = (FromPiGuid ?? "").Trim();
             if (string.Equals(pathGuid, "new", StringComparison.OrdinalIgnoreCase) || pathGuid.Length == 0)
             {
                 _isCreate = true;
+                _residentGuid = null;
                 if (from.Length > 0)
                     await LoadFromPiAsync(from);
                 else
@@ -835,7 +848,12 @@
             {
                 _isCreate = false;
                 await LoadExistingAsync(pathGuid);
+                _residentGuid = pathGuid;
             }
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("装箱单加载失败：" + ex.Message, Severity.Error);
         }
         finally { _loading = false; }
     }
@@ -1043,7 +1061,18 @@
             return;
         }
 
-        _products = await CotractBase.ListByClientNoAsync(no);
+        try
+        {
+            _products = await CotractBase.ListByClientNoAsync(no);
+        }
+        catch (Exception ex)
+        {
+            _products = [];
+            if (showNotify)
+                Notify.Show("查询合同基础信息失败：" + ex.Message, Severity.Warning);
+            return;
+        }
+
         if (!showNotify) return;
 
         if (_products.Count == 0)
@@ -1544,12 +1573,24 @@
                 Notify.Show(msg ?? "保存失败", Severity.Error);
                 return false;
             }
+            _isCreate = false;
+            if (!string.IsNullOrWhiteSpace(guid))
+            {
+                if (string.IsNullOrWhiteSpace(_header.CreatePerson))
+                    _header.CreatePerson = auth?.EmpNo;
+                _header.DocumentGuid = guid;
+                _residentGuid = guid;
+                MarkClean();
+            }
+
             if (showSuccess)
                 Notify.Show("保存成功", Severity.Success);
-            if (_isCreate && !string.IsNullOrWhiteSpace(guid))
+            // 新建单：地址还是 /new，换成正式 guid。重载交给上面的驻留判断，避免再查一次库并把表单拆掉。
+            if (!string.IsNullOrWhiteSpace(guid)
+                && !string.Equals((DocumentGuid ?? "").Trim(), guid, StringComparison.OrdinalIgnoreCase))
                 NavManager.NavigateTo($"/contract-pk/{guid}", replace: true);
-            else
-                await LoadExistingAsync(guid ?? _header.DocumentGuid ?? "");
+            else if (!string.IsNullOrWhiteSpace(guid))
+                await LoadExistingAsync(guid);
             return true;
         }
         catch (Exception ex)
@@ -1592,8 +1633,9 @@
         }
 
         _busy = true;
-        Notify.Show($"正在生成 Excel（{type}）…", Severity.Info);
+        Notify.Show($"正在生成 Excel（{type}），请稍候…", Severity.Info);
         await InvokeAsync(StateHasChanged);
+        await Task.Yield();
         try
         {
             var xlsx = await PackingExcel.BuildAsync(_header.DocumentGuid, type);

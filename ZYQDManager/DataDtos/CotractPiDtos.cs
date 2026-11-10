@@ -470,8 +470,9 @@ public sealed class CotractPiCompanyInfo
             };
         }
 
+        var currencyBlank = string.IsNullOrWhiteSpace(currencyUnit);
         var account = curr == "C$" ? "295046100018800004048"
-            : curr is "$" or "€" ? "295046100146300002686"
+            : currencyBlank || curr is "$" or "€" ? "295046100146300002686"
             : "295046100018010079541";
         return new CotractPiCompanyInfo
         {

@@ -358,6 +358,17 @@ else
             return;
         }
 
+        if (await Auth.NeedsPasswordChangeAsync())
+        {
+            var empNo = await Auth.GetCurrentEmpNoAsync() ?? "";
+            var changed = await ForceChangePasswordDialog.ShowAsync(DialogService, empNo);
+            if (!changed)
+            {
+                Nav.NavigateTo("/login", replace: true);
+                return;
+            }
+        }
+
         var auth = await Auth.GetStoredAsync();
         _canManageUsers = Auth.CanManageUsers(auth);
         try

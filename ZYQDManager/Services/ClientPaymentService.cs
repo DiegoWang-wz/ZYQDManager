@@ -226,11 +226,15 @@ public class ClientPaymentService
             string.Equals(CotractPiTypes.NormalizeClientNo(x), no, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static byte[] BuildClientPaymentExcel(IReadOnlyList<ZyqdClientPaymentModel> rows)
+    public static async Task<byte[]> BuildClientPaymentExcelAsync(
+        IReadOnlyList<ZyqdClientPaymentModel> rows,
+        Func<int, int, Task>? onProgress = null)
     {
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("客户付款方式");
         WriteHeader(ws, "序号", "客户编号", "定金", "付款方式编号", "付款方式", "维护人", "维护时间");
+        if (onProgress != null)
+            await onProgress(0, rows.Count);
 
         for (var i = 0; i < rows.Count; i++)
         {
@@ -243,17 +247,23 @@ public class ClientPaymentService
             SetText(ws.Cell(row, 5), r.BalancePayType?.Description);
             SetText(ws.Cell(row, 6), r.UpdatePerson);
             SetDate(ws.Cell(row, 7), r.UpdateTime);
+            if (onProgress != null)
+                await onProgress(i + 1, rows.Count);
         }
 
         ws.Columns().AdjustToContents();
         return SaveWorkbook(wb);
     }
 
-    public static byte[] BuildPayTypeExcel(IReadOnlyList<ZyqdBalancePayTypeModel> rows)
+    public static async Task<byte[]> BuildPayTypeExcelAsync(
+        IReadOnlyList<ZyqdBalancePayTypeModel> rows,
+        Func<int, int, Task>? onProgress = null)
     {
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("付款方式列表");
         WriteHeader(ws, "序号", "编号", "描述", "修改人", "修改时间");
+        if (onProgress != null)
+            await onProgress(0, rows.Count);
 
         for (var i = 0; i < rows.Count; i++)
         {
@@ -264,6 +274,8 @@ public class ClientPaymentService
             SetText(ws.Cell(row, 3), r.Description);
             SetText(ws.Cell(row, 4), r.UpdatePerson);
             SetDate(ws.Cell(row, 5), r.UpdateTime);
+            if (onProgress != null)
+                await onProgress(i + 1, rows.Count);
         }
 
         ws.Columns().AdjustToContents();

@@ -209,6 +209,11 @@ public sealed class ResetPasswordRequestDto
     public string NewPassword { get; set; } = "";
 }
 
+public sealed class ChangePasswordRequestDto
+{
+    public string NewPassword { get; set; } = "";
+}
+
 public sealed class UserInformationForSystemApiDto
 {
     public string EmpNo { get; set; } = "";

@@ -123,33 +123,42 @@ public class QuotationBaseExcelService
     public async Task<byte[]> ExportAsync(
         QuotationBaseQueryDto query,
         IReadOnlyCollection<int>? selectedIds = null,
+        Func<int, int, Task>? onProgress = null,
         CancellationToken ct = default)
     {
         var rows = await _base.QueryAllAsync(query, selectedIds, ct);
         if (rows.Count == 0)
             return [];
 
+        if (onProgress != null)
+            await onProgress(0, rows.Count);
+
         var controller = IsControllerGroup(query.ItemType);
         var templateBytes = await File.ReadAllBytesAsync(EnsureTemplate(controller), ct);
         using var input = new MemoryStream(templateBytes);
         using var wb = new XLWorkbook(input);
         var ws = wb.Worksheets.First();
-        // 在英文字段行下方插入数据行，避免覆盖第2行表头
         if (rows.Count > 0)
             ws.Row(DataStartRow - 1).InsertRowsBelow(rows.Count);
 
-        var images = await DownloadImagesAsync(rows, ct);
+        var images = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var http = _httpFactory.CreateClient(LegacyHttpClient);
+        using var gate = new SemaphoreSlim(6);
         var pending = new List<PendingPicture>();
         var typeLabel = TypeLabel(query.ItemType);
 
         for (var i = 0; i < rows.Count; i++)
         {
+            ct.ThrowIfCancellationRequested();
             var row = rows[i];
+            await EnsureRowImageAsync(http, gate, row.Quotation_logo, images, ct);
             var excelRow = DataStartRow + i;
             if (controller)
                 FillControllerRow(ws, excelRow, row, typeLabel, images, pending);
             else
                 FillMotorGroupRow(ws, excelRow, row, typeLabel, images, pending);
+            if (onProgress != null)
+                await onProgress(i + 1, rows.Count);
         }
 
         PlacePendingPictures(ws, pending);
@@ -528,41 +537,30 @@ public class QuotationBaseExcelService
         return path;
     }
 
-    private async Task<Dictionary<string, byte[]>> DownloadImagesAsync(
-        List<QuotationBaseListItemDto> rows, CancellationToken ct)
+    private async Task EnsureRowImageAsync(
+        HttpClient http,
+        SemaphoreSlim gate,
+        string? path,
+        Dictionary<string, byte[]> images,
+        CancellationToken ct)
     {
-        var urls = rows
-            .Select(r => LegacyFileUrl.Resolve(r.Quotation_logo, _imageBase))
-            .Where(u => u.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var url = LegacyFileUrl.Resolve(path, _imageBase);
+        if (url.Length == 0 || images.ContainsKey(url))
+            return;
 
-        var result = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-        if (urls.Count == 0) return result;
-
-        var http = _httpFactory.CreateClient(LegacyHttpClient);
-        using var gate = new SemaphoreSlim(6);
-        var bag = new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-        await Task.WhenAll(urls.Select(async url =>
+        await gate.WaitAsync(ct);
+        try
         {
-            await gate.WaitAsync(ct);
-            try
-            {
-                using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-                if (!resp.IsSuccessStatusCode) return;
-                if (resp.Content.Headers.ContentLength is > 8 * 1024 * 1024) return;
-                var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
-                if (bytes.Length >= 2)
-                    bag[url] = bytes;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch { /* 单张失败忽略 */ }
-            finally { gate.Release(); }
-        }));
-
-        foreach (var kv in bag)
-            result[kv.Key] = kv.Value;
-        return result;
+            using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!resp.IsSuccessStatusCode) return;
+            if (resp.Content.Headers.ContentLength is > 8 * 1024 * 1024) return;
+            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+            if (bytes.Length >= 2)
+                images[url] = bytes;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch { /* 单张失败忽略 */ }
+        finally { gate.Release(); }
     }
 
     private void PutImageOrText(

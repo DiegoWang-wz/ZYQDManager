@@ -184,7 +184,13 @@
         @if (_panel == PanelRegister)
         {
             <MudText Typo="Typo.caption" Class="reg-hint">
-                请先完成邮箱验证。注册成功后即可用员工号和密码登录。
+                请先完成邮箱验证。@CentralAuthService.PasswordComplexityHint。注册成功后即可用员工号和密码登录。
+            </MudText>
+        }
+        else if (_panel == PanelForgot)
+        {
+            <MudText Typo="Typo.caption" Class="reg-hint">
+                @CentralAuthService.PasswordComplexityHint。
             </MudText>
         }
 
@@ -505,6 +511,12 @@
         {
             if (await Auth.IsLoggedInAsync())
             {
+                if (!await CompletePasswordChangeIfNeededAsync())
+                {
+                    await RestoreLoginFieldsAsync();
+                    return;
+                }
+
                 var auth = await Auth.GetStoredAsync();
                 NavManager.NavigateTo(AppRoles.HomePath(auth?.Role), replace: true);
                 return;
@@ -724,6 +736,17 @@
         }
     }
 
+    /// <summary>初始密码 123 必须先改掉。返回 false 表示用户回到了登录，没有进入系统。</summary>
+    private async Task<bool> CompletePasswordChangeIfNeededAsync()
+    {
+        if (!await Auth.NeedsPasswordChangeAsync())
+            return true;
+
+        var empNo = (await Auth.GetCurrentEmpNoAsync() ?? _empNo).Trim();
+        var changed = await ForceChangePasswordDialog.ShowAsync(DialogService, empNo);
+        return changed;
+    }
+
     private async Task LoginAsync()
     {
         _error = null;
@@ -752,6 +775,22 @@
             }
 
             await PersistLoginFieldsAsync();
+
+            if (string.Equals(_password, CentralAuthService.InitialPassword, StringComparison.Ordinal))
+            {
+                await Auth.SetMustChangePasswordAsync(_empNo);
+                Notify.Show("当前为初始密码，请先修改密码", Severity.Warning);
+            }
+            else
+            {
+                await Auth.ClearMustChangePasswordAsync();
+            }
+
+            if (!await CompletePasswordChangeIfNeededAsync())
+            {
+                _error = "请先修改初始密码后再进入系统";
+                return;
+            }
 
             Notify.Show("登录成功", Severity.Success);
             var auth = await Auth.GetStoredAsync();
@@ -790,6 +829,12 @@
         if (_reg.Password != _reg.PasswordConfirm)
         {
             _error = "两次输入的密码不一致";
+            return;
+        }
+
+        if (!CentralAuthService.MeetsPasswordComplexity(_reg.Password))
+        {
+            _error = CentralAuthService.PasswordComplexityHint;
             return;
         }
 
@@ -1042,6 +1087,12 @@
         if (_fp.NewPassword != _fp.NewPasswordConfirm)
         {
             _error = "两次输入的新密码不一致";
+            return;
+        }
+
+        if (!CentralAuthService.MeetsPasswordComplexity(_fp.NewPassword))
+        {
+            _error = CentralAuthService.PasswordComplexityHint;
             return;
         }
 

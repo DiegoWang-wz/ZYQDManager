@@ -298,6 +298,7 @@ public class CotractBaseService
         CotractBaseQueryDto query,
         string imageBase,
         IReadOnlyCollection<int>? selectedIds = null,
+        Func<CotractBaseExportProgress, Task>? onProgress = null,
         CancellationToken ct = default)
     {
         var q = BuildFiltered(query);
@@ -311,7 +312,18 @@ public class CotractBaseService
         if (rows.Count == 0)
             return [];
 
-        var images = await DownloadImagesAsync(rows, imageBase, ct);
+        if (onProgress != null)
+        {
+            await onProgress(new CotractBaseExportProgress
+            {
+                Done = 0,
+                Total = rows.Count
+            });
+        }
+
+        var images = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var http = _httpFactory.CreateClient(LegacyHttpClient);
+        using var gate = new SemaphoreSlim(6);
         var templateBytes = await LoadTemplateBytesAsync(ct);
 
         using var input = new MemoryStream(templateBytes);
@@ -323,7 +335,25 @@ public class CotractBaseService
 
         var pending = new List<PendingPicture>();
         for (var i = 0; i < rows.Count; i++)
-            FillTemplateRow(ws, dataStartRow + i, rows[i], imageBase, images, pending);
+        {
+            ct.ThrowIfCancellationRequested();
+            var row = rows[i];
+            await EnsureRowImagesAsync(http, gate, row, imageBase, images, ct);
+            FillTemplateRow(ws, dataStartRow + i, row, imageBase, images, pending);
+            if (onProgress != null)
+            {
+                await onProgress(new CotractBaseExportProgress
+                {
+                    Done = i + 1,
+                    Total = rows.Count,
+                    ClientNo = row.ClientNo ?? "",
+                    ClientName = row.ClientName ?? "",
+                    MaterialNo = row.materialNo ?? "",
+                    MaterialName = row.materialName ?? ""
+                });
+            }
+        }
+
         PlacePendingPictures(ws, pending);
 
         using var ms = new MemoryStream();
@@ -648,28 +678,28 @@ public class CotractBaseService
         ws.Cell(row, ColManager).Value = r.Customer_Manager;
     }
 
-    private async Task<Dictionary<string, byte[]>> DownloadImagesAsync(
-        List<ZyqdCotractBaseModel> rows, string imageBase, CancellationToken ct)
+    private static async Task EnsureRowImagesAsync(
+        HttpClient http,
+        SemaphoreSlim gate,
+        ZyqdCotractBaseModel row,
+        string imageBase,
+        Dictionary<string, byte[]> images,
+        CancellationToken ct)
     {
-        var urls = rows
-            .SelectMany(r => new[]
+        var missing = new[]
             {
-                r.Customer_outer_box_logo, r.Tuo_Mark_url, r.Box_label_url,
-                r.Box_label_url2, r.nameplate_url, r.nameplate_url2
-            })
+                row.Customer_outer_box_logo, row.Tuo_Mark_url, row.Box_label_url,
+                row.Box_label_url2, row.nameplate_url, row.nameplate_url2
+            }
             .Select(p => LegacyFileUrl.Resolve(p, imageBase))
-            .Where(u => u.Length > 0)
+            .Where(u => u.Length > 0 && !images.ContainsKey(u))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        if (missing.Count == 0)
+            return;
 
-        var result = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-        if (urls.Count == 0)
-            return result;
-
-        var http = _httpFactory.CreateClient(LegacyHttpClient);
-        using var gate = new SemaphoreSlim(6);
         var bag = new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-        await Task.WhenAll(urls.Select(async url =>
+        await Task.WhenAll(missing.Select(async url =>
         {
             await gate.WaitAsync(ct);
             try
@@ -685,8 +715,7 @@ public class CotractBaseService
         }));
 
         foreach (var kv in bag)
-            result[kv.Key] = kv.Value;
-        return result;
+            images[kv.Key] = kv.Value;
     }
 
     private static async Task<byte[]?> TryDownloadImageAsync(HttpClient http, string url, CancellationToken ct)

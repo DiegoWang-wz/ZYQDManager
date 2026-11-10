@@ -13,6 +13,32 @@ public class CentralAuthService
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>迁移导入账号的初始明文密码。</summary>
+    public const string InitialPassword = "123";
+
+    public const string PasswordComplexityHint = "密码须同时包含数字、大写字母和小写字母";
+
+    /// <summary>至少同时包含数字、大写字母、小写字母。</summary>
+    public static bool MeetsPasswordComplexity(string? password)
+    {
+        if (string.IsNullOrEmpty(password))
+            return false;
+
+        var hasDigit = false;
+        var hasUpper = false;
+        var hasLower = false;
+        foreach (var c in password)
+        {
+            if (c is >= '0' and <= '9') hasDigit = true;
+            else if (c is >= 'A' and <= 'Z') hasUpper = true;
+            else if (c is >= 'a' and <= 'z') hasLower = true;
+            if (hasDigit && hasUpper && hasLower)
+                return true;
+        }
+
+        return false;
+    }
+
     private readonly HttpClient _http;
     private readonly LocalStorageHelper _localStorage;
     private readonly CentralApiOptions _api;
@@ -190,6 +216,74 @@ public class CentralAuthService
         {
             _logger.LogError(ex, "ResetPasswordAsync failed");
             return (false, "重置密码请求失败：" + ex.Root().Message);
+        }
+    }
+
+    public async Task<(bool Ok, string? Message)> ChangePasswordAsync(string newPassword, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_api.BaseUrl))
+            return (false, "未配置 CentralApi:BaseUrl");
+
+        var auth = await GetStoredAsync(ct);
+        if (auth is null || string.IsNullOrWhiteSpace(auth.Token))
+            return (false, "登录已失效，请重新登录");
+
+        var path = _api.Relative("auth/change-password");
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, path);
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", auth.Token);
+            req.Content = JsonContent.Create(new ChangePasswordRequestDto { NewPassword = newPassword });
+            using var resp = await _http.SendAsync(req, ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(body) || body.TrimStart().StartsWith('<'))
+            {
+                if ((int)resp.StatusCode == 404)
+                    return (false, "修改密码接口尚未发布到 JcCommonApi，请先更新并重启该服务");
+                return (false, $"修改密码失败（HTTP {(int)resp.StatusCode}）");
+            }
+
+            var parsed = JsonSerializer.Deserialize<JcCommonApiEnvelope<object?>>(body, JsonOptions);
+            if (parsed is null)
+                return (false, "无法解析修改密码响应");
+            if (parsed.Code != 200)
+                return (false, string.IsNullOrWhiteSpace(parsed.Message) ? "修改密码失败" : parsed.Message);
+            await ClearMustChangePasswordAsync(ct);
+            return (true, string.IsNullOrWhiteSpace(parsed.Message) ? "密码已修改" : parsed.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ChangePasswordAsync failed");
+            return (false, "修改密码请求失败：" + ex.Root().Message);
+        }
+    }
+
+    public async Task SetMustChangePasswordAsync(string empNo, CancellationToken ct = default)
+    {
+        await _localStorage.SetAsync(StorageKeys.MustChangePassword, empNo.Trim(), ct);
+    }
+
+    public async Task ClearMustChangePasswordAsync(CancellationToken ct = default)
+    {
+        await _localStorage.RemoveAsync(StorageKeys.MustChangePassword, ct);
+    }
+
+    /// <summary>当前登录工号是否仍被标记为必须修改初始密码。</summary>
+    public async Task<bool> NeedsPasswordChangeAsync(CancellationToken ct = default)
+    {
+        var auth = await GetStoredAsync(ct);
+        var empNo = (auth?.EmpNo ?? "").Trim();
+        if (empNo.Length == 0 || string.IsNullOrWhiteSpace(auth?.Token))
+            return false;
+
+        try
+        {
+            var flag = await _localStorage.GetStringAsync(StorageKeys.MustChangePassword, ct);
+            return string.Equals((flag ?? "").Trim(), empNo, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
         }
     }
 

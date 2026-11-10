@@ -25,10 +25,10 @@
             }
         </select>
         <button type="button" class="cpi-btn cpi-btn-excel" disabled="@(_busy || IsCreate)" @onclick="ExportExcelAsync">
-            <MudIcon Icon="@Icons.Material.Filled.TableView" Class="cpi-btn-icon"/>导出Excel
+            <MudIcon Icon="@Icons.Material.Filled.TableView" Class="cpi-btn-icon"/>@(_exporting ? "导出中…" : "导出Excel")
         </button>
         <button type="button" class="cpi-btn cpi-btn-pdf" disabled="@(_busy || IsCreate)" @onclick="ExportPdfAsync">
-            <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf" Class="cpi-btn-icon"/>导出PDF
+            <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf" Class="cpi-btn-icon"/>@(_exporting ? "导出中…" : "导出PDF")
         </button>
         <button type="button" class="cpi-btn cpi-btn-save" disabled="@_busy" @onclick="SaveAsync">
             <MudIcon Icon="@Icons.Material.Filled.Save" Class="cpi-btn-icon"/>保存
@@ -804,6 +804,7 @@
     [SupplyParameterFromQuery(Name = "type")] public string? CiOrderType { get; set; }
 
     private bool _busy;
+    private bool _exporting;
     private bool _freeze;
     private string? _loadedKey;
     private ZyqdCotractPiModel _header = NewHeader();
@@ -1939,7 +1940,11 @@
         if (!await ConfirmSaveBeforeExportAsync())
             return;
 
+        _exporting = true;
         _busy = true;
+        Notify.Show($"正在导出 Excel，共 {_lines.Count} 行，请稍候…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
         try
         {
             var rows = await CotractPi.GetByGuidAsync(DocumentGuid);
@@ -1961,6 +1966,7 @@
         }
         finally
         {
+            _exporting = false;
             _busy = false;
         }
     }
@@ -1970,10 +1976,13 @@
         if (!await ConfirmSaveBeforeExportAsync())
             return;
 
+        _exporting = true;
         _busy = true;
+        Notify.Show($"正在生成 PDF，共 {_lines.Count} 行，请稍候…", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
         try
         {
-            Notify.Show("正在生成 PDF…", Severity.Info);
             var rows = await CotractPi.GetByGuidAsync(DocumentGuid);
             if (rows.Count == 0)
             {
@@ -1995,6 +2004,7 @@
         }
         finally
         {
+            _exporting = false;
             _busy = false;
         }
     }

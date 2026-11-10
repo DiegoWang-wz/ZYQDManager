@@ -64,8 +64,11 @@
             <div class="cb-toolbar-right">
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy">删除</MudButton>
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy">
-                    @(_selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@(_exporting ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.Download)"
+                           OnClick="ExportAsync"
+                           Disabled="_busy">
+                    @(_exporting ? "导出中…" : _selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
                 </MudButton>
                 <label class="cb-file-label">
                     <InputFile OnChange="OnImportFile" accept=".xlsx" disabled="@_busy"/>
@@ -86,6 +89,18 @@
         </div>
     </MudPaper>
 
+    @if (_exporting)
+    {
+        <div class="cb-exporting">
+            <div class="cb-exporting-head">
+                <MudProgressLinear Indeterminate="@(_exportTotal <= 0)"
+                                   Value="@ExportPercent"
+                                   Color="Color.Primary"/>
+                <span>@_exportHint</span>
+            </div>
+        </div>
+    }
+
     <MudPaper Class="cotract-base-table-wrap pa-0" Outlined="true">
         @if (_ready)
         {
@@ -98,7 +113,7 @@
                   Hover="true"
                   Striped="true"
                   Bordered="true"
-                  Loading="_busy"
+                  Loading="@(_busy && !_exporting)"
                   MultiSelection="true"
                   SelectOnRowClick="false"
                   @bind-SelectedItems="_selected"
@@ -289,6 +304,30 @@
     @@media (max-width: 960px) {
         .cb-toolbar-grid { grid-template-columns: 1fr; }
         .cb-toolbar-right { justify-content: flex-start; }
+    }
+
+    .cb-exporting {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #e8f0fe;
+        border: 1px solid #c5d8f6;
+        border-radius: 6px;
+        color: #1a3a6b;
+        font-size: 14px;
+    }
+
+    .cb-exporting-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .cb-exporting .mud-progress-linear {
+        width: 220px;
+        flex: 0 0 220px;
+        border-radius: 4px;
     }
 
     .cb-file-label {
@@ -548,6 +587,12 @@
     private MudTable<ZyqdCotractBaseModel>? _table;
     private bool _ready;
     private bool _busy;
+    private bool _exporting;
+    private string _exportHint = "";
+    private int _exportDone;
+    private int _exportTotal;
+    private DateTime _exportUiAt = DateTime.MinValue;
+    private double ExportPercent => _exportTotal <= 0 ? 0 : _exportDone * 100.0 / _exportTotal;
     private string _filterColumn = "ClientNo";
     private string? _keyword;
     private DateTime? _dateStart;
@@ -756,13 +801,17 @@
             if (ok != true) return;
         }
 
-        _busy = true;
+        var count = selectedIds?.Count ?? _filteredTotal;
+        _exportDone = 0;
+        _exportTotal = count;
+        _exportUiAt = DateTime.MinValue;
+        await BeginExportAsync($"正在读取 {count} 条合同基础数据…");
         try
         {
             var query = await BuildQueryAsync();
             query.SortLabel = _sortLabel;
             query.SortDescending = _sortDescending;
-            var bytes = await CotractBase.ExportAsync(query, ImageBase, selectedIds);
+            var bytes = await CotractBase.ExportAsync(query, ImageBase, selectedIds, OnExportProgressAsync);
             if (bytes.Length == 0)
             {
                 Notify.Show("没有可导出的数据", Severity.Warning);
@@ -784,7 +833,36 @@
         }
         finally
         {
+            _exporting = false;
             _busy = false;
+        }
+    }
+
+    private async Task BeginExportAsync(string hint)
+    {
+        _exportHint = hint;
+        _exporting = true;
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+    }
+
+    private async Task OnExportProgressAsync(CotractBaseExportProgress progress)
+    {
+        _exportDone = progress.Done;
+        _exportTotal = progress.Total;
+
+        if (progress.Total > 0 && progress.Done >= progress.Total)
+            _exportHint = $"已写入 {progress.Done} / {progress.Total}，正在生成 Excel 文件…";
+        else if (progress.Total > 0)
+            _exportHint = $"已导出 {progress.Done} / {progress.Total}";
+
+        var now = DateTime.UtcNow;
+        if (progress.Done == 0 || progress.Done == progress.Total || now - _exportUiAt >= TimeSpan.FromSeconds(1))
+        {
+            _exportUiAt = now;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50);
         }
     }
 

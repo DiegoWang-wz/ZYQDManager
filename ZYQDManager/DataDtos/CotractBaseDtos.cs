@@ -13,6 +13,16 @@ public sealed class CotractBaseQueryDto
     public bool SortDescending { get; set; } = true;
 }
 
+public sealed class CotractBaseExportProgress
+{
+    public int Done { get; init; }
+    public int Total { get; init; }
+    public string ClientNo { get; init; } = "";
+    public string ClientName { get; init; } = "";
+    public string MaterialNo { get; init; } = "";
+    public string MaterialName { get; init; } = "";
+}
+
 public sealed class CotractBaseImportResult
 {
     public bool Ok { get; set; }

@@ -99,8 +99,11 @@
                         批量修改
                     </MudButton>
                 }
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" Disabled="_busy || _batchEditMode">
-                    @(_selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
+                <MudButton Variant="Variant.Outlined"
+                           StartIcon="@(_exporting ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.Download)"
+                           OnClick="ExportAsync"
+                           Disabled="_busy || _batchEditMode">
+                    @(_exporting ? "导出中…" : _selected.Count > 0 ? $"导出({_selected.Count})" : "导出")
                 </MudButton>
                 <label class="qb-file-label">
                     <InputFile OnChange="OnImportFile" accept=".xlsx" disabled="@(_busy || _batchEditMode)"/>
@@ -121,6 +124,18 @@
         </div>
     </MudPaper>
 
+    @if (_exporting)
+    {
+        <div class="qb-exporting">
+            <div class="qb-exporting-head">
+                <MudProgressLinear Indeterminate="@(_exportTotal <= 0)"
+                                   Value="@ExportPercent"
+                                   Color="Color.Primary"/>
+                <span>@_exportHint</span>
+            </div>
+        </div>
+    }
+
     <MudPaper Class="qb-table-wrap pa-0" Outlined="true">
         @if (_ready)
         {
@@ -133,7 +148,7 @@
                       Hover="true"
                       Striped="true"
                       Bordered="true"
-                      Loading="_busy"
+                      Loading="@(_busy && !_exporting)"
                       MultiSelection="true"
                       SelectOnRowClick="false"
                       @bind-SelectedItems="_selected"
@@ -338,6 +353,31 @@
         .qb-toolbar-grid { grid-template-columns: 1fr; }
         .qb-toolbar-right { justify-content: flex-start; }
     }
+    .qb-exporting {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        background: #e8f0fe;
+        border: 1px solid #c5d8f6;
+        border-radius: 6px;
+        color: #1a3a6b;
+        font-size: 14px;
+    }
+
+    .qb-exporting-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+    }
+
+    .qb-exporting .mud-progress-linear {
+        width: 220px;
+        flex: 0 0 220px;
+        border-radius: 4px;
+    }
+
     .qb-file-label {
         position: relative;
         display: inline-flex;
@@ -607,6 +647,12 @@
     private MudTable<QuotationBaseListItemDto>? _table;
     private bool _ready;
     private bool _busy;
+    private bool _exporting;
+    private string _exportHint = "";
+    private int _exportDone;
+    private int _exportTotal;
+    private DateTime _exportUiAt = DateTime.MinValue;
+    private double ExportPercent => _exportTotal <= 0 ? 0 : _exportDone * 100.0 / _exportTotal;
     private string _itemType = QuotationBaseTypes.Motor;
     private string _filterColumn = "Part_No";
     private string? _keyword;
@@ -1069,10 +1115,15 @@
             if (ok != true) return;
         }
 
-        _busy = true;
+        var count = selectedIds?.Count ?? _total;
+        var typeLabelForHint = QuotationBaseTypes.LabelOf(_itemType);
+        _exportDone = 0;
+        _exportTotal = count;
+        _exportUiAt = DateTime.MinValue;
+        await BeginExportAsync($"正在读取 {count} 条「{typeLabelForHint}」基础数据…");
         try
         {
-            var bytes = await QuotationBaseExcel.ExportAsync(BuildQuery(), selectedIds);
+            var bytes = await QuotationBaseExcel.ExportAsync(BuildQuery(), selectedIds, OnExportProgressAsync);
             if (bytes.Length == 0)
             {
                 Notify.Show("没有可导出的数据", Severity.Warning);
@@ -1095,7 +1146,35 @@
         }
         finally
         {
+            _exporting = false;
             _busy = false;
+        }
+    }
+
+    private async Task BeginExportAsync(string hint)
+    {
+        _exportHint = hint;
+        _exporting = true;
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+    }
+
+    private async Task OnExportProgressAsync(int done, int total)
+    {
+        _exportDone = done;
+        _exportTotal = total;
+        if (total > 0 && done >= total)
+            _exportHint = $"已写入 {done} / {total}，正在生成 Excel 文件…";
+        else if (total > 0)
+            _exportHint = $"已导出 {done} / {total}";
+
+        var now = DateTime.UtcNow;
+        if (done == 0 || done == total || now - _exportUiAt >= TimeSpan.FromSeconds(1))
+        {
+            _exportUiAt = now;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50);
         }
     }
 
