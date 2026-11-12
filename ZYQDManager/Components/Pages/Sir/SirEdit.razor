@@ -1022,7 +1022,10 @@
                 _displayName = (displayName ?? "").Trim();
         }
 
-        _operator = AppRoles.IsOperator(auth?.Role) && !AppRoles.IsAdmin(auth?.Role, auth?.EmpNo);
+        // auth 为空时不能当业务员：新标签刚打开时 localStorage 可能尚未读到，误判会踢回列表
+        _operator = auth is not null
+            && AppRoles.IsOperator(auth.Role)
+            && !AppRoles.IsAdmin(auth.Role, auth.EmpNo);
 
         var routeGuid = (DocumentGuid ?? "").Trim();
         var isNew = routeGuid.Length == 0 || string.Equals(routeGuid, "new", StringComparison.OrdinalIgnoreCase);

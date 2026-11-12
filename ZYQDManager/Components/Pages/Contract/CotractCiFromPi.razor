@@ -303,12 +303,12 @@
         await ReloadTableAsync(resetPage: true);
     }
 
-    private void OnRowClick(TableRowClickEventArgs<ZyqdCotractPiModel> args)
+    private async Task OnRowClick(TableRowClickEventArgs<ZyqdCotractPiModel> args)
     {
         if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
         var guid = (args.Item.DocumentGuid ?? "").Trim();
         if (guid.Length == 0) return;
-        NavManager.NavigateTo($"/contract-pi/{guid}");
+        await TabNav.OpenAsync($"/contract-pi/{guid}");
     }
 
     private void SelectAll() => _selected = _rows.ToHashSet();
@@ -343,7 +343,7 @@
         }
 
         var type = Uri.EscapeDataString(CotractPiTypes.ToCustomerCiType(_orderType));
-        NavManager.NavigateTo($"/contract-ci/new?from={guids}&type={type}");
+        await TabNav.OpenAsync($"/contract-ci/new?from={guids}&type={type}");
     }
 
     private async Task ReloadTableAsync(bool resetPage)

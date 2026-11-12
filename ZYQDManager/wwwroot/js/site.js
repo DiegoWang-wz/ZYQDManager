@@ -74,6 +74,12 @@ window.openPdfFromBase64 = function (base64) {
     setTimeout(function () { URL.revokeObjectURL(url); }, 60_000);
 };
 
+/** 新建/编辑/明细等：新开浏览器标签；顶栏菜单仍走站内路由。 */
+window.zyqdOpenTab = function (url) {
+    if (!url) return;
+    window.open(url, "_blank");
+};
+
 window.cpiUnfreezeHeader = function (wrapSel) {
     const wrap = document.querySelector(wrapSel);
     if (!wrap) return;
@@ -180,6 +186,63 @@ window.sirFreezeDetailHeader = function () {
     });
     return ok;
 };
+
+window.zyqdConsoleError = function (detail) {
+    const text = detail == null ? "" : String(detail);
+    console.error(text);
+    zyqdFillErrorUi(text);
+};
+
+function zyqdFillErrorUi(text) {
+    if (!text) return;
+    const ui = document.getElementById("blazor-error-ui");
+    if (!ui) return;
+    const pre = ui.querySelector(".zyqd-error-detail");
+    if (!pre) return;
+    pre.textContent = text;
+    pre.classList.add("zyqd-error-detail--on");
+}
+
+(function () {
+    const orig = console.error.bind(console);
+    let last = "";
+    console.error = function () {
+        const parts = [];
+        for (let i = 0; i < arguments.length; i++) {
+            const item = arguments[i];
+            if (item instanceof Error)
+                parts.push(item.stack || item.message || String(item));
+            else if (typeof item === "string")
+                parts.push(item);
+            else {
+                try { parts.push(JSON.stringify(item)); }
+                catch (_) { parts.push(String(item)); }
+            }
+        }
+        const text = parts.join("\n");
+        if (text) last = text;
+        const result = orig.apply(console, arguments);
+        const ui = document.getElementById("blazor-error-ui");
+        if (ui && ui.style.display === "block")
+            zyqdFillErrorUi(last);
+        return result;
+    };
+
+    function attach() {
+        const ui = document.getElementById("blazor-error-ui");
+        if (!ui) return;
+        const obs = new MutationObserver(function () {
+            if (ui.style.display === "block")
+                zyqdFillErrorUi(last);
+        });
+        obs.observe(ui, { attributes: true, attributeFilter: ["style"] });
+    }
+
+    if (document.readyState === "loading")
+        document.addEventListener("DOMContentLoaded", attach);
+    else
+        attach();
+})();
 
 window.sirFreezeDetailHeaderSoon = function () {
     const tryOnce = function () {

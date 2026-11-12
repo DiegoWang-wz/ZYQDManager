@@ -636,7 +636,12 @@
 
     private bool IsCopy => RelPath().Contains("/copy", StringComparison.OrdinalIgnoreCase);
     private bool IsDetail => RelPath().Contains("/detail", StringComparison.OrdinalIgnoreCase);
-    private bool IsCreate => string.IsNullOrWhiteSpace(DocumentGuid) || IsCopy
+    /// <summary>
+    /// /quotation/new 也可能绑到 {DocumentGuid}=new；必须把 "new" 当新建，
+    /// 否则会去库里查 guid=new，弹出「报价单不存在」红/黄提示。
+    /// </summary>
+    private bool IsNewGuid => string.Equals((DocumentGuid ?? "").Trim(), "new", StringComparison.OrdinalIgnoreCase);
+    private bool IsCreate => string.IsNullOrWhiteSpace(DocumentGuid) || IsNewGuid || IsCopy
                              || RelPath().StartsWith("quotation/new", StringComparison.OrdinalIgnoreCase);
     private string Title => IsDetail ? "报价详情" : IsCopy ? "复制报价" : IsCreate ? "报价录入" : "编辑报价";
 
@@ -672,6 +677,15 @@
             }
 
             var guid = (DocumentGuid ?? "").Trim();
+            if (guid.Length == 0 || IsNewGuid)
+            {
+                _doc = Quotation.CreateBlank(empNo);
+                _main = _doc.Main;
+                ApplyDefaultSignature(empNo);
+                MarkClean();
+                return;
+            }
+
             var doc = await Quotation.GetAsync(guid);
             if (doc is null)
             {
@@ -826,10 +840,17 @@
     private async Task LoadSignatureOptionsAsync()
     {
         var (ok, list, msg) = await UserInfo.ListSignatureOptionsAsync();
+        // 新标签刚打开时偶发「未登录」读仓失败：静默重试一次，避免进页闪警告
+        if (!ok && string.Equals(msg, "未登录", StringComparison.Ordinal))
+        {
+            await Task.Delay(80);
+            (ok, list, msg) = await UserInfo.ListSignatureOptionsAsync();
+        }
         if (!ok)
         {
             _sigOptions = [];
-            if (!string.IsNullOrWhiteSpace(msg))
+            if (!string.IsNullOrWhiteSpace(msg)
+                && !string.Equals(msg, "未登录", StringComparison.Ordinal))
                 Notify.Show(msg, Severity.Warning);
             return;
         }

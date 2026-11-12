@@ -167,6 +167,7 @@ public class CustomsAndPackingService
                 qty = item.qty,
                 PIcotract_code = item.INVOICE_NO,
                 PI_Material_Name = item.materialName,
+                Trade_Term = string.IsNullOrWhiteSpace(item.BILL_TO_FOB) ? null : item.BILL_TO_FOB.Trim(),
                 Shipping_heads_up = string.Equals(item.Cotract_PI_type, "JCK", StringComparison.OrdinalIgnoreCase)
                     ? "新昌县捷昌进出口有限公司"
                     : "浙江捷昌线性驱动科技股份有限公司",
@@ -215,6 +216,10 @@ public class CustomsAndPackingService
                     model.nameplate_url2 = bas.nameplate_url2;
                 }
             }
+
+            var piPo = (item.BILL_TO_PO_REF ?? "").Trim();
+            if (piPo.Length > 0)
+                model.Client_poNo = piPo;
 
             if (string.IsNullOrWhiteSpace(model.packing_list_type))
                 model.packing_list_type = "总箱单";

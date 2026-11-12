@@ -132,6 +132,7 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<LocalStorageHelper>();
 builder.Services.AddScoped<LastListReturnService>();
 builder.Services.AddScoped<NavigationHistoryService>();
+builder.Services.AddScoped<TabNavigationService>();
 builder.Services.Configure<SelectOptions>(builder.Configuration.GetSection(SelectOptions.SectionName));
 builder.Services.Configure<LegacyFilesOptions>(builder.Configuration.GetSection(LegacyFilesOptions.SectionName));
 builder.Services.Configure<AdminNotifyOptions>(builder.Configuration.GetSection(AdminNotifyOptions.SectionName));

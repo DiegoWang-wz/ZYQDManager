@@ -4,19 +4,13 @@
 @inject CentralAuthService Auth
 @inject NavigationHistoryService NavHistory
 
-@if (!_authReady)
-{
-    <LayoutView Layout="typeof(InitLayout)">
-    </LayoutView>
-}
-else
-{
-    <MudThemeProvider/>
-    <MudPopoverProvider/>
-    <MudDialogProvider/>
-    <MudSnackbarProvider/>
+@* 不再用 InitLayout 挡住首屏：新开标签时直接进正式布局，登录校验在后台完成 *@
+<MudThemeProvider/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
 
-    <MudLayout>
+<MudLayout>
         <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
             <div class="zyqd-nav">
                 <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/"))">
@@ -99,15 +93,15 @@ else
                     </button>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoTo(_homePath))"/>
-                    <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" OnClick="@(() => GoTo("/Profile"))"/>
+                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" Href="@_homePath" Target="_blank"/>
+                    <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" Href="/Profile" Target="_blank"/>
                     @if (_canSeeBusinessModules)
                     {
-                        <MudMenuItem Label="客户付款方式" Icon="@Icons.Material.Filled.Payments" OnClick="@(() => GoTo("/client-payment"))"/>
+                        <MudMenuItem Label="客户付款方式" Icon="@Icons.Material.Filled.Payments" Href="/client-payment" Target="_blank"/>
                     }
                     @if (_canManageUsers)
                     {
-                        <MudMenuItem Label="人员管理" Icon="@Icons.Material.Filled.ManageAccounts" OnClick="@(() => GoTo("/personnel"))"/>
+                        <MudMenuItem Label="人员管理" Icon="@Icons.Material.Filled.ManageAccounts" Href="/personnel" Target="_blank"/>
                     }
                     <MudDivider/>
                     <MudMenuItem Label="登出" Icon="@Icons.Material.Filled.Logout" OnClick="LogoutAsync"/>
@@ -116,16 +110,23 @@ else
         </MudAppBar>
 
         <MudMainContent Class="zyqd-main">
-            @Body
+            @* 等登录态读完再渲染页面，避免 /sir/new 等在 auth 为空时被误判成业务员踢回列表；不显示 InitLayout 蓝卡 *@
+            @if (_authReady)
+            {
+                <ErrorBoundary @ref="_pageError">
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent Context="ex">
+                        @{
+                            RememberPageError();
+                        }
+                        <PageErrorDetail Exception="ex"/>
+                    </ErrorContent>
+                </ErrorBoundary>
+            }
         </MudMainContent>
     </MudLayout>
-}
-
-<div id="blazor-error-ui" data-nosnippet>
-    发生未处理错误。
-    <a href="." class="reload">重新加载</a>
-    <span class="dismiss">🗙</span>
-</div>
 
 <style>
     html, body {
@@ -298,6 +299,8 @@ else
 </style>
 
 @code {
+    private ErrorBoundary? _pageError;
+    private string? _errorUri;
     private bool _checked;
     private bool _authReady;
     private bool _canManageUsers;
@@ -315,12 +318,20 @@ else
             _authReady = true;
     }
 
+    private void RememberPageError() => _errorUri ??= Nav.Uri;
+
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         if (_isInspector && !IsPublicPath && !IsInspectorAllowedPath(CurrentPath))
         {
             Nav.NavigateTo("/sir", replace: true);
             return;
+        }
+
+        if (_errorUri != null && !string.Equals(_errorUri, e.Location, StringComparison.OrdinalIgnoreCase))
+        {
+            _errorUri = null;
+            _pageError?.Recover();
         }
 
         _ = InvokeAsync(StateHasChanged);
@@ -340,7 +351,11 @@ else
     {
         if (!firstRender || _checked) return;
         _checked = true;
-        if (IsPublicPath) return;
+        if (IsPublicPath)
+        {
+            _authReady = true;
+            return;
+        }
 
         var loggedIn = false;
         try
@@ -429,11 +444,24 @@ else
             if (path.Length == 0 || Starts(path, "home")) return "首页";
 
             if (Starts(path, "quotation-base")) return path is "quotation-base" ? "报价基础数据" : "报价基础数据详情";
-            if (Starts(path, "quotation")) return path is "quotation" ? "报价列表" : "报价详情";
+            if (Starts(path, "quotation"))
+            {
+                if (path is "quotation") return "报价列表";
+                if (path.Equals("quotation/new", StringComparison.OrdinalIgnoreCase)) return "新建报价";
+                if (path.EndsWith("/copy", StringComparison.OrdinalIgnoreCase)) return "复制报价";
+                if (path.EndsWith("/detail", StringComparison.OrdinalIgnoreCase)) return "报价详情";
+                return "编辑报价";
+            }
             if (Starts(path, "contract-base")) return path is "contract-base" ? "合同基础数据" : "合同基础数据详情";
             if (Starts(path, "contract-pk")) return path is "contract-pk" ? "装箱单列表" : "装箱单编辑";
-            if (Starts(path, "contract-ci")) return path is "contract-ci" ? "客户CI列表" : "客户CI详情";
-            if (Starts(path, "contract-bg")) return path is "contract-bg" ? "报关PI列表" : "报关PI详情";
+            if (Starts(path, "contract-ci"))
+            {
+                if (path is "contract-ci") return "客户CI列表";
+                if (path.Equals("contract-ci/from-pi", StringComparison.OrdinalIgnoreCase)) return "客户CI生成入口";
+                return PiEditTitle(path, "客户CI");
+            }
+            if (Starts(path, "contract-bg"))
+                return path is "contract-bg" ? "报关PI列表" : PiEditTitle(path, "报关PI");
             if (Starts(path, "contract-pi") || path is "contract")
             {
                 if (path is "contract" or "contract-pi")
@@ -448,7 +476,7 @@ else
                     };
                 }
 
-                return "合同详情";
+                return PiEditTitle(path, "客户PI");
             }
             if (Starts(path, "invoice-kp")) return "开票管理";
             if (Starts(path, "sir/items")) return "检测项维护";
@@ -463,6 +491,9 @@ else
             return "遮阳管理系统";
         }
     }
+
+    private static string PiEditTitle(string path, string kind)
+        => path.EndsWith("/new", StringComparison.OrdinalIgnoreCase) ? $"新建{kind}" : $"编辑{kind}";
 
     private static bool Starts(string path, string prefix)
         => path.Equals(prefix, StringComparison.OrdinalIgnoreCase)

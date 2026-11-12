@@ -135,6 +135,24 @@ public static class CotractPiTypes
         return baseType + "-报关PI";
     }
 
+    /// <summary>多张客户 PI 合成报关 PI：客户、订单类型、贸易方式必须一致。</summary>
+    public static string? CustomsMergeBlockReason(IReadOnlyList<ZyqdCotractPiModel> docs)
+    {
+        if (docs.Count <= 1) return null;
+        var client = NormalizeClientNo(docs[0].ClientNo);
+        var order = (docs[0].var6 ?? "").Trim();
+        var trade = (docs[0].BILL_TO_FOB ?? "").Trim();
+        foreach (var doc in docs.Skip(1))
+        {
+            var sameClient = string.Equals(NormalizeClientNo(doc.ClientNo), client, StringComparison.OrdinalIgnoreCase);
+            var sameOrder = string.Equals((doc.var6 ?? "").Trim(), order, StringComparison.Ordinal);
+            var sameTrade = string.Equals((doc.BILL_TO_FOB ?? "").Trim(), trade, StringComparison.OrdinalIgnoreCase);
+            if (!sameClient || !sameOrder || !sameTrade)
+                return "请选择同一客户、同一订单类型、同一贸易方式的客户 PI";
+        }
+        return null;
+    }
+
     public static string DocumentKind(string? orderType)
     {
         var s = orderType ?? "";
@@ -154,9 +172,20 @@ public static class CotractPiTypes
     public static string InvoiceTitle(string? orderType)
         => IsCustomerCi(orderType) ? "COMMERCIAL INVOICE" : "PROFORMA INVOICE";
 
-    /// <summary>发票号前缀一律 JC（含 J-star / 进出口订单）。</summary>
-    public static string InvoicePrefix(string? templateType = null)
-        => "JC";
+    /// <summary>客户 PI 发票号前缀：标准订单 JC，贸易订单（1300） JCK，两种 1300-2001 为 JS。</summary>
+    public static string InvoicePrefix(string? orderType)
+    {
+        var key = BaseOrderType(orderType);
+        if (key == OrderTrade1300_2001 || key == OrderConsignment1300_2001)
+            return "JS";
+        if (key == OrderTrade1300)
+            return "JCK";
+        return "JC";
+    }
+
+    /// <summary>客户 CI、报关 PI 发票号前缀一律 JC。客户 PI 仍按订单类型。</summary>
+    public static string DocumentInvoicePrefix(string? orderType)
+        => IsCustomerCi(orderType) || IsCustomsPi(orderType) ? "JC" : InvoicePrefix(orderType);
 
     public static string InvoiceNamePart(string? orderType, string? clientName)
     {
@@ -165,19 +194,25 @@ public static class CotractPiTypes
         return (clientName ?? "").Trim();
     }
 
-    /// <summary>老数据 24JS / 24JCK 前缀统一成 24JC。</summary>
-    public static string WithJcInvoicePrefix(string? invoiceNo)
+    /// <summary>改发票号前缀，保留年份和后面的日期、名称。客户 CI、报关 PI 固定 JC。JCK 要先于 JC 判断。</summary>
+    public static string ApplyInvoicePrefix(string? invoiceNo, string? orderType)
     {
+        var prefix = DocumentInvoicePrefix(orderType);
         var s = (invoiceNo ?? "").Trim();
         if (s.Length < 4 || !char.IsDigit(s[0]) || !char.IsDigit(s[1]))
             return s;
         var yy = s[..2];
         var rest = s[2..];
+        string tail;
         if (rest.StartsWith("JCK", StringComparison.OrdinalIgnoreCase))
-            return yy + "JC" + rest[3..];
-        if (rest.StartsWith("JS", StringComparison.OrdinalIgnoreCase))
-            return yy + "JC" + rest[2..];
-        return s;
+            tail = rest[3..];
+        else if (rest.StartsWith("JS", StringComparison.OrdinalIgnoreCase))
+            tail = rest[2..];
+        else if (rest.StartsWith("JC", StringComparison.OrdinalIgnoreCase))
+            tail = rest[2..];
+        else
+            return s;
+        return yy + prefix + tail;
     }
 
     public static bool NeedsCustomsDiscount(string? orderType)
@@ -409,6 +444,10 @@ public sealed class CotractPiLineDto
     public string? materiaSpecs { get; set; }
     public string? materiaPowered { get; set; }
     public string? Notes { get; set; }
+    /// <summary>这一行物料来自哪张客户 PI 的发票号。</summary>
+    public string? SourceInvoice { get; set; }
+    /// <summary>这一行物料来自哪张客户 PI 的 DocumentGuid。</summary>
+    public string? SourceGuid { get; set; }
     public double qty { get; set; }
     public string? var7 { get; set; }
     public string? currency_unit { get; set; }
@@ -449,7 +488,7 @@ public sealed class CotractPiCompanyInfo
                 Bank3 = "ADDRESS: 13617 Woodlawn Hills Dr, Cedar Springs, MI 49319",
                 Bank4 = "THE ADVISING BANK: JP Morgan Chase",
                 Bank5 = "ADDRESS: 270 Park Avenue, New York, NY 10017",
-                Bank6 = "NOTE: 5YR WARRANTY ON ALL MOTOR TYPES"
+                Bank6 = "NOTE: OUR FULL UNABBREVIATED NAME MUST APPEAR IN THE WIRE PAPERWORK."
             };
         }
 
@@ -466,7 +505,7 @@ public sealed class CotractPiCompanyInfo
                 Bank3 = "ADDRESS: N0. 19, Xintao Road Qixing Street, Xinchang County, Zhejiang, China",
                 Bank4 = "THE ADVISING BANK: BANK OF CHINA XINCHANG SUB-BRANCH",
                 Bank5 = "BANK ACCOUNT: 368870956982",
-                Bank6 = "SWIFT: BKCHCNBJ92D      TEL:0575-86041909"
+                Bank6 = "SWIFT: BKCHCNBJ92D\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0TEL:0575-86041909"
             };
         }
 
@@ -485,7 +524,7 @@ public sealed class CotractPiCompanyInfo
             Bank3 = "ADDRESS: PROVINCIAL HIGH TECH PARK,XINCHANG COUNTY,ZHEJIANG,CHINA.",
             Bank4 = "THE ADVISING BANK: BANK OF COMMUNICATIONS,SHAOXING BRANCH",
             Bank5 = $"BANK ACCOUNT: {account}",
-            Bank6 = "SWIFT: COMM CN SH SXG      TEL:0575-81166066"
+            Bank6 = "SWIFT: COMM CN SH SXG\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0TEL:0575-81166066"
         };
     }
 }

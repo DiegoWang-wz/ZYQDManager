@@ -36,7 +36,6 @@
         <button type="button" class="cpi-btn cpi-btn-freeze" @onclick="ToggleFreeze">
             <MudIcon Icon="@(_freeze ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)" Class="cpi-btn-icon"/>@(_freeze ? "取消冻结" : "冻结表头")
         </button>
-        <span class="cpi-topbar-spacer"></span>
         <div class="cpi-picker-group">
             <input class="cpi-cell cpi-edit cpi-picker-client cpi-lookup" placeholder="选择客户编号" @bind="_productClientNo" @bind:event="oninput" @onkeydown="OnProductKey" @onblur="@(() => LoadProductsAsync(true))"/>
             <label>选择产品信息</label>
@@ -94,16 +93,6 @@
                 <td colspan="4" class="cpi-label">INVOICE NO.:</td>
                 <td colspan="6">
                     <input class="cpi-cell cpi-edit" placeholder="INVOICE NO" value="@_header.INVOICE_NO" @oninput="OnInvoiceInput"/>
-                    @if (IsDerivedDoc && SourcePiLinks.Count > 0)
-                    {
-                        <div class="cpi-source-pi">
-                            来源客户PI：
-                            @foreach (var src in SourcePiLinks)
-                            {
-                                <a href="@($"/contract-pi/{src.Guid}")" @onclick:preventDefault @onclick="@(() => OpenSourcePi(src.Guid))">@src.Label</a>
-                            }
-                        </div>
-                    }
                 </td>
             </tr>
             <tr class="cpi-stick cpi-stick-6">
@@ -226,9 +215,25 @@
                 </tr>
                 <tr @key="@(line.Uid + "-d")">
                     <td colspan="1" class="cpi-label">Notes:</td>
-                    <td colspan="24">
+                    <td colspan="@(IsDerivedDoc ? 14 : 24)">
                         <input class="cpi-cell cpi-edit" placeholder="Notes" @bind="_lines[idx].Notes" @bind:event="oninput"/>
                     </td>
+                    @if (IsDerivedDoc)
+                    {
+                        <td colspan="10" class="cpi-line-source">
+                            @if (!string.IsNullOrWhiteSpace(line.SourceInvoice))
+                            {
+                                @if (!string.IsNullOrWhiteSpace(line.SourceGuid))
+                                {
+                                    <a href="@($"/contract-pi/{line.SourceGuid}")" @onclick:preventDefault @onclick="@(() => OpenSourcePi(line.SourceGuid!))">PI：@line.SourceInvoice</a>
+                                }
+                                else
+                                {
+                                    <span>PI：@line.SourceInvoice</span>
+                                }
+                            }
+                        </td>
+                    }
                     <td colspan="2" class="cpi-center">
                         <button type="button" class="cpi-btn cpi-btn-del" @onclick="() => RemoveLine(idx)">删除此行</button>
                     </td>
@@ -307,14 +312,14 @@
                 <tr>
                     <td colspan="18" class="cpi-bank">@_company.Bank2</td>
                     <td colspan="4" class="cpi-pay-cell">
-                        <div class="cpi-pay-full">
+                        <div class="cpi-pay-full @(_paymentLocked ? "cpi-pay-locked" : null)">
                             @SelectedPaymentDisplay
                             @if (string.IsNullOrWhiteSpace(_header.var3))
                             {
                                 <span class="cpi-req">*</span>
                             }
                         </div>
-                        <select class="cpi-pay-ghost" value="@_header.var3" title="@SelectedPaymentDisplay" @onchange="OnPaymentNative">
+                        <select class="cpi-pay-ghost" value="@_header.var3" title="@SelectedPaymentDisplay" disabled="@_paymentLocked" @onchange="OnPaymentNative">
                             <option value="">请选择付款方式</option>
                             @foreach (var p in PaymentOptions)
                             {
@@ -333,7 +338,10 @@
                     <td colspan="18" class="cpi-bank">@_company.Bank1</td>
                     <td colspan="2" class="cpi-right">DEPOSIT DUE AT TIME OF ORDER</td>
                     <td colspan="2">
-                        <input class="cpi-cell cpi-edit cpi-center" value="@_header.Payment_ratio" @onchange="OnNativeRatio"/>
+                        <input class="cpi-cell cpi-center @(_paymentLocked ? null : "cpi-edit")"
+                               value="@_header.Payment_ratio"
+                               readonly="@_paymentLocked"
+                               @onchange="OnNativeRatio"/>
                     </td>
                     <td colspan="2" class="cpi-center">%</td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
@@ -342,14 +350,14 @@
                 <tr>
                     <td colspan="18" class="cpi-bank">@_company.Bank2</td>
                     <td colspan="6" class="cpi-pay-cell">
-                        <div class="cpi-pay-full">
+                        <div class="cpi-pay-full @(_paymentLocked ? "cpi-pay-locked" : null)">
                             @SelectedPaymentDisplay
                             @if (string.IsNullOrWhiteSpace(_header.var3))
                             {
                                 <span class="cpi-req">*</span>
                             }
                         </div>
-                        <select class="cpi-pay-ghost" value="@_header.var3" title="@SelectedPaymentDisplay" @onchange="OnPaymentNative">
+                        <select class="cpi-pay-ghost" value="@_header.var3" title="@SelectedPaymentDisplay" disabled="@_paymentLocked" @onchange="OnPaymentNative">
                             <option value="">请选择付款方式</option>
                             @foreach (var p in PaymentOptions)
                             {
@@ -377,15 +385,34 @@
                 <td colspan="18" class="cpi-bank">@_company.Bank6</td>
                 <td colspan="10"></td>
             </tr>
-            <tr>
-                <td colspan="18" class="cpi-bank">@(IsJs ? "THE COUNTRY OF ORIGIN:CHINA" : "NOTE: OUR FULL UNABBREVIATED NAME MUST APPEAR IN THE WIRE PAPERWORK.")</td>
-                <td colspan="10"></td>
-            </tr>
-            <tr>
-                <td colspan="18" class="cpi-bank">NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP OR SCREENSHOT TO</td>
-                <td colspan="4" class="cpi-label">邮箱</td>
-                <td colspan="6"><input class="cpi-cell" readonly value="@_header.email"/></td>
-            </tr>
+            @if (IsJs)
+            {
+                <tr>
+                    <td colspan="18" class="cpi-bank">NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP or SCREENSHOT TO</td>
+                    <td colspan="4" class="cpi-label">邮箱</td>
+                    <td colspan="6"><input class="cpi-cell" readonly value="@_header.email"/></td>
+                </tr>
+                <tr>
+                    <td colspan="18" class="cpi-bank">NOTE: 5YR WARRANTY ON ALL MOTOR TYPES</td>
+                    <td colspan="10"></td>
+                </tr>
+                <tr>
+                    <td colspan="18" class="cpi-bank">THE COUNTRY OF ORIGIN:CHINA</td>
+                    <td colspan="10"></td>
+                </tr>
+            }
+            else
+            {
+                <tr>
+                    <td colspan="18" class="cpi-bank">NOTE: OUR FULL UNABBREVIATED NAME MUST APPEAR IN THE WIRE PAPERWORK.</td>
+                    <td colspan="10"></td>
+                </tr>
+                <tr>
+                    <td colspan="18" class="cpi-bank">NOTE: UPON PAYMENT, PLEASE EMAIL A COPY OF THE BANK SLIP OR SCREENSHOT TO</td>
+                    <td colspan="4" class="cpi-label">邮箱</td>
+                    <td colspan="6"><input class="cpi-cell" readonly value="@_header.email"/></td>
+                </tr>
+            }
             <tr>
                 <td colspan="4" class="cpi-label">Customer Signature：</td>
                 <td colspan="14"></td>
@@ -456,17 +483,16 @@
     .cpi-btn-save { background: #1d4ed8; }
     .cpi-btn-freeze { background: #F56C6C; }
     .cpi-btn-add { padding: 5px 12px; }
-    .cpi-btn-del { background: #409eff; padding: 2px 8px; font-size: 12px; }
+    .cpi-btn-del { background: #F56C6C; padding: 2px 8px; font-size: 12px; }
     .cpi-link { color: #409eff; white-space: nowrap; }
-    .cpi-topbar-spacer {
-        flex: 1 1 auto;
-        min-width: 12px;
-    }
     .cpi-picker-group {
         display: inline-flex;
         align-items: center;
+        align-self: center;
         gap: 8px;
         flex: 0 0 auto;
+        margin-left: auto;
+        margin-right: 10%;
         min-width: 0;
     }
     .cpi-picker-client { width: 120px; flex: 0 0 120px; }
@@ -516,7 +542,8 @@
         text-align: left;
         padding: 4px 6px !important;
         font-weight: 600;
-        white-space: normal !important;
+        /* 保留 SWIFT / TEL 之间的多空格，避免 HTML 折叠成一个空格 */
+        white-space: pre-wrap !important;
         overflow-wrap: anywhere;
         word-break: break-word;
         line-height: 1.4;
@@ -570,6 +597,18 @@
         opacity: 0;
         cursor: pointer;
         z-index: 2;
+    }
+    .cpi-pay-ghost:disabled {
+        cursor: default;
+        pointer-events: none;
+    }
+    .cpi-pay-full.cpi-pay-locked {
+        background: #f5f7fa;
+        color: #909399;
+        cursor: default;
+    }
+    .cpi-pay-full.cpi-pay-locked::after {
+        border-top-color: #c0c4cc;
     }
     .cpi-foot-warn { text-align: center; color: #c62828; }
     .cpi-discount-hint {
@@ -767,20 +806,21 @@
         opacity: 0;
     }
     .cpi-remark { color: mediumvioletred; }
-    .cpi-source-pi {
-        margin-top: 2px;
-        font-size: 11px;
+    .cpi-line-source {
+        font-size: 12px;
         line-height: 1.3;
-        color: #606266;
+        color: #F56C6C;
         white-space: normal;
+        word-break: break-all;
+        vertical-align: middle;
+        padding: 2px 6px;
     }
-    .cpi-source-pi a {
-        color: #409eff;
-        margin-right: 8px;
+    .cpi-line-source a {
+        color: #F56C6C;
         text-decoration: none;
         cursor: pointer;
     }
-    .cpi-source-pi a:hover { text-decoration: underline; }
+    .cpi-line-source a:hover { text-decoration: underline; }
     .cpi-frozen thead {
         position: sticky;
         top: 0;
@@ -824,6 +864,8 @@
     private double _shipFeeAmt;
     private bool _invoiceLocked;
     private bool _invoiceEdited;
+    /// <summary>客户付款方式已在系统维护时锁定定金/尾款，不允许手改。</summary>
+    private bool _paymentLocked;
     private string? _cleanFingerprint;
     private List<SelectOptionItem> _payMethods = [];
 
@@ -836,36 +878,20 @@
     private bool IsCustomsPi => IsBgRoute || CotractPiTypes.IsCustomsPi(_header.var6);
     private bool IsDerivedDoc => IsCustomerCi || IsCustomsPi;
 
-    private List<(string Guid, string Label)> SourcePiLinks
+    private static string? LineSource(string? lineValue, string? documentValue)
     {
-        get
-        {
-            var guids = SplitCsv(_header.var14);
-            if (guids.Count == 0) return [];
-            var labels = SplitCsv(_header.var13);
-            var list = new List<(string Guid, string Label)>(guids.Count);
-            for (var i = 0; i < guids.Count; i++)
-            {
-                var label = i < labels.Count && labels[i].Length > 0 ? labels[i] : guids[i];
-                list.Add((guids[i], label));
-            }
-            return list;
-        }
+        var line = (lineValue ?? "").Trim();
+        if (line.Length > 0) return line;
+        var doc = (documentValue ?? "").Trim();
+        if (doc.Length == 0 || doc.Contains(',')) return null;
+        return doc;
     }
 
-    private static List<string> SplitCsv(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return [];
-        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    private void OpenSourcePi(string guid)
+    private async Task OpenSourcePi(string guid)
     {
         guid = (guid ?? "").Trim();
         if (guid.Length == 0) return;
-        NavManager.NavigateTo($"/contract-pi/{guid}");
+        await TabNav.OpenAsync($"/contract-pi/{guid}");
     }
     private string Title => IsCustomerCi
         ? (IsCreate ? "生成客户CI" : "编辑客户CI")
@@ -1042,6 +1068,7 @@
         catch (InvalidOperationException)
         {
         }
+        await RefreshPaymentLockAsync();
         await LoadProductsAsync();
         await LoadShipToAsync(applyFirst: false);
         RefreshCompany();
@@ -1057,9 +1084,15 @@
             return;
         }
 
-        var rows = documentKind == "报关PI"
+        var (rows, error) = documentKind == "报关PI"
             ? await CotractPi.LoadCustomsPiDraftAsync(SourceGuids, CiOrderType)
             : await CotractPi.LoadCustomerCiDraftAsync(SourceGuids, CiOrderType);
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            Notify.Show(error, Severity.Warning);
+            NavManager.NavigateTo(backHref);
+            return;
+        }
         if (rows.Count == 0)
         {
             Notify.Show("未找到选中的客户PI", Severity.Warning);
@@ -1091,6 +1124,7 @@
         catch (InvalidOperationException)
         {
         }
+        await RefreshPaymentLockAsync();
         await LoadProductsAsync();
         if (!CotractPiTypes.CustomsUsesJstarShip(_header.var6))
             await LoadShipToAsync(applyFirst: false);
@@ -1154,6 +1188,8 @@
             materiaSpecs = x.materiaSpecs,
             materiaPowered = x.materiaPowered,
             Notes = x.Notes,
+            SourceInvoice = IsDerivedDoc ? LineSource(x.var15, x.var13) : null,
+            SourceGuid = IsDerivedDoc ? LineSource(x.var16, x.var14) : null,
             qty = x.qty,
             var7 = x.var7,
             currency_unit = x.currency_unit,
@@ -1316,6 +1352,7 @@
 
     private void OnNativeRatio(ChangeEventArgs e)
     {
+        if (_paymentLocked) return;
         if (TryNum(e, out var n)) OnRatioChanged(n);
     }
 
@@ -1356,7 +1393,7 @@
             if (await ApplyClientPaymentAsync(notify: false))
                 oks.Add("定金和付款方式");
             else
-                warns.Add("未获取到该客户的付款方式，请手动选择");
+                warns.Add("该客户尚未维护付款方式，请先到「客户付款方式」维护");
 
             if (!IsDerivedDoc)
                 await RefreshInvoiceNoAsync();
@@ -1592,6 +1629,7 @@
 
     private void OnRatioChanged(double value)
     {
+        if (_paymentLocked) return;
         _header.Payment_ratio = value;
         RecalcTotals();
     }
@@ -1620,11 +1658,13 @@
         var row = await ClientPay.GetActiveByClientNoAsync(_header.ClientNo);
         if (row is null)
         {
+            _paymentLocked = false;
             if (notify)
-                Notify.Show("未获取到该客户的付款方式，请手动选择", Severity.Warning);
+                Notify.Show("该客户尚未维护付款方式，请先到「客户付款方式」维护", Severity.Warning);
             return false;
         }
 
+        _paymentLocked = true;
         var desc = (row.BalancePayType?.Description ?? "").Trim();
         if (desc.Length > 0)
             _header.var3 = desc;
@@ -1640,8 +1680,23 @@
         return true;
     }
 
+    /// <summary>打开已有单据时：有维护则锁定定金/尾款，不覆盖单据已存值。</summary>
+    private async Task RefreshPaymentLockAsync()
+    {
+        var no = CotractPiTypes.NormalizeClientNo(_header.ClientNo ?? _billClientNo);
+        if (no.Length == 0)
+        {
+            _paymentLocked = false;
+            return;
+        }
+
+        var row = await ClientPay.GetActiveByClientNoAsync(no);
+        _paymentLocked = row is not null;
+    }
+
     private void OnPaymentNative(ChangeEventArgs e)
     {
+        if (_paymentLocked) return;
         _header.var3 = e.Value?.ToString() ?? "";
         RecalcTotals();
     }
@@ -1722,7 +1777,7 @@
         }
         else
         {
-            _header.INVOICE_NO = CotractPiTypes.WithJcInvoicePrefix(_header.INVOICE_NO);
+            _header.INVOICE_NO = CotractPiTypes.ApplyInvoicePrefix(_header.INVOICE_NO, _header.var6);
         }
 
         _invoiceEdited = false;
@@ -1850,9 +1905,15 @@
             return false;
         }
 
+        if (!await ApplyClientPaymentAsync(notify: false))
+        {
+            Notify.Show("该客户尚未维护付款方式，请先到「客户付款方式」维护后再保存", Severity.Error);
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(_header.var3))
         {
-            Notify.Show("请选择付款方式", Severity.Warning);
+            Notify.Show("付款方式为空，请先到「客户付款方式」完善该客户资料", Severity.Error);
             return false;
         }
 

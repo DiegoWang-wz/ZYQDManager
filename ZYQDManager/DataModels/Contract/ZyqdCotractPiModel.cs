@@ -78,11 +78,13 @@ public class ZyqdCotractPiModel
     public string? var10 { get; set; }
     public string? var11 { get; set; }
     public string? var12 { get; set; }
-    /// <summary>来源客户PI发票号（展示用，不唯一）。客户PI保存时等于本单 INVOICE_NO。</summary>
+    /// <summary>整张单的来源客户PI发票号，多张用逗号分隔。客户PI保存时等于本单 INVOICE_NO。</summary>
     public string? var13 { get; set; }
-    /// <summary>来源客户PI DocumentGuid，多张用逗号分隔。</summary>
+    /// <summary>整张单的来源客户PI DocumentGuid，多张用逗号分隔。</summary>
     public string? var14 { get; set; }
+    /// <summary>本行物料来源客户PI发票号。</summary>
     public string? var15 { get; set; }
+    /// <summary>本行物料来源客户PI DocumentGuid。</summary>
     public string? var16 { get; set; }
     public string? var17 { get; set; }
     public string? var18 { get; set; }

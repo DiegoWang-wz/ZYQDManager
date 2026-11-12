@@ -77,7 +77,7 @@
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
                 @if (IsCustomerPi)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-pi/new">新建</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/contract-pi/new" Target="_blank">新建</MudButton>
                 }
                 else
                 {
@@ -142,20 +142,25 @@
                     {
                         <MudTd>
                             @{
-                                var srcLabel = (context.var13 ?? "").Trim();
-                                var srcGuid = FirstCsv(context.var14);
+                                var sources = SourceLinks(context);
                             }
-                            @if (srcGuid.Length > 0)
+                            @if (sources.Count == 0)
                             {
-                                <MudLink Href="@($"/contract-pi/{srcGuid}")">@(srcLabel.Length > 0 ? srcLabel : "打开来源")</MudLink>
-                            }
-                            else if (srcLabel.Length > 0)
-                            {
-                                @srcLabel
+                                <text>-</text>
                             }
                             else
                             {
-                                <text>-</text>
+                                var first = true;
+                                foreach (var src in sources)
+                                {
+                                    var link = src;
+                                    if (!first)
+                                    {
+                                        <span>、</span>
+                                    }
+                                    first = false;
+                                    <MudLink Href="@($"/contract-pi/{link.Guid}")" Target="_blank">@link.Label</MudLink>
+                                }
                             }
                         </MudTd>
                     }
@@ -183,7 +188,8 @@
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.Edit"
                                        Class="cpi-ops-btn"
-                                       Href="@EditHref(context)">编辑</MudButton>
+                                       Href="@EditHref(context)"
+                                       Target="_blank">编辑</MudButton>
                             @if (IsCustomerPi)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Secondary"
@@ -566,11 +572,25 @@
     private bool IsCustomsPi => _documentType == "报关PI";
     private bool ShowsSourcePi => _documentType is "报关PI" or "客户CI";
 
-    private static string FirstCsv(string? raw)
+    private static List<(string Guid, string Label)> SourceLinks(ZyqdCotractPiModel row)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return "";
-        var part = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return part.Length == 0 ? "" : part[0];
+        var guids = SplitCsv(row.var14);
+        var labels = SplitCsv(row.var13);
+        var list = new List<(string Guid, string Label)>(guids.Count);
+        for (var i = 0; i < guids.Count; i++)
+        {
+            var label = i < labels.Count && labels[i].Length > 0 ? labels[i] : "打开来源";
+            list.Add((guids[i], label));
+        }
+        return list;
+    }
+
+    private static List<string> SplitCsv(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return [];
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
     private bool IsPackingList => _documentType == "装箱单";
     private string OpsCellClass => IsCustomerPi || IsCustomsPi
@@ -771,58 +791,96 @@
         NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString(next)}", replace: true);
     }
 
-    private void OnRowClick(TableRowClickEventArgs<ZyqdCotractPiModel> args)
+    private async Task OnRowClick(TableRowClickEventArgs<ZyqdCotractPiModel> args)
     {
         if (IsPackingList || args.MouseEventArgs.Detail != 2 || args.Item is null) return;
         var guid = (args.Item.DocumentGuid ?? "").Trim();
         if (guid.Length == 0) return;
-        NavManager.NavigateTo(EditHref(args.Item));
+        await TabNav.OpenAsync(EditHref(args.Item));
     }
 
     private void ClearSelection() => _selected.Clear();
 
+    private List<ZyqdCotractPiModel> GenerateTargets(ZyqdCotractPiModel row)
+    {
+        var clicked = (row.DocumentGuid ?? "").Trim();
+        var selected = _selected
+            .Where(x => !string.IsNullOrWhiteSpace(x.DocumentGuid))
+            .GroupBy(x => x.DocumentGuid!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+        var useSelection = selected.Count > 1
+            && selected.Any(x => string.Equals((x.DocumentGuid ?? "").Trim(), clicked, StringComparison.OrdinalIgnoreCase));
+        if (!useSelection)
+            return clicked.Length == 0 ? [] : [row];
+
+        var order = _rows
+            .Select((item, index) => (Guid: (item.DocumentGuid ?? "").Trim(), index))
+            .Where(x => x.Guid.Length > 0)
+            .GroupBy(x => x.Guid, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().index, StringComparer.OrdinalIgnoreCase);
+        return selected
+            .OrderBy(x => order.TryGetValue((x.DocumentGuid ?? "").Trim(), out var index) ? index : int.MaxValue)
+            .ToList();
+    }
+
     private async Task OpenGenerateAsync(ZyqdCotractPiModel row)
     {
-        var guid = (row.DocumentGuid ?? "").Trim();
-        if (guid.Length == 0)
+        var targets = GenerateTargets(row);
+        if (targets.Count == 0)
         {
             Notify.Show("单据缺少编号，无法生成", Severity.Warning);
             return;
         }
 
+        var multi = targets.Count > 1;
+        if (multi)
+        {
+            var block = CotractPiTypes.CustomsMergeBlockReason(targets);
+            if (block != null)
+            {
+                Notify.Show(block, Severity.Warning);
+                return;
+            }
+        }
+
         var parameters = new DialogParameters<CotractGenerateKindDialog>
         {
-            { x => x.InvoiceNo, row.INVOICE_NO }
+            { x => x.InvoiceNo, targets[0].INVOICE_NO },
+            { x => x.InvoiceNos, targets.Select(x => x.INVOICE_NO ?? "").ToList() }
         };
         var options = new DialogOptions
         {
             CloseOnEscapeKey = true,
-            MaxWidth = MaxWidth.ExtraSmall,
+            MaxWidth = multi ? MaxWidth.Small : MaxWidth.ExtraSmall,
             FullWidth = true
         };
-        var dialog = await DialogService.ShowAsync<CotractGenerateKindDialog>("选择生成类型", parameters, options);
+        var dialog = await DialogService.ShowAsync<CotractGenerateKindDialog>(
+            multi ? "生成报关PI" : "选择生成类型", parameters, options);
         var result = await dialog.Result;
         if (result is null || result.Canceled || result.Data is not string kind || kind.Length == 0)
             return;
 
         if (kind == "报关PI")
         {
-            var type = Uri.EscapeDataString(CotractPiTypes.ToCustomsPiType(row.var6));
-            NavManager.NavigateTo($"/contract-bg/new?from={Uri.EscapeDataString(guid)}&type={type}");
+            var guids = string.Join(",", targets.Select(x => (x.DocumentGuid ?? "").Trim()));
+            var type = Uri.EscapeDataString(CotractPiTypes.ToCustomsPiType(targets[0].var6));
+            await TabNav.OpenAsync($"/contract-bg/new?from={Uri.EscapeDataString(guids)}&type={type}");
             return;
         }
 
         if (kind == "客户CI")
         {
-            var type = Uri.EscapeDataString(CotractPiTypes.ToCustomerCiType(row.var6));
-            NavManager.NavigateTo($"/contract-ci/new?from={Uri.EscapeDataString(guid)}&type={type}");
+            var guid = (targets[0].DocumentGuid ?? "").Trim();
+            var type = Uri.EscapeDataString(CotractPiTypes.ToCustomerCiType(targets[0].var6));
+            await TabNav.OpenAsync($"/contract-ci/new?from={Uri.EscapeDataString(guid)}&type={type}");
             return;
         }
 
         Notify.Show("未知的生成类型", Severity.Warning);
     }
 
-    private void GeneratePackingFromCustomsPi(ZyqdCotractPiModel row)
+    private async Task GeneratePackingFromCustomsPi(ZyqdCotractPiModel row)
     {
         var guid = (row.DocumentGuid ?? "").Trim();
         if (guid.Length == 0)
@@ -831,7 +889,7 @@
             return;
         }
 
-        NavManager.NavigateTo($"/contract-pk/new?from={Uri.EscapeDataString(guid)}");
+        await TabNav.OpenAsync($"/contract-pk/new?from={Uri.EscapeDataString(guid)}");
     }
 
     private async Task ReloadTableAsync(bool resetPage)

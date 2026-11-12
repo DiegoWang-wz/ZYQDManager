@@ -73,7 +73,8 @@
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
                 @if (_canManageReports)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/sir/new">新增</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="@(() => TabNav.OpenAsync("/sir/new"))">新增</MudButton>
                 }
                 @if (_isAdmin)
                 {
@@ -512,7 +513,7 @@
         var page = _table?.CurrentPage ?? _currentPage;
         var size = _table?.RowsPerPage > 0 ? _table.RowsPerPage : _rowsPerPage;
         PersistAsync(page, size);
-        NavManager.NavigateTo(EditHref(row));
+        await TabNav.OpenAsync(EditHref(row));
     }
 
     private void ClearSelection() => _selected.Clear();

@@ -61,6 +61,7 @@
                            Color="Color.Primary"
                            StartIcon="@Icons.Material.Filled.Add"
                            Href="@NewHref"
+                           Target="_blank"
                            Disabled="_batchEditMode">新建</MudButton>
             </div>
             <div class="qb-toolbar-right">
@@ -286,17 +287,20 @@
                                        StartIcon="@Icons.Material.Filled.Edit"
                                        Class="qb-ops-btn"
                                        Disabled="_batchEditMode"
-                                       Href="@EditHref(context)">编辑</MudButton>
+                                       Href="@EditHref(context)"
+                                       Target="_blank">编辑</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Filled.Visibility"
                                        Class="qb-ops-btn"
                                        Disabled="_batchEditMode"
-                                       Href="@DetailHref(context)">详情</MudButton>
+                                       Href="@DetailHref(context)"
+                                       Target="_blank">详情</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Filled.ContentCopy"
                                        Class="qb-ops-btn"
                                        Disabled="_batchEditMode"
-                                       Href="@CopyHref(context)">复制</MudButton>
+                                       Href="@CopyHref(context)"
+                                       Target="_blank">复制</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
                                        StartIcon="@Icons.Material.Filled.Delete"
                                        Class="qb-ops-btn"
@@ -773,11 +777,11 @@
 
     private void ClearSelection() => _selected.Clear();
 
-    private void OnRowClick(TableRowClickEventArgs<QuotationBaseListItemDto> args)
+    private async Task OnRowClick(TableRowClickEventArgs<QuotationBaseListItemDto> args)
     {
         if (_batchEditMode) return;
         if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
-        NavManager.NavigateTo(DetailHref(args.Item));
+        await TabNav.OpenAsync(DetailHref(args.Item));
     }
 
     private bool CanBatchEdit(QuotationBaseListItemDto row)

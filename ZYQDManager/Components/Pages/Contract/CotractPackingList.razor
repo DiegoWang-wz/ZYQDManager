@@ -84,7 +84,7 @@
                         </MudButton>
                     </ActivatorContent>
                     <ChildContent>
-                        <MudMenuItem Icon="@Icons.Material.Filled.EditNote" OnClick="GoBlankCreate">直接制作</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.EditNote" Href="/contract-pk/new" Target="_blank">直接制作</MudMenuItem>
                         <MudMenuItem Icon="@Icons.Material.Filled.LocalShipping" OnClick="GoCustomsPiForCreate">从报关PI生成</MudMenuItem>
                     </ChildContent>
                 </MudMenu>
@@ -411,18 +411,15 @@
     private static string EditHref(ZyqdCustomsAndPackingModel row)
         => $"/contract-pk/{Uri.EscapeDataString((row.DocumentGuid ?? "").Trim())}";
 
-    private void GoBlankCreate()
-        => NavManager.NavigateTo("/contract-pk/new");
-
     private void GoCustomsPiForCreate()
         => NavManager.NavigateTo($"/contract?type={Uri.EscapeDataString("报关PI")}&hint=generate");
 
-    private void OnRowClick(TableRowClickEventArgs<ZyqdCustomsAndPackingModel> args)
+    private async Task OnRowClick(TableRowClickEventArgs<ZyqdCustomsAndPackingModel> args)
     {
         if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
         var guid = (args.Item.DocumentGuid ?? "").Trim();
         if (guid.Length == 0) return;
-        NavManager.NavigateTo(EditHref(args.Item));
+        await TabNav.OpenAsync(EditHref(args.Item));
     }
 
     private Task OnKeyUp(KeyboardEventArgs e)

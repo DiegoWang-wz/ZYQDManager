@@ -264,19 +264,33 @@ public class CustomsAndPackingExcelService
         return t is "客户" or "生产" or "报关" ? t : "报关";
     }
 
-    public static string DownloadExcelName(ZyqdCustomsAndPackingModel main, string type)
+    /// <summary>目的国 客户名称 订单号 装箱单类型。多个 SAP 订单号用 + 连接。</summary>
+    public static string DownloadExcelName(ZyqdCustomsAndPackingModel main, IEnumerable<string?>? orderNos, string type)
     {
         type = NormalizeType(type);
+        var parts = new List<string>();
+        var country = Sanitize(main.Customer_destination_country);
         var client = Sanitize(main.ClientName);
-        var pi = Sanitize(main.PIcotract_code);
-        var baseName = client.Length > 0 ? client : "装箱单";
-        if (pi.Length > 0) baseName += "-" + pi;
-        return $"{baseName}-{type}.xlsx";
+        if (country.Length > 0) parts.Add(country);
+        if (client.Length > 0) parts.Add(client);
+
+        var orders = (orderNos ?? [])
+            .Append(main.SAP_order_NO)
+            .SelectMany(x => (x ?? "").Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(Sanitize)
+            .Where(x => x.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (orders.Count > 0)
+            parts.Add(string.Join("+", orders));
+
+        parts.Add(type + "装箱单");
+        return string.Join(" ", parts) + ".xlsx";
     }
 
-    public static string DownloadPdfName(ZyqdCustomsAndPackingModel main, string type)
+    public static string DownloadPdfName(ZyqdCustomsAndPackingModel main, IEnumerable<string?>? orderNos, string type)
     {
-        var name = DownloadExcelName(main, type);
+        var name = DownloadExcelName(main, orderNos, type);
         return name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
             ? name[..^5] + ".pdf"
             : name + ".pdf";

@@ -32,7 +32,8 @@
                               OnKeyUp="OnKeyUp"/>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="/quotation/new">新建</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="@(() => TabNav.OpenAsync("/quotation/new"))">新建</MudButton>
             </div>
             <div class="qe-toolbar-right">
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect" OnClick="ClearSelection" Disabled="_selected.Count == 0">取消选择</MudButton>
@@ -89,15 +90,18 @@
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.Edit"
                                        Class="qe-ops-btn"
-                                       Href="@EditHref(context)">编辑</MudButton>
+                                       Href="@EditHref(context)"
+                                       Target="_blank">编辑</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Filled.Visibility"
                                        Class="qe-ops-btn"
-                                       Href="@DetailHref(context)">详情</MudButton>
+                                       Href="@DetailHref(context)"
+                                       Target="_blank">详情</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text"
                                        StartIcon="@Icons.Material.Filled.ContentCopy"
                                        Class="qe-ops-btn"
-                                       Href="@CopyHref(context)">复制</MudButton>
+                                       Href="@CopyHref(context)"
+                                       Target="_blank">复制</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
                                        StartIcon="@Icons.Material.Filled.Delete"
                                        Class="qe-ops-btn"
@@ -354,10 +358,10 @@
     private static string DetailHref(QuotationListItemDto row) => $"/quotation/{row.Guid}/detail";
     private static string CopyHref(QuotationListItemDto row) => $"/quotation/{row.Guid}/copy";
 
-    private void OnRowClick(TableRowClickEventArgs<QuotationListItemDto> args)
+    private async Task OnRowClick(TableRowClickEventArgs<QuotationListItemDto> args)
     {
         if (args.MouseEventArgs.Detail != 2 || args.Item is null) return;
-        NavManager.NavigateTo(DetailHref(args.Item));
+        await TabNav.OpenAsync(DetailHref(args.Item));
     }
 
     private Task OnKeyUp(KeyboardEventArgs e)

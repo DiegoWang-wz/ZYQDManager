@@ -44,6 +44,7 @@ public class CotractPiService
                 INVOICE_NO = x.INVOICE_NO,
                 var13 = x.var13,
                 var14 = x.var14,
+                BILL_TO_FOB = x.BILL_TO_FOB,
                 BILL_TO_DATE = x.BILL_TO_DATE,
                 CreateTime = x.CreateTime,
                 CreatePerson = x.CreatePerson,
@@ -122,20 +123,20 @@ public class CotractPiService
         return list;
     }
 
-    public Task<List<ZyqdCotractPiModel>> LoadCustomerCiDraftAsync(
+    public async Task<(List<ZyqdCotractPiModel> Rows, string? Error)> LoadCustomerCiDraftAsync(
         string? sourceGuids, string? orderType, CancellationToken ct = default)
-        => LoadDerivedDraftAsync(sourceGuids, orderType, "客户CI", ct);
+        => await LoadDerivedDraftAsync(sourceGuids, orderType, "客户CI", ct);
 
-    public Task<List<ZyqdCotractPiModel>> LoadCustomsPiDraftAsync(
+    public async Task<(List<ZyqdCotractPiModel> Rows, string? Error)> LoadCustomsPiDraftAsync(
         string? sourceGuids, string? orderType, CancellationToken ct = default)
-        => LoadDerivedDraftAsync(sourceGuids, orderType, "报关PI", ct);
+        => await LoadDerivedDraftAsync(sourceGuids, orderType, "报关PI", ct);
 
-    public async Task<List<ZyqdCotractPiModel>> LoadDerivedDraftAsync(
+    public async Task<(List<ZyqdCotractPiModel> Rows, string? Error)> LoadDerivedDraftAsync(
         string? sourceGuids, string? orderType, string documentKind, CancellationToken ct = default)
     {
         var rows = await GetByGuidsAsync(sourceGuids, ct);
         if (rows.Count == 0)
-            return [];
+            return ([], null);
 
         var kind = (documentKind ?? "").Trim();
         var isCi = kind == "客户CI";
@@ -157,6 +158,13 @@ public class CotractPiService
             .Select(x => (x.INVOICE_NO ?? "").Trim())
             .Where(x => x.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase));
+        if (!isCi && unique.Count > 1)
+        {
+            var block = CotractPiTypes.CustomsMergeBlockReason(unique);
+            if (block != null)
+                return ([], block);
+        }
+
         var ship = unique.Sum(ParseFee);
         var insure = unique.Sum(x => x.Insurance_premium);
         var ratioExt = unique.Sum(x => x.Payment_ratio_Ext);
@@ -179,15 +187,38 @@ public class CotractPiService
                 excludeDocumentGuid: null,
                 ct);
         }
+        else if (!isCi && unique.Count > 1)
+        {
+            customsInvoice = CotractPiTypes.ApplyInvoicePrefix(unique[0].INVOICE_NO, targetType);
+        }
+
+        string? mergedPo = null;
+        if (!isCi && unique.Count > 1)
+        {
+            var pos = unique
+                .Select(x => (x.BILL_TO_PO_REF ?? "").Trim())
+                .Where(x => x.Length > 0)
+                .SelectMany(x => x.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (pos.Count > 0)
+                mergedPo = string.Join(",", pos);
+        }
 
         foreach (var row in rows)
         {
+            var lineInvoice = (row.INVOICE_NO ?? "").Trim();
+            var lineGuid = (row.DocumentGuid ?? "").Trim();
             row.Id = 0;
             row.DocumentGuid = null;
             row.var6 = targetType;
             row.var11 = isCi ? "客户CI" : "报关PI";
-            row.var13 = sourceInvoices.Length > 0 ? sourceInvoices : row.INVOICE_NO;
+            row.var13 = sourceInvoices.Length > 0 ? sourceInvoices : lineInvoice;
             row.var14 = sourceGuidCsv;
+            row.var15 = lineInvoice.Length > 0 ? lineInvoice : null;
+            row.var16 = lineGuid.Length > 0 ? lineGuid : null;
+            if (mergedPo != null)
+                row.BILL_TO_PO_REF = mergedPo;
             row.BILL_TO_DATE = today;
             row.var5 = today;
             row.var10 = ship.ToString("0.##");
@@ -200,15 +231,15 @@ public class CotractPiService
             if (!isCi)
             {
                 CotractPiTypes.ApplyCustomsPartyOverrides(row);
-                row.INVOICE_NO = customsInvoice ?? CotractPiTypes.WithJcInvoicePrefix(row.INVOICE_NO);
+                row.INVOICE_NO = customsInvoice ?? CotractPiTypes.ApplyInvoicePrefix(row.INVOICE_NO, targetType);
             }
             else
             {
-                row.INVOICE_NO = CotractPiTypes.WithJcInvoicePrefix(row.INVOICE_NO);
+                row.INVOICE_NO = CotractPiTypes.ApplyInvoicePrefix(row.INVOICE_NO, targetType);
             }
         }
 
-        return rows;
+        return (rows, null);
     }
 
     private static double ParseFee(ZyqdCotractPiModel x)
@@ -241,7 +272,7 @@ public class CotractPiService
     {
         clientNo = CotractPiTypes.NormalizeClientNo(clientNo);
         var name = CotractPiTypes.InvoiceNamePart(orderType, clientNameOld);
-        var prefix = CotractPiTypes.InvoicePrefix();
+        var prefix = CotractPiTypes.DocumentInvoicePrefix(orderType);
         var today = DateTime.Today;
         var year = today.ToString("yy");
         var md = today.ToString("MMdd");
@@ -389,6 +420,8 @@ public class CotractPiService
                 var12 = header.var12,
                 var13 = header.var13,
                 var14 = header.var14,
+                var15 = line.SourceInvoice,
+                var16 = line.SourceGuid,
                 ClientName_old = header.ClientName_old,
                 percent = header.percent,
                 Insurance_premium = header.Insurance_premium,

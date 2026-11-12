@@ -48,6 +48,7 @@ public class CotractPiExcelService
         var extra = Math.Max(0, rows.Count - 1) * 6;
         ApplyTradeFeeLayout(ws, extra, english, main.BILL_TO_FOB);
         WriteCompletion(ws, rows);
+        OmitEmptyRemarkRow(ws, extra, english, main, rows);
         ApplyPrintLayout(ws);
 
         using var ms = new MemoryStream();
@@ -64,7 +65,14 @@ public class CotractPiExcelService
 
     public static string DownloadName(ZyqdCotractPiModel main)
     {
-        var prefix = CotractPiTypes.IsCustomerCi(main.var6) ? "CI" : "PI";
+        // CI 仍用 CI；PI 区分客户PI / 报关PI
+        var kind = CotractPiTypes.DocumentKind(main.var6);
+        var prefix = kind switch
+        {
+            "客户CI" => "CI",
+            "报关PI" => "报关PI",
+            _ => "客户PI"
+        };
         var no = string.IsNullOrWhiteSpace(main.INVOICE_NO) ? prefix : main.INVOICE_NO.Trim();
         foreach (var c in Path.GetInvalidFileNameChars())
             no = no.Replace(c, '_');
@@ -354,6 +362,16 @@ public class CotractPiExcelService
         to.Style.Border.BottomBorderColor = from.Style.Border.BottomBorderColor;
     }
 
+    /// <summary>整体备注和预计完成时间都空，且这行没有运费时，不导出这一行。</summary>
+    private static void OmitEmptyRemarkRow(
+        IXLWorksheet ws, int extra, bool english, ZyqdCotractPiModel main, IReadOnlyList<ZyqdCotractPiModel> rows)
+    {
+        if (FirstText(main.var4).Length > 0) return;
+        if (CompletionText(rows).Length > 0) return;
+        if (CotractPiTypes.ResolveFeeVisibility(main.BILL_TO_FOB).Ship) return;
+        ws.Row((english ? 18 : 19) + extra).Hide();
+    }
+
     /// <summary>
     /// 模板 F19:J19 为合并单元格，和 Shipping_Fee 同行；明细插入后整行下移。
     /// 必须在清理运费之后写，否则清 J 列会把合并格内容一起清掉。
@@ -421,8 +439,8 @@ public class CotractPiExcelService
         page.AdjustTo(85);
         page.PagesWide = 1;
         page.PagesTall = 0;
-        page.Margins.Left = 0.1;
-        page.Margins.Right = 0.1;
+        page.Margins.Left = 1.0 / 2.54;
+        page.Margins.Right = 1.0 / 2.54;
         page.Margins.Top = 0.5;
         page.Margins.Bottom = 0.5;
         page.CenterHorizontally = true;
