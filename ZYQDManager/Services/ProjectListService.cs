@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ZYQDManager.DataDtos;
 using ZYQDManager.DataModels;
+using ZYQDManager.Utilities;
 
 namespace ZYQDManager.Services;
 
@@ -74,20 +75,32 @@ public class ProjectListService
             .ToListAsync(ct);
 
         var projectGuids = rows.Select(x => x.ProjectGuid).Distinct().ToList();
-        var pendingFlows = projectGuids.Count == 0
-            ? new List<ApprovalFlowModel>()
-            : await _db.ApprovalFlows.AsNoTracking()
-                .Where(f => projectGuids.Contains(f.ProjectGuid) && f.TodoStatus == "Pending")
-                .OrderByDescending(f => f.ActionTime)
+
+        // 待办一律读版本表：PendingEmpNo（指定人）/ PendingRole（角色节点）+ CurrentNode。
+        // 不再从 ApprovalFlow 的 Pending 流水里取 —— 那张表现在只记退回原因、审批备注这类特殊事项。
+        var versions = projectGuids.Count == 0
+            ? new List<ProjectVersionModel>()
+            : await _db.ProjectVersions.AsNoTracking()
+                .Where(v => projectGuids.Contains(v.ProjectGuid))
+                .OrderBy(v => v.Id)
                 .ToListAsync(ct);
 
-        var latestPending = pendingFlows
-            .GroupBy(f => f.ProjectGuid)
-            .ToDictionary(g => g.Key, g => g.First());
+        var latestVersion = versions
+            .GroupBy(v => v.ProjectGuid)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.Id).First());
+
+        // 当前待办人姓名：业务表只存工号，姓名从员工表批量取
+        var assigneeNames = await LoadEmpNamesAsync(
+            latestVersion.Values.Select(v => v.PendingEmpNo), ct);
 
         return rows.Select(x =>
         {
-            latestPending.TryGetValue(x.ProjectGuid, out var flow);
+            latestVersion.TryGetValue(x.ProjectGuid, out var ver);
+            var node = MotorNode.Normalize(ver?.CurrentNode ?? MotorNode.None);
+            var archived = ver is null
+                           || MotorFlow.Same(ver.Status, MotorFlow.VersionArchived)
+                           || node == MotorNode.Archived;
+
             return new ProjectListItemDto
             {
                 Id = x.Id,
@@ -104,8 +117,12 @@ public class ProjectListService
                 TimeToRequest = x.TimeToRequest,
                 CreateTime = x.CreateTime,
                 UpdateTime = x.UpdateTime,
-                CurrentAssigneeName = flow?.ToUserName ?? flow?.ToUserCode,
-                CurrentStepCode = flow?.StepCode
+                CurrentAssigneeName = archived
+                    ? null
+                    : (string.IsNullOrWhiteSpace(ver!.PendingEmpNo)
+                        ? MotorFlow.RoleName(ver.PendingRole)
+                        : LookupName(assigneeNames, ver.PendingEmpNo) ?? ver.PendingEmpNo),
+                CurrentStepCode = archived ? null : MotorNode.Title(node)
             };
         }).ToList();
     }
@@ -128,4 +145,33 @@ public class ProjectListService
 
         return await _db.SaveChangesAsync(ct);
     }
+
+    /// <summary>批量取「工号 → 姓名」，业务表只存工号，姓名统一从员工表取。</summary>
+    private async Task<Dictionary<string, string>> LoadEmpNamesAsync(
+        IEnumerable<string?> empNos, CancellationToken ct)
+    {
+        var keys = empNos
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (keys.Count == 0) return dict;
+
+        var rows = await _db.Employees.AsNoTracking()
+            .Where(x => keys.Contains(x.EmpNo))
+            .Select(x => new { x.EmpNo, x.EmpName })
+            .ToListAsync(ct);
+
+        foreach (var r in rows)
+        {
+            if (!string.IsNullOrWhiteSpace(r.EmpName))
+                dict[r.EmpNo] = r.EmpName!.Trim();
+        }
+        return dict;
+    }
+
+    private static string? LookupName(Dictionary<string, string> names, string? empNo)
+        => !string.IsNullOrWhiteSpace(empNo) && names.TryGetValue(empNo.Trim(), out var n) ? n : null;
 }

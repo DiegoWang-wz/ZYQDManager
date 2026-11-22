@@ -704,8 +704,11 @@
     {
         "超级管理员" => Color.Error,
         "管理员" => Color.Warning,
-        "业务员" => Color.Info,
-        _ => Color.Default,
+        "销售经理" => Color.Success,
+        "检测员" => Color.Tertiary,
+        "研发经理" => Color.Secondary,
+        "研发工程师" => Color.Primary,
+        _ => Color.Info,
     };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -730,6 +733,19 @@
             }
 
             _empNo = auth.EmpNo;
+
+            // 角色/权限以 JcCommonApi 为准：管理员刚在人员管理里改过角色时，
+            // 不必等对方重新登录就能看到正确角色（失败就沿用本地缓存）。
+            try
+            {
+                await Auth.RefreshPermissionsAsync();
+                auth = await Auth.GetStoredAsync() ?? auth;
+            }
+            catch
+            {
+                // 网络异常时保留本地缓存
+            }
+
             _roleText = RoleText(auth.Role, auth.EmpNo);
 
             var (ok, displayName, info, msg) = await UserInfo.GetAsync(_empNo);
@@ -898,12 +914,9 @@
         }
     }
 
-    private static string RoleText(string? role, string empNo)
-    {
-        if (string.Equals(empNo, "JcAdmin", StringComparison.OrdinalIgnoreCase))
-            return "超级管理员";
-        if (string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase))
-            return "管理员";
-        return "业务员";
-    }
+    /// <summary>
+    /// 角色文案统一走 <see cref="AppRoles.Display"/>：以前这里自己写了 if/else，
+    /// 只认 admin，其余全落到「业务员」，研发经理/工程师/检测员登录后都显示成业务员。
+    /// </summary>
+    private static string RoleText(string? role, string empNo) => AppRoles.Display(role, empNo);
 }

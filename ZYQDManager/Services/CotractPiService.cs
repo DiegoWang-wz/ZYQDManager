@@ -180,9 +180,10 @@ public class CotractPiService
         string? customsInvoice = null;
         if (!isCi && CotractPiTypes.IsJsConsignmentOrder(targetType))
         {
+            // 寄售报关 PI 名称段 = JS21(原客户 PI 的真实客户名)，由 InvoiceNamePart 动态拼接
             customsInvoice = await BuildInvoiceNoAsync(
                 rows[0].ClientNo,
-                CotractPiTypes.ConsignmentCustomsInvoiceName,
+                rows[0].ClientName,
                 targetType,
                 excludeDocumentGuid: null,
                 ct);

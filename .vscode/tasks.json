@@ -1,0 +1,110 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build: ZYQDManager (Debug)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/ZYQDManager/ZYQDManager.csproj",
+        "-c",
+        "Debug",
+        "--nologo"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "silent",
+        "clear": true
+      }
+    },
+    {
+      "label": "watch: ZYQDManager (Hot Reload)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "watch",
+        "--non-interactive",
+        "run",
+        "--launch-profile",
+        "http"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/ZYQDManager",
+        "env": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "ASPNETCORE_URLS": "http://localhost:5240"
+        }
+      },
+      "isBackground": true,
+      "dependsOn": "kill: ZYQDManager",
+      "dependsOrder": "sequence",
+      "problemMatcher": {
+        "owner": "dotnet-watch",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\s*(?:error|warning)\\s+([^\\s]+)\\s*:\\s*(.+)$",
+          "file": 1,
+          "message": 2
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "dotnet watch|Waiting for a file to change|Build started|正在生成|正在等待文件",
+          "endsPattern": "Now listening on:\\s+https?://|现在正在侦听"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "group": "watch"
+      }
+    },
+    {
+      "label": "kill: ZYQDManager",
+      "type": "process",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.vscode/scripts/stop-app.ps1"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "kill",
+        "clear": true,
+        "showReuseMessage": false
+      }
+    },
+    {
+      "label": "publish: ZYQDManager (Release)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "publish",
+        "${workspaceFolder}/ZYQDManager/ZYQDManager.csproj",
+        "-c",
+        "Release",
+        "-f",
+        "net9.0",
+        "--no-self-contained",
+        "-o",
+        "W:\\ZYQManger"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "clear": true
+      }
+    }
+  ]
+}

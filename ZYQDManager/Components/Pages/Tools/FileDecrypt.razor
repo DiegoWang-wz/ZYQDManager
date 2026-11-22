@@ -139,6 +139,13 @@
             await using var stream = _pending.OpenReadStream(MaxBytes);
             var (bytes, apiMsg) = await FileOp.DecryptUploadAsync(stream, _pending.Name);
 
+            var apiHasError = !string.IsNullOrWhiteSpace(apiMsg) &&
+                              (apiMsg.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                               apiMsg.Contains("拒绝", StringComparison.Ordinal) ||
+                               apiMsg.Contains("失败", StringComparison.Ordinal) ||
+                               apiMsg.Contains("无权限", StringComparison.Ordinal) ||
+                               apiMsg.Contains("denied", StringComparison.OrdinalIgnoreCase));
+
             var downloadName = BuildDownloadName(_pending.Name);
             await JS.InvokeVoidAsync(
                 "downloadFileFromBase64",
@@ -146,9 +153,18 @@
                 GuessContentType(downloadName),
                 Convert.ToBase64String(bytes));
 
-            _lastSeverity = Severity.Success;
-            _lastMsg = "解密完成，已开始下载。" + (string.IsNullOrWhiteSpace(apiMsg) ? "" : " 服务返回：" + apiMsg.Trim());
-            Notify.Show("解密完成", Severity.Success);
+            if (apiHasError)
+            {
+                _lastSeverity = Severity.Warning;
+                _lastMsg = "文件已下载，但解密服务返回错误：" + apiMsg.Trim() + "（下载的文件可能仍是加密状态）";
+                Notify.Show("解密服务返回错误", Severity.Warning);
+            }
+            else
+            {
+                _lastSeverity = Severity.Success;
+                _lastMsg = "解密完成，已开始下载。" + (string.IsNullOrWhiteSpace(apiMsg) ? "" : " 服务返回：" + apiMsg.Trim());
+                Notify.Show("解密完成", Severity.Success);
+            }
         }
         catch (Exception ex)
         {

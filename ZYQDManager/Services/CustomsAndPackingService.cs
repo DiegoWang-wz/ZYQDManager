@@ -516,6 +516,7 @@ public class CustomsAndPackingService
         {
             "ClientNo" => desc ? q.OrderByDescending(x => x.ClientNo) : q.OrderBy(x => x.ClientNo),
             "ClientName" => desc ? q.OrderByDescending(x => x.ClientName) : q.OrderBy(x => x.ClientName),
+            "Customer_destination_country" => desc ? q.OrderByDescending(x => x.Customer_destination_country) : q.OrderBy(x => x.Customer_destination_country),
             "PIcotract_code" => desc ? q.OrderByDescending(x => x.PIcotract_code) : q.OrderBy(x => x.PIcotract_code),
             "Person" => desc ? q.OrderByDescending(x => x.Person) : q.OrderBy(x => x.Person),
             "CreatePerson" => desc ? q.OrderByDescending(x => x.CreatePerson) : q.OrderBy(x => x.CreatePerson),

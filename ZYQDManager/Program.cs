@@ -159,10 +159,23 @@ builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 builder.Services.AddScoped<CentralUserInformationService>();
 builder.Services.AddScoped<CentralAuthService>();
 builder.Services.AddScoped<CentralUserManagementService>();
+// 角色判定：统一走 JcCommonApi（ZYQDManager 系统下的 Role），不再维护本地角色成员表
+builder.Services.AddScoped<AppRoleService>();
 builder.Services.AddScoped<UserCustomerAssignService>();
 builder.Services.AddScoped<AdminNotifyService>();
 builder.Services.AddScoped<ProjectListService>();
 builder.Services.AddScoped<MotorLxService>();
+// 项目模块：单据读写、流程流转、签字版落盘、Excel/PDF 导出
+builder.Services.AddScoped<MotorDocService>();
+builder.Services.AddScoped<MotorFlowService>();
+builder.Services.AddScoped<MotorPermissionService>();
+builder.Services.AddScoped<MotorSignFileService>();
+builder.Services.AddScoped<MotorImageService>();
+builder.Services.AddScoped<MotorSheetExportService>();
+// 研发工程师名录：跨库读 JcCommonApi 的 CommonApi.dbo.CentralUsers（按 rd_engineer + 部门过滤）
+builder.Services.AddScoped<RdEngineerDirectoryService>();
+// 通用人员名片：按工号查姓名 / 部门 / 岗位（列表悬停提示用，带 10 分钟缓存）
+builder.Services.AddScoped<UserDirectoryService>();
 builder.Services.AddScoped<FileOperationService>();
 builder.Services.AddScoped<CotractBaseService>();
 builder.Services.AddScoped<ClientPaymentService>();
@@ -296,5 +309,6 @@ app.MapGet("/api/db-test", async (IAppService appService, CancellationToken ct) 
     var result = await appService.GetDbStatusAsync(ct);
     return Results.Json(result);
 });
+
 
 app.Run();

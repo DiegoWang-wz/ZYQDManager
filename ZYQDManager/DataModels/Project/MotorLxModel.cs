@@ -11,6 +11,10 @@ public class MotorLxModel
     public DateTime? ForwardedAt { get; set; }
     public string? Status { get; set; }
 
+    /// <summary>提交时指定的研发工程师，立项单步骤完成的标志是 SubmitTime 非空。</summary>
+    public string? EngineerCode { get; set; }
+    public DateTime? SubmitTime { get; set; }
+
     public string? Customer { get; set; }
     public string? DemandPerson { get; set; }
     public string? CustomerPartCode { get; set; }
@@ -117,9 +121,7 @@ public class MotorLxModel
     public DateTime? CreateTime { get; set; }
     public DateTime? UpdateTime { get; set; }
     public string? CreatePersonCode { get; set; }
-    public string? CreatePersonName { get; set; }
     public string? UpdatePersonCode { get; set; }
-    public string? UpdatePersonName { get; set; }
     public string? Remark { get; set; }
     public string DeleteFlag { get; set; } = "";
     public DateTime? DeleteTime { get; set; }

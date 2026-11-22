@@ -13,6 +13,26 @@ public class MotorCrModel
     public string? SourceLxDocGuid { get; set; }
     public string? SourceGgDocGuid { get; set; }
 
+    /// <summary>研发经理审批（第一级）。</summary>
+    public string? ManagerCode { get; set; }
+    public DateTime? ManagerApproveTime { get; set; }
+
+    /// <summary>蒋经理审批（第二级）。</summary>
+    public string? JiangCode { get; set; }
+    public DateTime? JiangApproveTime { get; set; }
+
+    /// <summary>业务员回传的客户签字版文件。</summary>
+    public string? SignFileId { get; set; }
+    public string? SignFileName { get; set; }
+    public DateTime? SignUploadTime { get; set; }
+    public string? SignUploadPersonCode { get; set; }
+
+    /// <summary>沿用上一版本时不重走审批，为空表示本版本重新编制。</summary>
+    public string? InheritedFromVersion { get; set; }
+
+    /// <summary>同规格书：参数表/配件/包装/样品检验等扩展内容，序列化成 JSON 存一列。</summary>
+    public string? ExtraJson { get; set; }
+
     public string? Customer { get; set; }
     public string? DemandPerson { get; set; }
     public string? CustomerPartCode { get; set; }
@@ -196,9 +216,7 @@ public class MotorCrModel
     public DateTime? CreateTime { get; set; }
     public DateTime? UpdateTime { get; set; }
     public string? CreatePersonCode { get; set; }
-    public string? CreatePersonName { get; set; }
     public string? UpdatePersonCode { get; set; }
-    public string? UpdatePersonName { get; set; }
     public string DeleteFlag { get; set; } = "";
     public DateTime? DeleteTime { get; set; }
     public string? DeletePersonCode { get; set; }

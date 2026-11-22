@@ -107,7 +107,7 @@ public class CotractPiExcelService
         Set(ws, 4, 1, main.BILL_TO_info1); Set(ws, 4, 10, main.INVOICE_NO);
         Set(ws, 5, 1, main.BILL_TO_info3); SetDate(ws, 5, 10, main.BILL_TO_DATE);
         Set(ws, 6, 1, main.BILL_TO_info4);
-        Set(ws, 7, 1, main.SHIP_TO_info1); Set(ws, 6, 10, main.BILL_TO_PO_REF);
+        Set(ws, 7, 1, main.SHIP_TO_info1); SetText(ws, 6, 10, main.BILL_TO_PO_REF);
         Set(ws, 8, 1, main.SHIP_TO_info3);
         Set(ws, 9, 1, main.SHIP_TO_info4); Set(ws, 9, 9, main.BILL_TO_FOB);
 
@@ -126,7 +126,7 @@ public class CotractPiExcelService
             Set(ws, r + 1, 2, item.materialModel);
             var (first, last) = SplitSpecs(item.materiaSpecs);
             Set(ws, r + 2, 2, first);
-            Set(ws, r + 3, 2, last);
+            WriteSpecsLine(ws, r + 3, item, last);
             Set(ws, r + 4, 2, item.materiaPowered);
             Set(ws, r + 5, 2, item.Notes);
         }
@@ -151,7 +151,7 @@ public class CotractPiExcelService
         Set(ws, 5, 1, main.BILL_TO_info1); Set(ws, 5, 10, main.INVOICE_NO);
         Set(ws, 6, 1, main.BILL_TO_info3); SetDate(ws, 6, 10, main.BILL_TO_DATE);
         Set(ws, 7, 1, main.BILL_TO_info4);
-        Set(ws, 8, 1, main.SHIP_TO_info1); Set(ws, 7, 10, main.BILL_TO_PO_REF);
+        Set(ws, 8, 1, main.SHIP_TO_info1); SetText(ws, 7, 10, main.BILL_TO_PO_REF);
         Set(ws, 9, 1, main.SHIP_TO_info3);
         Set(ws, 10, 1, main.SHIP_TO_info4); Set(ws, 10, 9, main.BILL_TO_FOB);
 
@@ -170,7 +170,7 @@ public class CotractPiExcelService
             Set(ws, r + 1, 2, item.materialModel);
             var (first, last) = SplitSpecs(item.materiaSpecs);
             Set(ws, r + 2, 2, first);
-            Set(ws, r + 3, 2, last);
+            WriteSpecsLine(ws, r + 3, item, last);
             Set(ws, r + 4, 2, item.materiaPowered);
             Set(ws, r + 5, 2, item.Notes);
         }
@@ -527,6 +527,17 @@ public class CotractPiExcelService
     }
 
     /// <summary>
+    /// 强制按文本写入，避免像 222,111 这样的编号被 Set 的 double.TryParse 吞掉千分位逗号。
+    /// 用于 PO REF 这类「用户手填、含分隔符也属正常」的编号。
+    /// </summary>
+    private static void SetText(IXLWorksheet ws, int npoiRow, int npoiCol, string? value)
+    {
+        var cell = ws.Cell(npoiRow + 1, npoiCol + 1);
+        cell.Style.NumberFormat.Format = "@";
+        cell.SetValue((value ?? "").Trim());
+    }
+
+    /// <summary>
     /// 单价写入原价*折扣公式，金额引用单价格。单元格格式显示两位，点进去仍是原值和公式。
     /// </summary>
     private void WriteLineMoney(IXLWorksheet ws, int npoiRow, ZyqdCotractPiModel item, string curr)
@@ -703,6 +714,47 @@ public class CotractPiExcelService
 
     private static string FmtQty(double qty)
         => qty.ToString("0.##");
+
+    /// <summary>
+    /// 来源 PI 号：行级 var15 优先，否则整单 var13（多张逗号分隔时不取）。
+    /// 与编辑页 CotractPiEdit.LineSource 保持一致。
+    /// </summary>
+    private static string? SourceInvoiceOf(ZyqdCotractPiModel item)
+    {
+        var line = (item.var15 ?? "").Trim();
+        if (line.Length > 0) return line;
+        var doc = (item.var13 ?? "").Trim();
+        return doc.Length == 0 || doc.Contains(',') ? null : doc;
+    }
+
+    /// <summary>
+    /// 写 Specs 下方那一行：报关 PI / 客户 CI 且该行本为空时，显示来源客户 PI（PI: xxx）并靠右对齐；
+    /// 其余情况原样写入 Specs 折行。客户 PI 不写（其 var13 是本单号）。
+    /// </summary>
+    private static void WriteSpecsLine(
+        IXLWorksheet ws, int npoiRow, ZyqdCotractPiModel item, string? specsLastLine)
+    {
+        var last = specsLastLine ?? "";
+        var isSource = false;
+        var text = last;
+        if (last.Trim().Length == 0
+            && (CotractPiTypes.IsCustomerCi(item.var6) || CotractPiTypes.IsCustomsPi(item.var6)))
+        {
+            var source = SourceInvoiceOf(item);
+            if (!string.IsNullOrWhiteSpace(source))
+            {
+                text = "PI: " + source;
+                isSource = true;
+            }
+        }
+
+        Set(ws, npoiRow, 2, text);
+        if (isSource)
+        {
+            // 该格是横向合并格（如 C16:M16），取首格设右对齐，让 PI 号贴在右侧显示
+            ResolveCell(ws, npoiRow + 1, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        }
+    }
 
     private static (string First, string Last) SplitSpecs(string? specs)
     {

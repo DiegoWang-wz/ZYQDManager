@@ -12,6 +12,28 @@ public class MotorGgModel
     public string? Status { get; set; }
     public string? SourceLxDocGuid { get; set; }
 
+    /// <summary>研发经理审批人（通过后写入）。</summary>
+    public string? ApproverCode { get; set; }
+    public DateTime? ApproveTime { get; set; }
+
+    /// <summary>业务员回传的客户签字版文件（存文件服务返回的标识）。</summary>
+    public string? SignFileId { get; set; }
+    public string? SignFileName { get; set; }
+    public DateTime? SignUploadTime { get; set; }
+    public string? SignUploadPersonCode { get; set; }
+
+    /// <summary>
+    /// 新建版本时本单据是「沿用上一版本」的话，记录来源版本号（如 V1），此版本不重走审批；
+    /// 为空表示本版本重新填写，需要完整走一遍。
+    /// </summary>
+    public string? InheritedFromVersion { get; set; }
+
+    /// <summary>
+    /// 规格书里无法用固定列承载的内容（参数表、配件、包装、操作说明、变更履历等），
+    /// 由 <see cref="DataDtos.MotorDocExtra"/> 序列化成 JSON 后整体存这一列。
+    /// </summary>
+    public string? ExtraJson { get; set; }
+
     public string? Customer { get; set; }
     public string? DemandPerson { get; set; }
     public string? CustomerPartCode { get; set; }
@@ -143,9 +165,7 @@ public class MotorGgModel
     public DateTime? CreateTime { get; set; }
     public DateTime? UpdateTime { get; set; }
     public string? CreatePersonCode { get; set; }
-    public string? CreatePersonName { get; set; }
     public string? UpdatePersonCode { get; set; }
-    public string? UpdatePersonName { get; set; }
     public string DeleteFlag { get; set; } = "";
     public DateTime? DeleteTime { get; set; }
     public string? DeletePersonCode { get; set; }

@@ -16,6 +16,7 @@ public static class ListUiStateStore
         public const string CotractBase = "/contract-base";
         public const string CotractPacking = "/contract-pk";
         public const string Project = "/project-list";
+        public const string MotorProject = "/project";
     }
 
     public static PagedListUiState? Take(LastListReturnService store, string listKey)

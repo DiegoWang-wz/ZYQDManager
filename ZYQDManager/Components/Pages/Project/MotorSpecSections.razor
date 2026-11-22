@@ -1,0 +1,801 @@
+@* 规格书 / 承认书共用：一~七节（参数表、工况、配件、尺寸图、附件、包装、操作说明） *@
+@using ZYQDManager.DataDtos
+@inject MotorImageService Images
+
+<div class="msheet-lines">
+    <table class="msheet">
+        <colgroup>
+            <col style="width:16%"/>
+            <col style="width:16%"/>
+            <col style="width:21%"/>
+            <col style="width:23%"/>
+            <col style="width:24%"/>
+        </colgroup>
+        <tbody>
+        <tr><td colspan="5" class="msheet-sec">一、产品功性能要求及参数规格表 Product Functional - Performance Requirements &amp; Parameter Specification Sheet</td></tr>
+        <tr>
+            <td colspan="2" class="msheet-subsec msheet-center">参数名称 Parameter</td>
+            <td colspan="3" class="msheet-subsec msheet-center">参数说明 Parameter Description</td>
+        </tr>
+
+        <tr>
+            <td colspan="2" class="msheet-label">输入电压Input Voltage(V)</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in Voltages)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.InputVoltage, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.InputVoltage, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:180px" placeholder="其它电压"
+                           value="@G(MotorDocKeys.InputVoltage + "Other")" @onchange='e => S(MotorDocKeys.InputVoltage + "Other", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">额定扭矩Rated Torque(N.m)</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 1.2" value="@G(MotorDocKeys.RatedTorque)" @onchange='e => S(MotorDocKeys.RatedTorque, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">运行速度Speed(rpm&amp;cm/s)</td>
+            <td colspan="3">
+                <div class="msheet-inline">
+                    <span class="msheet-unit">出厂默认</span>
+                    <input class="msheet-input msheet-boxed" placeholder="28rpm" value="@G(MotorDocKeys.Speed)" @onchange='e => S(MotorDocKeys.Speed, e)'/>
+                    <span class="msheet-hint">factory default</span>
+                    <span class="msheet-unit">其它挡位</span>
+                    <input class="msheet-input msheet-boxed" placeholder="选填" value="@G("speedLevels")" @onchange='e => S("speedLevels", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">额定功率Rated Power(W)</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 120" value="@G(MotorDocKeys.RatedPower)" @onchange='e => S(MotorDocKeys.RatedPower, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">运行噪音Operation Noise Based On ISO3745(dBA)</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 37" value="@G(MotorDocKeys.Noise)" @onchange='e => S(MotorDocKeys.Noise, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">遥控频率Radio Frequency</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in RadioFreqs)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.RadioFrequency, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.RadioFrequency, o, e.Value is true)'/>@o</label>
+                    }
+                    <span class="msheet-unit">距离</span>
+                    <input class="msheet-input msheet-boxed" style="max-width:90px" placeholder="米"
+                           value="@G(MotorDocKeys.RfDistance)" @onchange='e => S(MotorDocKeys.RfDistance, e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">遥控协议Protocol</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in Protocols)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.Protocol, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.Protocol, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">遥控技术Radio Mode</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in RadioModes)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.RadioMode, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.RadioMode, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">RF信号 Smart Module signal receiving distance requirements</td>
+            <td colspan="3">
+                <div class="msheet-inline">
+                    <span class="msheet-unit">距离distance</span>
+                    <input class="msheet-input msheet-boxed" placeholder="米" value="@G(MotorDocKeys.RfDistance)" @onchange='e => S(MotorDocKeys.RfDistance, e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">智能模块Smart Module</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in SmartModules)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.SmartModule, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.SmartModule, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">功能 Function</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in Functions)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.Function, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.Function, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:220px" placeholder="其它说明"
+                           value="@G("functionOther")" @onchange='e => S("functionOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">输入电源Power Supply</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in PowerSupplies)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.PowerSupply, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.PowerSupply, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">内置锂电Internal Lithium Battery</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.InternalBattery, "是 Yes")"
+                                  @onchange='e => Toggle(MotorDocKeys.InternalBattery, "是 Yes", e.Value is true)'/>是 Yes</label>
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.InternalBattery, "否 No")"
+                                  @onchange='e => Toggle(MotorDocKeys.InternalBattery, "否 No", e.Value is true)'/>否 No</label>
+                    <input class="msheet-input msheet-boxed" style="max-width:90px" placeholder="节数 cell"
+                           value="@G("batteryCells")" @onchange='e => S("batteryCells", e)'/>
+                    <input class="msheet-input msheet-boxed" style="max-width:120px" placeholder="容量 mAh"
+                           value="@G("batteryMah")" @onchange='e => S("batteryMah", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">电池续航性能Battery Endurance Performance</td>
+            <td colspan="3">
+                <textarea class="msheet-input" placeholder="当输入电源包含 Battery 时填写"
+                          value="@G(MotorDocKeys.BatteryEndurance)" @onchange='e => S(MotorDocKeys.BatteryEndurance, e)'></textarea>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">电池类型Battery Type</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in BatteryTypes)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.BatteryType, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.BatteryType, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:180px" placeholder="其它电池"
+                           value="@G("batteryTypeOther")" @onchange='e => S("batteryTypeOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">电池额定容量Battery Rated Capacity</td>
+            <td colspan="3">
+                <div class="msheet-inline">
+                    <input class="msheet-input msheet-boxed" placeholder="2600" value="@G(MotorDocKeys.BatteryCapacity)" @onchange='e => S(MotorDocKeys.BatteryCapacity, e)'/>
+                    <span class="msheet-unit">mAh</span>
+                </div>
+            </td>
+        </tr>
+
+        <tr><td colspan="5" class="msheet-subsec">成品电机电池续航测试 Battery Endurance Test of Finished Motor</td></tr>
+        <tr>
+            <td colspan="2" class="msheet-label">负载Load</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 70% Rated Load；3.2kg" value="@G("batteryTestLoad")" @onchange='e => S("batteryTestLoad", e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">工作制Duty Cycle</td>
+            <td colspan="3"><input class="msheet-input" placeholder="上行 2 分钟，下降 2 分钟" value="@G("batteryTestDuty")" @onchange='e => S("batteryTestDuty", e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">运行高度Travel Height</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 2M" value="@G("batteryTestHeight")" @onchange='e => S("batteryTestHeight", e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">充电可使用次数Operation Cycles</td>
+            <td colspan="3">
+                <div class="msheet-inline">
+                    <input class="msheet-input msheet-boxed" placeholder="如 322" value="@G("batteryTestCycles")" @onchange='e => S("batteryTestCycles", e)'/>
+                    <span class="msheet-unit">Cycles 次</span>
+                </div>
+            </td>
+        </tr>
+
+        <tr>
+            <td colspan="2" class="msheet-label">充电方式Recharge port</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in RechargePorts)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.RechargePort, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.RechargePort, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">兼容QC协议快充Compatible with QC fast charge</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.FastCharge, "是 YES")"
+                                  @onchange='e => Toggle(MotorDocKeys.FastCharge, "是 YES", e.Value is true)'/>是 YES</label>
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.FastCharge, "否 No")"
+                                  @onchange='e => Toggle(MotorDocKeys.FastCharge, "否 No", e.Value is true)'/>否 No</label>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">行程头Motor Head</td>
+            <td colspan="3"><input class="msheet-input" placeholder="型号 / 供电接口" value="@G(MotorDocKeys.MotorHead)" @onchange='e => S(MotorDocKeys.MotorHead, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">输出轴Shaft</td>
+            <td colspan="3"><input class="msheet-input" placeholder="规格" value="@G(MotorDocKeys.Shaft)" @onchange='e => S(MotorDocKeys.Shaft, e)'/></td>
+        </tr>
+
+        <tr><td colspan="5" class="msheet-subsec">电机引出电线规格 Power Cord</td></tr>
+        <tr>
+            <td colspan="2" class="msheet-label">线材型号 / 规格</td>
+            <td colspan="3"><input class="msheet-input" placeholder="型号" value="@G(MotorDocKeys.Cord)" @onchange='e => S(MotorDocKeys.Cord, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">线材认证Cord Certified</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in CordCerts)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.CordCertified, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.CordCertified, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">线材颜色Color</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in CordColors)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.CordColor, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.CordColor, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:160px" placeholder="其它颜色"
+                           value="@G("cordColorOther")" @onchange='e => S("cordColorOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">线材类型Cord Type</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in CordTypes)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.CordType, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.CordType, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:160px" placeholder="其它类型"
+                           value="@G("cordTypeOther")" @onchange='e => S("cordTypeOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">线材是否带插头Cord plug</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.CordPlug, "With Plug 有")"
+                                  @onchange='e => Toggle(MotorDocKeys.CordPlug, "With Plug 有", e.Value is true)'/>With Plug 有</label>
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.CordPlug, "Without Plug 无")"
+                                  @onchange='e => Toggle(MotorDocKeys.CordPlug, "Without Plug 无", e.Value is true)'/>Without Plug 无</label>
+                    <input class="msheet-input msheet-boxed" style="max-width:260px" placeholder="有无特殊要求"
+                           value="@G("cordPlugOther")" @onchange='e => S("cordPlugOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">线材长度Cord Length</td>
+            <td colspan="3">
+                <div class="msheet-inline">
+                    <input class="msheet-input msheet-boxed" style="max-width:110px" placeholder="长度" value="@G(MotorDocKeys.CordLength)" @onchange='e => S(MotorDocKeys.CordLength, e)'/>
+                    <span class="msheet-unit">米 M</span>
+                    <input class="msheet-input msheet-boxed" placeholder="有无特殊要求" value="@G("cordLengthOther")" @onchange='e => S("cordLengthOther", e)'/>
+                </div>
+            </td>
+        </tr>
+
+        <tr>
+            <td colspan="2" class="msheet-label">外管Motor Tube</td>
+            <td colspan="3">
+                <div class="msheet-inline">
+                    <span class="msheet-unit">直径</span>
+                    <input class="msheet-input msheet-boxed" style="max-width:80px" placeholder="25" value="@G("tubeDiameter")" @onchange='e => S("tubeDiameter", e)'/>
+                    <span class="msheet-unit">mm，颜色</span>
+                    <input class="msheet-input msheet-boxed" style="max-width:90px" placeholder="白" value="@G("tubeColor")" @onchange='e => S("tubeColor", e)'/>
+                    <span class="msheet-unit">长度限制</span>
+                    <input class="msheet-input msheet-boxed" style="max-width:90px" placeholder="585" value="@G("tubeLengthLimit")" @onchange='e => S("tubeLengthLimit", e)'/>
+                    <span class="msheet-unit">mm</span>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">长度Motor Length(MM)</td>
+            <td colspan="3"><input class="msheet-input" placeholder="mm" value="@G(MotorDocKeys.MotorLength)" @onchange='e => S(MotorDocKeys.MotorLength, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">产品重量Motor Weight(KG)</td>
+            <td colspan="3"><input class="msheet-input" placeholder="kg" value="@G(MotorDocKeys.MotorWeight)" @onchange='e => S(MotorDocKeys.MotorWeight, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">持续运行时间Protection time of continuous operation</td>
+            <td colspan="3">
+                <textarea class="msheet-input" placeholder="最大连续运行时间，超过后自动停止"
+                          value="@G(MotorDocKeys.ProtectionTime)" @onchange='e => S(MotorDocKeys.ProtectionTime, e)'></textarea>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">产品应用场合Application Occasions</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in Applications)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.Applications, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.Applications, o, e.Value is true)'/>@o</label>
+                    }
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">丝印或镭雕图纸 Surface printing drawing</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.SurfacePrint, "有 YES")"
+                                  @onchange='e => Toggle(MotorDocKeys.SurfacePrint, "有 YES", e.Value is true)'/>有 YES</label>
+                    <label><input type="checkbox" checked="@Has(MotorDocKeys.SurfacePrint, "无 None")"
+                                  @onchange='e => Toggle(MotorDocKeys.SurfacePrint, "无 None", e.Value is true)'/>无 None</label>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">认证要求Certification Requirements</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in Certifications)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.Certification, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.Certification, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:200px" placeholder="其它（注明具体要求）"
+                           value="@G("certificationOther")" @onchange='e => S("certificationOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">质保期限Warranty Period</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 3 年" value="@G(MotorDocKeys.Warranty)" @onchange='e => S(MotorDocKeys.Warranty, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">产品特殊功能Special function</td>
+            <td colspan="3"><textarea class="msheet-input" value="@G(MotorDocKeys.SpecialFunction)" @onchange='e => S(MotorDocKeys.SpecialFunction, e)'></textarea></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">客户特殊要求OtherRequirement</td>
+            <td colspan="3"><textarea class="msheet-input" value="@G(MotorDocKeys.OtherRequirement)" @onchange='e => S(MotorDocKeys.OtherRequirement, e)'></textarea></td>
+        </tr>
+
+        <tr><td colspan="5" class="msheet-sec">二、产品使用工况 Product Operating Conditions</td></tr>
+        <tr>
+            <td colspan="2" class="msheet-subsec msheet-center">参数名称 Parameter</td>
+            <td colspan="3" class="msheet-subsec msheet-center">参数说明 Parameter Description</td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">使用环境Application</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in UsageEnvs)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.UsageEnv, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.UsageEnv, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:240px" placeholder="注明具体环境"
+                           value="@G("usageOther")" @onchange='e => S("usageOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">IP等级IP Degree</td>
+            <td colspan="3">
+                <div class="msheet-chk">
+                    @foreach (var o in IpLevels)
+                    {
+                        <label><input type="checkbox" checked="@Has(MotorDocKeys.IpDegree, o)"
+                                      @onchange='e => Toggle(MotorDocKeys.IpDegree, o, e.Value is true)'/>@o</label>
+                    }
+                    <input class="msheet-input msheet-boxed" style="max-width:180px" placeholder="其它等级"
+                           value="@G("ipOther")" @onchange='e => S("ipOther", e)'/>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">工作温度 Working Temperature</td>
+            <td colspan="3"><input class="msheet-input" placeholder="如 -10℃ ~ +55℃" value="@G(MotorDocKeys.WorkingTemp)" @onchange='e => S(MotorDocKeys.WorkingTemp, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">静电防护等级 ESD Protection Level</td>
+            <td colspan="3"><input class="msheet-input" value="@G(MotorDocKeys.Esd)" @onchange='e => S(MotorDocKeys.Esd, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">客户配套件 customer matching parts</td>
+            <td colspan="3"><input class="msheet-input" value="@G(MotorDocKeys.CustomerParts)" @onchange='e => S(MotorDocKeys.CustomerParts, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">客户组装接口尺寸 Customer assembly interface dimensions</td>
+            <td colspan="3"><input class="msheet-input" placeholder="可在第四部分附图" value="@G(MotorDocKeys.InterfaceDim)" @onchange='e => S(MotorDocKeys.InterfaceDim, e)'/></td>
+        </tr>
+        <tr>
+            <td colspan="2" class="msheet-label">客户使用载荷 Customer usage load</td>
+            <td colspan="3"><input class="msheet-input" value="@G(MotorDocKeys.CustomerLoad)" @onchange='e => S(MotorDocKeys.CustomerLoad, e)'/></td>
+        </tr>
+
+        <tr><td colspan="5" class="msheet-sec">三、选配配件 Optional Accessories</td></tr>
+        <tr>
+            <td class="msheet-subsec msheet-center">序号 No.</td>
+            <td class="msheet-subsec msheet-center">零件 Component</td>
+            <td class="msheet-subsec msheet-center">型号 Type</td>
+            <td class="msheet-subsec msheet-center">示意图 Ref.Photo</td>
+            <td class="msheet-subsec msheet-center">备注 Remark</td>
+        </tr>
+        @for (var i = 0; i < Extra.Accessories.Count; i++)
+        {
+            var idx = i;
+            var row = Extra.Accessories[idx];
+            <tr>
+                <td class="msheet-idx">@((idx + 1).ToString("00"))</td>
+                <td class="msheet-label">@row.Name</td>
+                <td><input class="msheet-input" value="@row.Type" @onchange='e => row.Type = e.Value?.ToString()'/></td>
+                <td>
+                    @if (string.IsNullOrWhiteSpace(row.Photo))
+                    {
+                        if (Editable)
+                        {
+                            <label class="msheet-img msheet-img-upload" title="点击上传示意图">
+                                <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Style="font-size:14px"/>上传
+                                <InputFile OnChange="e => UploadImageAsync(e, v => row.Photo = v)" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="display:none"/>
+                            </label>
+                        }
+                    }
+                    else
+                    {
+                        <div class="msheet-img-preview">
+                            <LegacyRemoteImg Path="@row.Photo" CssClass="msheet-img-thumb"/>
+                            @if (Editable)
+                            {
+                                <button type="button" class="msheet-img-remove" title="删除图片"
+                                        @onclick="() => RemoveImage(row.Photo, v => row.Photo = v)">
+                                    <MudIcon Icon="@Icons.Material.Filled.Close" Style="font-size:13px"/>
+                                </button>
+                            }
+                        </div>
+                    }
+                </td>
+                <td><input class="msheet-input" value="@row.Remark" @onchange='e => row.Remark = e.Value?.ToString()'/></td>
+            </tr>
+        }
+
+        <tr><td colspan="5" class="msheet-sec">四、产品尺寸图 Product Dimension Drawing</td></tr>
+        <tr>
+            <td colspan="5" class="msheet-label">外形尺寸图 Overall Dimension Drawing</td>
+        </tr>
+        @{
+            var overall = G(MotorDocKeys.OverallDrawing);
+        }
+        <tr><td colspan="5">
+            @if (string.IsNullOrWhiteSpace(overall))
+            {
+                if (Editable)
+                {
+                    <label class="msheet-img msheet-img-upload" style="min-height:150px" title="点击上传外形尺寸图">
+                        <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Style="font-size:18px"/>外形尺寸图（点击上传）
+                        <InputFile OnChange="e => UploadImageAsync(e, v => SetValue(MotorDocKeys.OverallDrawing, v))" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="display:none"/>
+                    </label>
+                }
+            }
+            else
+            {
+                <div class="msheet-img-preview" style="min-height:150px">
+                    <LegacyRemoteImg Path="@overall" CssClass="msheet-img-thumb"/>
+                    @if (Editable)
+                    {
+                        <button type="button" class="msheet-img-remove" title="删除图片"
+                                @onclick="() => RemoveImage(overall, v => SetValue(MotorDocKeys.OverallDrawing, v))">
+                            <MudIcon Icon="@Icons.Material.Filled.Close" Style="font-size:13px"/>
+                        </button>
+                    }
+                </div>
+            }
+        </td></tr>
+        <tr>
+            <td colspan="5" class="msheet-label">电控系统图Electrical Control System Diagram</td>
+        </tr>
+        @{
+            var control = G(MotorDocKeys.ControlDiagram);
+        }
+        <tr><td colspan="5">
+            @if (string.IsNullOrWhiteSpace(control))
+            {
+                if (Editable)
+                {
+                    <label class="msheet-img msheet-img-upload" style="min-height:130px" title="点击上传电控系统图">
+                        <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Style="font-size:18px"/>电控系统图（点击上传）
+                        <InputFile OnChange="e => UploadImageAsync(e, v => SetValue(MotorDocKeys.ControlDiagram, v))" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="display:none"/>
+                    </label>
+                }
+            }
+            else
+            {
+                <div class="msheet-img-preview" style="min-height:130px">
+                    <LegacyRemoteImg Path="@control" CssClass="msheet-img-thumb"/>
+                    @if (Editable)
+                    {
+                        <button type="button" class="msheet-img-remove" title="删除图片"
+                                @onclick="() => RemoveImage(control, v => SetValue(MotorDocKeys.ControlDiagram, v))">
+                            <MudIcon Icon="@Icons.Material.Filled.Close" Style="font-size:13px"/>
+                        </button>
+                    }
+                </div>
+            }
+        </td></tr>
+
+        <tr><td colspan="5" class="msheet-sec">五、产品附件 Production Accessories</td></tr>
+        <tr>
+            <td class="msheet-subsec msheet-center">序号 No.</td>
+            <td class="msheet-subsec msheet-center">零件 Component</td>
+            <td class="msheet-subsec msheet-center">型号 Type</td>
+            <td class="msheet-subsec msheet-center">示意图 Ref.Photo</td>
+            <td class="msheet-subsec msheet-center">备注 Remark</td>
+        </tr>
+        @for (var i = 0; i < Extra.Attachments.Count; i++)
+        {
+            var idx = i;
+            var row = Extra.Attachments[idx];
+            <tr>
+                <td class="msheet-idx">@((idx + 1).ToString("00"))</td>
+                <td class="msheet-label">@row.Name</td>
+                <td><input class="msheet-input" value="@row.Type" @onchange='e => row.Type = e.Value?.ToString()'/></td>
+                <td>
+                    @if (string.IsNullOrWhiteSpace(row.Photo))
+                    {
+                        if (Editable)
+                        {
+                            <label class="msheet-img msheet-img-upload" style="min-height:60px" title="点击上传示意图">
+                                <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Style="font-size:14px"/>上传
+                                <InputFile OnChange="e => UploadImageAsync(e, v => row.Photo = v)" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="display:none"/>
+                            </label>
+                        }
+                    }
+                    else
+                    {
+                        <div class="msheet-img-preview">
+                            <LegacyRemoteImg Path="@row.Photo" CssClass="msheet-img-thumb"/>
+                            @if (Editable)
+                            {
+                                <button type="button" class="msheet-img-remove" title="删除图片"
+                                        @onclick="() => RemoveImage(row.Photo, v => row.Photo = v)">
+                                    <MudIcon Icon="@Icons.Material.Filled.Close" Style="font-size:13px"/>
+                                </button>
+                            }
+                        </div>
+                    }
+                </td>
+                <td><input class="msheet-input" value="@row.Remark" @onchange='e => row.Remark = e.Value?.ToString()'/></td>
+            </tr>
+        }
+
+        <tr><td colspan="5" class="msheet-sec">六、包装 Package</td></tr>
+        <tr>
+            <td class="msheet-subsec msheet-center">项目 Item</td>
+            <td class="msheet-subsec msheet-center">示意图 Drawing</td>
+            <td class="msheet-subsec msheet-center">尺寸 Size(mm)</td>
+            <td class="msheet-subsec msheet-center">材质 Material</td>
+            <td class="msheet-subsec msheet-center">内含数量 Package Qty</td>
+        </tr>
+        @foreach (var row in Extra.Packages)
+        {
+            <tr>
+                <td class="msheet-label">@row.Name</td>
+                <td>
+                    @if (string.IsNullOrWhiteSpace(row.Drawing))
+                    {
+                        if (Editable)
+                        {
+                            <label class="msheet-img msheet-img-upload" style="min-height:52px" title="点击上传包装示意图">
+                                <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Style="font-size:14px"/>上传
+                                <InputFile OnChange="e => UploadImageAsync(e, v => row.Drawing = v)" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="display:none"/>
+                            </label>
+                        }
+                    }
+                    else
+                    {
+                        <div class="msheet-img-preview">
+                            <LegacyRemoteImg Path="@row.Drawing" CssClass="msheet-img-thumb"/>
+                            @if (Editable)
+                            {
+                                <button type="button" class="msheet-img-remove" title="删除图片"
+                                        @onclick="() => RemoveImage(row.Drawing, v => row.Drawing = v)">
+                                    <MudIcon Icon="@Icons.Material.Filled.Close" Style="font-size:13px"/>
+                                </button>
+                            }
+                        </div>
+                    }
+                </td>
+                <td><input class="msheet-input" value="@row.Size" @onchange='e => row.Size = e.Value?.ToString()'/></td>
+                <td><input class="msheet-input" value="@row.Material" @onchange='e => row.Material = e.Value?.ToString()'/></td>
+                <td><input class="msheet-input" value="@row.Qty" @onchange='e => row.Qty = e.Value?.ToString()'/></td>
+            </tr>
+        }
+
+        <tr><td colspan="5" class="msheet-sec">七、产品操作说明 Product Operating Instructions</td></tr>
+        @foreach (var item in OpRows)
+        {
+            if (item.Section)
+            {
+                <tr><td colspan="5" class="msheet-subsec">@item.Label</td></tr>
+            }
+            else
+            {
+                var code = item.Code;
+                <tr>
+                    <td colspan="2" class="msheet-label">@item.Label</td>
+                    <td colspan="3">
+                        <textarea class="msheet-input" value="@O(code)" @onchange='e => SetOp(code, e)'></textarea>
+                    </td>
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MotorDocExtra Extra { get; set; } = MotorDocExtra.CreateDefault();
+
+    /// <summary>是否可编辑：只读页不渲染上传/删除按钮，没图的位置直接留空。</summary>
+    [Parameter] public bool Editable { get; set; } = true;
+
+    private string? G(string key) => Extra.Fields.TryGetValue(key, out var v) ? v : null;
+
+    private void S(string key, ChangeEventArgs e) => SetValue(key, e.Value?.ToString());
+
+    private void SetValue(string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) Extra.Fields.Remove(key);
+        else Extra.Fields[key] = value!;
+    }
+
+    /// <summary>图片先落盘，URL 写回 Extra；点页面「保存」后随 ExtraJson 一起入库。</summary>
+    private async Task UploadImageAsync(InputFileChangeEventArgs e, Action<string?> setUrl)
+    {
+        var file = e.File;
+        if (file is null) return;
+        if (file.Size > 10 * 1024 * 1024)
+        {
+            Notify.Show("图片不能超过 10MB", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            var url = await Images.SaveAsync(stream, file.Name);
+            setUrl(url);
+            Notify.Show("图片已上传，点「保存」后写入单据", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("图片上传失败：" + ex.Message, Severity.Error);
+        }
+    }
+
+    private void RemoveImage(string? url, Action<string?> clear)
+    {
+        Images.TryDelete(url);
+        clear(null);
+    }
+
+    private bool Has(string key, string option)
+    {
+        var v = G(key);
+        if (string.IsNullOrWhiteSpace(v)) return false;
+        return v.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Any(x => string.Equals(x, option, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void Toggle(string key, string option, bool on)
+    {
+        var set = (G(key) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (on) set.Add(option); else set.Remove(option);
+        SetValue(key, set.Count == 0 ? null : string.Join(",", set));
+    }
+
+    private string? O(string code) => Extra.Operations.TryGetValue(code, out var v) ? v : null;
+
+    private void SetOp(string code, ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(v)) Extra.Operations.Remove(code);
+        else Extra.Operations[code] = v!;
+    }
+
+    private static readonly string[] Voltages = ["5V", "8.4V", "12V", "24V", "110V", "230V", "100-240V"];
+    private static readonly string[] RadioFreqs = ["433.92 MHz", "447.x MHz", "868.x MHz"];
+    private static readonly string[] Protocols = ["Standard", "Customized"];
+    private static readonly string[] RadioModes = ["单向 Single-way", "双向 Bi-directional"];
+    private static readonly string[] SmartModules = ["None", "ZigBee 3.0", "Bluetooth", "Matter", "Wi-Fi", "Matter/Bluetooth"];
+    private static readonly string[] Functions = ["None", "RS485", "Dry Contact", "Others"];
+    private static readonly string[] PowerSupplies =
+    [
+        "AC 110V/60Hz", "AC 230V/50Hz", "AC 100-240V", "Adapter",
+        "Li-ion Battery 2 cells", "Li-ion Battery 3 cells", "Li-ion Battery 4 cells"
+    ];
+    private static readonly string[] BatteryTypes = ["锂电池 Li-ion", "镍氢电池 Ni-MH", "其它 Other"];
+    private static readonly string[] RechargePorts = ["None", "Micro-USB", "Type-C", "JST Plug"];
+    private static readonly string[] CordCerts = ["UL", "VDE", "CCC"];
+    private static readonly string[] CordColors = ["Black", "White", "Grey", "Others"];
+    private static readonly string[] CordTypes = ["2-core wire", "3-core wire", "4-core wire", "5-core wire", "Others"];
+    private static readonly string[] Applications =
+    [
+        "卷帘 Roller shade", "蜂巢帘 Honeycomb Shade", "香格里拉帘 Shangri-la Blinds",
+        "罗马帘 Roman Shade", "木百叶帘 Wooden Venetian Blinds", "斑马帘 Zebra Shade",
+        "遮阳篷 Ceiling Blinds", "铝百叶帘 Aluminum Venetian Blinds", "投影屏 Projection screen", "开合帘 Curtain"
+    ];
+    private static readonly string[] Certifications = ["CE", "UL", "KC", "FCC", "其它 Other"];
+    private static readonly string[] UsageEnvs = ["室内 Indoor", "室外 Outdoor", "特殊环境 Special"];
+    private static readonly string[] IpLevels = ["IP40", "IP44", "IP45", "IP66"];
+
+    private static readonly (string Code, string Label, bool Section)[] OpRows =
+    [
+        ("", "① 控制器按键与运行 Controller Keys & Operation", true),
+        ("keyHandler", "按键与通道定义 Key & Channel Definition", false),
+        ("opMode", "运行模式(点动/连续/自动) Operating Mode", false),
+        ("", "② 行程设置 Limit Setting", true),
+        ("direction", "换向(方向切换) Direction Reversal", false),
+        ("setLimits", "设置行程(上/下限位) Set Limits", false),
+        ("boundary", "边界行程/微调/校准 Boundary Limit / Fine Adjustment", false),
+        ("favorite", "最佳行程点(设/删/运行) Favorite Position", false),
+        ("", "③ 控制器对码 Controller Pairing", true),
+        ("addPairing", "添码(对码/配对) Add Controller", false),
+        ("delPairing", "删码(单删/全删) Delete Controller", false),
+        ("maxPaired", "配对存储上限 Max Paired Controllers", false),
+        ("", "④ 运行特性 Operating Features", true),
+        ("speedLevelsOp", "速度与挡位 Speed & Levels", false),
+        ("softStart", "缓启缓停/软启动 Soft Start / Soft Stop", false),
+        ("warehouse", "仓储模式/待机/低功耗 Warehouse Mode", false),
+        ("childLock", "童锁 Child Lock", false),
+        ("positionRun", "位置/百分比运行 Position / Percentage Run", false),
+        ("", "⑤ 遇阻与安全 Obstacle Detection & Safety", true),
+        ("obstacleBehavior", "遇阻行为 Obstacle Behavior", false),
+        ("obstacleSensitivity", "遇阻模式与灵敏度 Obstacle Mode & Sensitivity", false),
+        ("", "⑥ 智能接入 Smart Connectivity", true),
+        ("smartJoin", "智能配网/入网 Smart Commissioning", false),
+        ("networkReset", "重置网络/解绑 Network Reset / Unbind", false),
+        ("", "⑦ 状态提示 Status Indication", true),
+        ("ledCodes", "指示灯(LED 灯语) Indicator (LED Codes)", false),
+        ("lowBattery", "低压/充电提示 Low Battery / Charging Indication", false),
+        ("runProtection", "运行保护/断电记忆 Run Protection / Power-loss Memory", false),
+        ("", "⑧ 恢复与复位 Reset & Restore", true),
+        ("factoryReset", "恢复出厂(电机/控制器) Factory Reset", false),
+        ("setupButton", "设置键分级速查 Setup Button Quick Reference", false)
+    ];
+}

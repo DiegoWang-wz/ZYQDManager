@@ -70,7 +70,12 @@ public static class CotractPiTypes
     public const string JstarPartyName = "J-Star Motion Corporation";
     public const string JstarPartyAddress = "13617 Woodlawn Hills DrCedar Springs, Ml 49319";
     public const string JstarPartyTel = "Attn:Nelly Li/Tel: 6162168596";
-    public const string ConsignmentCustomsInvoiceName = "JS21(J-Star Motion Corporation)";
+    /// <summary>
+    /// 寄售订单（1300-2001）报关 PI 的名称段：JS21 固定，括号里取原客户 PI 的真实客户名，
+    /// 如 JS21(VERTILUX LIMITED)。这里只决定发票号名称段，J-star 的 Bill To/Ship To 仍由上面对方信息负责。
+    /// </summary>
+    public static string ConsignmentCustomsInvoiceName(string? clientName)
+        => $"JS21({(clientName ?? "").Trim()})";
 
     public static bool IsJsTradeOrder(string? orderType)
     {
@@ -172,29 +177,30 @@ public static class CotractPiTypes
     public static string InvoiceTitle(string? orderType)
         => IsCustomerCi(orderType) ? "COMMERCIAL INVOICE" : "PROFORMA INVOICE";
 
-    /// <summary>客户 PI 发票号前缀：标准订单 JC，贸易订单（1300） JCK，两种 1300-2001 为 JS。</summary>
+    /// <summary>
+    /// 客户 PI / 客户 CI 发票号前缀：标准订单、贸易订单（1300）为 JC，两种 1300-2001 为 JS。
+    /// 注意：JCK 是进出口模板类型（ResolveTemplateType），不是发票号前缀。
+    /// </summary>
     public static string InvoicePrefix(string? orderType)
     {
         var key = BaseOrderType(orderType);
         if (key == OrderTrade1300_2001 || key == OrderConsignment1300_2001)
             return "JS";
-        if (key == OrderTrade1300)
-            return "JCK";
         return "JC";
     }
 
-    /// <summary>客户 CI、报关 PI 发票号前缀一律 JC。客户 PI 仍按订单类型。</summary>
+    /// <summary>报关 PI 前缀一律 JC；客户 PI、客户 CI 按订单类型走 InvoicePrefix。</summary>
     public static string DocumentInvoicePrefix(string? orderType)
-        => IsCustomerCi(orderType) || IsCustomsPi(orderType) ? "JC" : InvoicePrefix(orderType);
+        => IsCustomsPi(orderType) ? "JC" : InvoicePrefix(orderType);
 
     public static string InvoiceNamePart(string? orderType, string? clientName)
     {
         if (IsCustomsPi(orderType) && IsJsConsignmentOrder(orderType))
-            return ConsignmentCustomsInvoiceName;
+            return ConsignmentCustomsInvoiceName(clientName);
         return (clientName ?? "").Trim();
     }
 
-    /// <summary>改发票号前缀，保留年份和后面的日期、名称。客户 CI、报关 PI 固定 JC。JCK 要先于 JC 判断。</summary>
+    /// <summary>改发票号前缀，保留年份和后面的日期、名称。报关 PI 固定 JC、其余按订单类型。JCK 要先于 JC 判断。</summary>
     public static string ApplyInvoicePrefix(string? invoiceNo, string? orderType)
     {
         var prefix = DocumentInvoicePrefix(orderType);

@@ -1,0 +1,958 @@
+@page "/project"
+@page "/project-list"
+@rendermode InteractiveServer
+@inject MotorLxService LxSvc
+@inject MotorFlowService FlowSvc
+@inject LastListReturnService LastListReturn
+@inject UserDirectoryService People
+
+<PageTitle>项目列表</PageTitle>
+
+<div class="motor-project-page">
+    <MudPaper Class="pa-3" Outlined="true">
+        <div class="mpl-toolbar-grid">
+            <div class="mpl-toolbar-left">
+                <MudSelect T="string"
+                           Value="_productType"
+                           ValueChanged="OnProductTypeChanged"
+                           Label="产品类型"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mpl-type-select">
+                    @foreach (var type in ProductTypes)
+                    {
+                        <MudSelectItem Value="@type">@type</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string"
+                           Value="_filterColumn"
+                           ValueChanged="OnFilterColumnChanged"
+                           Label="条件"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mpl-filter-select">
+                    @foreach (var field in MotorLxFilterColumns.All)
+                    {
+                        <MudSelectItem Value="@field.Value">@field.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_keyword"
+                              Label="内容"
+                              Placeholder="输入查询内容"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="mpl-filter-input"
+                              OnKeyUp="OnKeyUp"/>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="SearchAsync" Disabled="_busy">搜索</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearAsync" Disabled="_busy">清空</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           Href="/project/motor/lx/new" Target="_blank">新建</MudButton>
+            </div>
+            <div class="mpl-toolbar-right">
+                @if (_todoCount > 0)
+                {
+                    <span class="mpl-todo-badge" title="有 @_todoCount 个项目当前节点等你处理">
+                        <MudIcon Icon="@Icons.Material.Filled.AssignmentLate" Style="font-size:15px"/>
+                        我的待办 @_todoCount
+                    </span>
+                }
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Deselect"
+                           OnClick="ClearSelection" Disabled="_selected.Count == 0 || IsUnsupported">取消选择</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                           OnClick="DeleteSelectedAsync" Disabled="_selected.Count == 0 || _busy || IsUnsupported">删除</MudButton>
+            </div>
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="motor-project-table-wrap pa-0" Outlined="true">
+        @if (_ready)
+        {
+            <MudTable @ref="_table"
+                      T="MotorLxListDto"
+                      ServerData="LoadServerData"
+                      @bind-CurrentPage="_currentPage"
+                      RowsPerPage="@_rowsPerPage"
+                      Dense="true"
+                      Hover="true"
+                      Striped="true"
+                      Bordered="true"
+                      Loading="_busy"
+                      MultiSelection="true"
+                      SelectOnRowClick="false"
+                      @bind-SelectedItems="_selected"
+                      Breakpoint="Breakpoint.None"
+                      FixedHeader="true"
+                      SortMode="SortMode.Single"
+                      OnRowClick="OnRowClick"
+                      RowClassFunc="RowCssClass"
+                      Class="motor-project-table">
+                <HeaderContent>
+                    <MudTh Class="mpl-no-cell">序号</MudTh>
+                    <MudTh><MudTableSortLabel T="MotorLxListDto" SortLabel="Customer">客户</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="MotorLxListDto" SortLabel="CustomerPartCode">客户产品编号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="MotorLxListDto" SortLabel="MotorModelSpec">产品型号</MudTableSortLabel></MudTh>
+                    <MudTh>品名</MudTh>
+                    <MudTh Class="mpl-stage-cell">阶段</MudTh>
+                    <MudTh Class="mpl-pending-cell" title="当前流程停在谁那里处理">当前处理人</MudTh>
+                    <MudTh Class="mpl-owner-cell">负责人</MudTh>
+                    <MudTh Class="mpl-createtime-cell">
+                        <MudTableSortLabel T="MotorLxListDto" SortLabel="CreateTime" InitialDirection="SortDirection.Descending">创建时间</MudTableSortLabel>
+                    </MudTh>
+                    <MudTh Class="mpl-ops-cell">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="mpl-no-cell">@RowNo(context)</MudTd>
+                    <MudTd>@Dash(context.Customer)</MudTd>
+                    <MudTd>@Dash(context.CustomerPartCode)</MudTd>
+                    <MudTd>@Dash(context.MotorModelSpec)</MudTd>
+                    <MudTd>@Dash(context.Description)</MudTd>
+                    <MudTd Class="mpl-stage-cell">
+                        @* 与单据明细页 .mdsteps 同款圆点条，纯展示不可点；第四档为归档 *@
+                        <div class="mdsteps mpl-steps" title="@StageTip(context)">
+                            @for (var i = 0; i < StageLabels.Length; i++)
+                            {
+                                var idx = i;
+
+                                if (idx > 0)
+                                {
+                                    <span class="mdsteps-line @(StageLineOn(context, idx) ? "mdsteps-line-on" : null)"></span>
+                                }
+
+                                <span class="mdsteps-step @StageClass(context, idx)">
+                                    <span class="mdsteps-dot"></span>
+                                    <span class="mdsteps-label">@StageLabels[idx]</span>
+                                </span>
+                            }
+                        </div>
+                    </MudTd>
+                    <MudTd Class="mpl-pending-cell" title="@PendingTip(context)">@PendingDisplay(context)</MudTd>
+                    <MudTd Class="mpl-owner-cell" title="@OwnerTip(context)">@OwnerText(context)</MudTd>
+                    <MudTd Class="mpl-createtime-cell">@DateDisplay.Format(context.CreateTime, "-")</MudTd>
+                    <MudTd Class="mpl-ops-cell">
+                        <div class="mpl-ops-grid">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Article"
+                                       Class="mpl-ops-btn"
+                                       Disabled="_busy"
+                                       OnClick="@(() => OpenDetailAsync(context))">明细</MudButton>
+                        </div>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">@EmptyText</MudText>
+                </NoRecordsContent>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }"
+                                   RowsPerPageString="每页行数："
+                                   InfoFormat="显示第 {first_item} 到第 {last_item} 条，共 {all_items} 条"/>
+                </PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+</div>
+
+<style>
+    .motor-project-page {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .mpl-toolbar-grid {
+        display: grid;
+        grid-template-columns: 7fr 5fr;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .mpl-toolbar-left,
+    .mpl-toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+
+    .mpl-toolbar-left { justify-content: flex-start; }
+    .mpl-toolbar-right { justify-content: flex-end; }
+
+    .mpl-toolbar-left > *,
+    .mpl-toolbar-right > * { flex: 0 0 auto; }
+
+    .mpl-type-select { width: 140px; }
+    .mpl-filter-select { width: 140px; }
+    .mpl-filter-input { width: 200px; }
+    .mpl-filter-input .mud-input-control { width: 100%; margin-top: 0 !important; }
+
+    /* 我的待办：工具栏右侧计数徽标 */
+    .mpl-todo-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 15px;
+        border: 1px solid #f3bcbc;
+        background: #fdeeee;
+        color: #c0392b;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* 我的待办：整行淡红（覆盖斑马纹与 hover） */
+    .motor-project-table .mud-table-body tr.mpl-row-todo > td,
+    .motor-project-table .mud-table-body tr.mpl-row-todo.mud-table-row-striped > td {
+        background-color: #fdeeee !important;
+    }
+
+    .motor-project-table .mud-table-body tr.mpl-row-todo:hover > td {
+        background-color: #fbdcdc !important;
+    }
+
+    .motor-project-table .mud-table-body tr.mpl-row-todo > td:first-child {
+        box-shadow: inset 3px 0 0 #e74c3c;
+    }
+
+    @@media (max-width: 960px) {
+        .mpl-toolbar-grid { grid-template-columns: 1fr; }
+        .mpl-toolbar-right { justify-content: flex-start; }
+    }
+
+    .motor-project-table-wrap {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .motor-project-table {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .motor-project-table .mud-table-container {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: auto !important;
+    }
+
+    .motor-project-table .mud-table-pagination {
+        flex: 0 0 auto !important;
+        margin-top: auto;
+        border-top: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .motor-project-table .mud-table-head .mud-table-cell:not(.mpl-ops-cell):not(.mpl-createtime-cell):not(.mpl-no-cell):not(:first-child),
+    .motor-project-table .mud-table-body .mud-table-cell:not(.mpl-ops-cell):not(.mpl-createtime-cell):not(.mpl-no-cell):not(:first-child) {
+        white-space: nowrap;
+        min-width: 92px;
+        vertical-align: middle;
+    }
+
+    /* 左侧固定：勾选列 + 序号 */
+    .motor-project-table .mud-table-cell:first-child,
+    .motor-project-table .mud-table-cell.mpl-no-cell {
+        position: sticky;
+        z-index: 4;
+        box-sizing: border-box;
+        background-color: #fff !important;
+        vertical-align: middle !important;
+    }
+
+    .motor-project-table .mud-table-head .mud-table-cell:first-child,
+    .motor-project-table .mud-table-head .mud-table-cell.mpl-no-cell { z-index: 6; }
+
+    .motor-project-table .mud-table-cell:first-child {
+        left: 0;
+        width: 42px !important;
+        min-width: 42px !important;
+        max-width: 42px !important;
+        padding: 0 !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+    }
+
+    .motor-project-table .mud-table-cell:first-child .mud-input-control,
+    .motor-project-table .mud-table-cell:first-child .mud-checkbox {
+        margin: 0 auto !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .motor-project-table .mud-table-cell.mpl-no-cell {
+        left: 42px;
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        padding: 0 2px !important;
+        text-align: center;
+        border-right: 1px solid #e0e0e0;
+    }
+
+    /* 右侧固定：创建时间 | 操作 */
+    .motor-project-table .mud-table-cell.mpl-createtime-cell,
+    .motor-project-table .mud-table-cell.mpl-ops-cell {
+        position: sticky;
+        z-index: 4;
+        box-sizing: border-box;
+        vertical-align: middle;
+        overflow: hidden;
+        background-color: #fff !important;
+        white-space: nowrap;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .motor-project-table .mud-table-cell.mpl-ops-cell {
+        right: 0;
+        width: 96px;
+        min-width: 96px;
+        max-width: 96px;
+        padding: 4px 6px !important;
+    }
+
+    .motor-project-table .mud-table-cell.mpl-createtime-cell {
+        right: 96px;
+        width: 156px;
+        min-width: 156px;
+        max-width: 156px;
+        padding: 6px 8px !important;
+    }
+
+    /* 当前处理人：姓名 + （审批中/编写中）要完整显示，长名字允许换行 */
+    .motor-project-table .mud-table-cell.mpl-pending-cell {
+        width: 140px;
+        min-width: 140px;
+        max-width: 140px;
+        padding: 6px 8px !important;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        vertical-align: middle;
+    }
+
+    .motor-project-table .mud-table-cell.mpl-owner-cell {
+        width: 88px;
+        min-width: 88px;
+        max-width: 88px;
+        padding: 6px 8px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .motor-project-table .mud-table-head .mud-table-cell.mpl-createtime-cell,
+    .motor-project-table .mud-table-head .mud-table-cell.mpl-ops-cell {
+        z-index: 6;
+        background-color: #fff !important;
+    }
+
+    .motor-project-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell:first-child,
+    .motor-project-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.mpl-no-cell,
+    .motor-project-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.mpl-createtime-cell,
+    .motor-project-table.mud-table-striped .mud-table-body .mud-table-row:nth-of-type(odd) .mud-table-cell.mpl-ops-cell {
+        background-color: #f5f5f5 !important;
+    }
+
+    .motor-project-table .mud-table-body .mud-table-row:hover .mud-table-cell:first-child,
+    .motor-project-table .mud-table-body .mud-table-row:hover .mud-table-cell.mpl-no-cell,
+    .motor-project-table .mud-table-body .mud-table-row:hover .mud-table-cell.mpl-createtime-cell,
+    .motor-project-table .mud-table-body .mud-table-row:hover .mud-table-cell.mpl-ops-cell {
+        background-color: #eeeeee !important;
+    }
+
+    .mpl-ops-grid {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        width: 100%;
+    }
+
+    .mpl-ops-grid .mpl-ops-btn.mud-button-root {
+        width: auto;
+        flex: 0 0 auto;
+        min-width: auto !important;
+        height: 28px;
+        padding: 0 4px !important;
+        margin: 0;
+        font-size: 12px;
+        line-height: 28px;
+        white-space: nowrap;
+    }
+
+    .mpl-ops-grid .mpl-ops-btn .mud-button-label {
+        font-size: 12px !important;
+        white-space: nowrap !important;
+    }
+
+    .mpl-ops-grid .mpl-ops-btn .mud-icon-root {
+        font-size: 16px !important;
+        margin-right: 2px !important;
+        flex-shrink: 0;
+    }
+
+    /* ===== 阶段流程条（复用单据明细页 .mdsteps，表格行内紧凑版） ===== */
+    .motor-project-table .mud-table-cell.mpl-stage-cell {
+        width: 340px !important;
+        min-width: 340px !important;
+        max-width: 340px !important;
+        padding: 2px 10px !important;
+        vertical-align: middle;
+    }
+
+    /* .mdsteps 原样式是给明细页工具栏用的，这里把宽度和间距收回来 */
+    .mpl-steps {
+        width: auto;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .mpl-steps .mdsteps-step {
+        padding: 1px 3px;
+        font-size: 12px;
+        cursor: default;
+    }
+
+    /* 纯展示，不要鼠标悬停底色 */
+    .mpl-steps .mdsteps-step:hover,
+    .mpl-steps .mdsteps-step:hover:not(:disabled) {
+        background: none !important;
+    }
+
+    .mpl-steps .mdsteps-dot {
+        width: 8px;
+        height: 8px;
+    }
+
+    /* 还没生成的那一档，文字也跟着变灰（明细页是 disabled 按钮，效果一致） */
+    .mpl-steps .mdsteps-step.is-off { color: #c0c4cc; }
+
+    .mpl-steps .mdsteps-step.is-current .mdsteps-dot {
+        box-shadow: 0 0 0 2px #dbe7ff;
+    }
+
+    .mpl-steps .mdsteps-line {
+        width: 14px;
+        margin: 0 2px;
+    }
+
+    .motor-project-table .mud-table-body .mud-table-row {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private static readonly string[] ProductTypes = ["电机", "遥控器", "控制盒", "推杆"];
+
+    private MudTable<MotorLxListDto>? _table;
+    private bool _ready;
+    private bool _busy;
+    private string _productType = "电机";
+    private string _filterColumn = MotorLxFilterColumns.Customer;
+    private string? _keyword;
+    private List<MotorLxListDto> _rows = [];
+    private HashSet<MotorLxListDto> _selected = [];
+    private int _skip;
+    private int _total;
+    private int _currentPage;
+    private int _rowsPerPage = 20;
+
+    /// <summary>登录人工号 / 角色，用于「我的待办」判定。</summary>
+    private string? _myEmpNo;
+    private string? _myRole;
+    private int _todoCount;
+
+    /// <summary>当前页出现的工号 → 人员名片（姓名 / 部门 / 岗位），悬停提示用。</summary>
+    private readonly Dictionary<string, UserDirectoryCard> _people = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>目前只有电机立项单落了库，其余类型先占位。</summary>
+    private bool IsUnsupported => !string.Equals(_productType, "电机", StringComparison.Ordinal);
+
+    private string EmptyText => _busy
+        ? "加载中…"
+        : IsUnsupported
+            ? $"{_productType}立项单功能开发中"
+            : "暂无项目，点击「新建」创建";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _ready) return;
+        RestoreFromReturn();
+
+        // 待办判定要用登录人的工号与角色，取一次缓存起来，避免每次分页都回读 localStorage
+        var auth = await Auth.GetStoredAsync();
+        _myEmpNo = auth?.EmpNo;
+        _myRole = auth?.Role;
+
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private void RestoreFromReturn()
+    {
+        var snap = ListUiStateStore.Take(LastListReturn, ListUiStateStore.Keys.MotorProject);
+        if (snap is null) return;
+        if (!string.IsNullOrWhiteSpace(snap.FilterColumn) && MotorLxFilterColumns.IsValid(snap.FilterColumn))
+            _filterColumn = snap.FilterColumn!;
+        _keyword = snap.Keyword;
+        _rowsPerPage = snap.PageSize > 0 ? snap.PageSize : 20;
+        _currentPage = snap.Page < 0 ? 0 : snap.Page;
+    }
+
+    private void Persist(int page, int pageSize)
+        => ListUiStateStore.Capture(LastListReturn, ListUiStateStore.Keys.MotorProject, new PagedListUiState
+        {
+            Page = page < 0 ? 0 : page,
+            PageSize = pageSize > 0 ? pageSize : 20,
+            FilterColumn = _filterColumn,
+            Keyword = _keyword,
+        });
+
+    private async Task<TableData<MotorLxListDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        if (!_ready || IsUnsupported)
+        {
+            _rows = [];
+            _total = 0;
+            _skip = 0;
+            return new TableData<MotorLxListDto> { Items = [], TotalItems = 0 };
+        }
+
+        _busy = true;
+        try
+        {
+            var take = state.PageSize <= 0 ? 20 : state.PageSize;
+            _skip = Math.Max(0, state.Page) * take;
+
+            var sortLabel = string.IsNullOrWhiteSpace(state.SortLabel) ? "CreateTime" : state.SortLabel;
+            var descending = state.SortDirection != SortDirection.Ascending;
+            if (string.IsNullOrWhiteSpace(state.SortLabel))
+                descending = true;
+
+            var productType = ProjectTypes.FromName(_productType);
+
+            var (rows, total) = await LxSvc.QueryPageAsync(
+                new MotorLxQueryDto { FilterColumn = _filterColumn, Keyword = _keyword },
+                _skip, take, sortLabel, descending, ct,
+                productType, _myEmpNo, _myRole);
+
+            // 顶部徽标：跨页统计当前登录人的待办项目数。
+            // 徽标在工具栏里（父组件），而 ServerData 只让 MudTable 自己重渲染，
+            // 所以这里必须主动 StateHasChanged，否则徽标要等下一次无关重渲染才出现，
+            // 看起来就像「列表出来了，待办过几秒才冒出来」。
+            try
+            {
+                _todoCount = await LxSvc.CountMyTodoAsync(_myEmpNo, _myRole, productType, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // 徽标算不出来不该影响列表本身
+                _todoCount = 0;
+            }
+
+            // 先把当前页出现的工号换成名片（姓名 / 部门 / 岗位），悬停提示才有内容
+            await ResolvePeopleAsync(rows, ct);
+
+            _rows = rows;
+            _total = total;
+            _currentPage = state.Page;
+            _rowsPerPage = take;
+            Persist(state.Page, take);
+
+            return new TableData<MotorLxListDto> { Items = rows, TotalItems = total };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new TableData<MotorLxListDto> { Items = _rows, TotalItems = _total };
+        }
+        catch (Exception ex)
+        {
+            if (ct.IsCancellationRequested)
+                return new TableData<MotorLxListDto> { Items = _rows, TotalItems = _total };
+
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+            return new TableData<MotorLxListDto> { Items = [], TotalItems = 0 };
+        }
+        finally
+        {
+            _busy = false;
+            // 必须在 _busy 复位后刷新：原来在 try 里（_busy=true 时）刷新，
+            // 会把「搜索 / 清空」按钮渲染成禁用态且不再恢复，按钮一直是灰的。
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ReloadAsync(bool resetPage)
+    {
+        if (_table is null) return;
+        if (resetPage && _table.CurrentPage != 0)
+        {
+            _table.NavigateTo(MudBlazor.Page.First);
+            return;
+        }
+
+        await _table.ReloadServerData();
+    }
+
+    private async Task SearchAsync()
+    {
+        _selected.Clear();
+        await ReloadAsync(resetPage: true);
+    }
+
+    private async Task ClearAsync()
+    {
+        _filterColumn = MotorLxFilterColumns.Customer;
+        _keyword = null;
+        await SearchAsync();
+    }
+
+    private Task OnKeyUp(KeyboardEventArgs e)
+        => e.Key == "Enter" ? SearchAsync() : Task.CompletedTask;
+
+    private Task OnFilterColumnChanged(string value)
+    {
+        _filterColumn = MotorLxFilterColumns.IsValid(value) ? value : MotorLxFilterColumns.Customer;
+        return Task.CompletedTask;
+    }
+
+    private Task OnProductTypeChanged(string value)
+    {
+        _productType = value ?? "电机";
+        _selected.Clear();
+        return ReloadAsync(resetPage: true);
+    }
+
+    private void ClearSelection() => _selected.Clear();
+
+    private async Task OnRowClick(TableRowClickEventArgs<MotorLxListDto> args)
+    {
+        if (IsUnsupported || args.MouseEventArgs.Detail != 2 || args.Item is null)
+            return;
+        var guid = (args.Item.DocGuid ?? "").Trim();
+        if (guid.Length == 0) return;
+        Persist(_currentPage, _rowsPerPage);
+        await TabNav.OpenAsync(EditHref(args.Item));
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0 || IsUnsupported) return;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除选中的 {_selected.Count} 个项目吗？项目下的所有版本单据都会一并删除。",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+
+        await DeleteCoreAsync(_selected.Select(x => x.DocGuid));
+    }
+
+    private async Task DeleteAsync(MotorLxListDto row)
+    {
+        if (IsUnsupported) return;
+        var who = string.IsNullOrWhiteSpace(row.Customer) ? "该项目" : row.Customer;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认删除",
+            $"确定删除 {who} 的这个项目吗？项目下的所有版本单据都会一并删除。",
+            yesText: "删除",
+            cancelText: "取消");
+        if (ok != true) return;
+
+        await DeleteCoreAsync([row.DocGuid]);
+    }
+
+    private async Task DeleteCoreAsync(IEnumerable<string> docGuids)
+    {
+        _busy = true;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            var count = await LxSvc.SoftDeleteAsync(docGuids, auth?.EmpNo);
+            if (count == 0)
+            {
+                Notify.Show("没有可删除的记录", Severity.Warning);
+                return;
+            }
+
+            Notify.Show($"已删除 {count} 条", Severity.Success);
+            _selected.Clear();
+            await ReloadAsync(resetPage: false);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("删除失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private int RowNo(MotorLxListDto row) => _skip + _rows.IndexOf(row) + 1;
+
+    /// <summary>
+    /// 点进项目时打开的地址：按版本表上的流程节点决定落到哪份单据
+    /// （工程师/研发经理在规格书阶段直接落到规格书，蒋经理落到承认书）。
+    /// 规格书还在编写/审批时，非研发侧（业务员等）落回立项单，见 MotorNode.EntryHref。
+    /// 规则集中在 MotorNode.EntryHref，列表行与双击走同一套。
+    /// </summary>
+    private string EditHref(MotorLxListDto row)
+    {
+        var href = MotorNode.EntryHref(
+            row.Node, row.DocGuid, row.GgDocGuid, row.GgStatus, row.CrDocGuid,
+            row.IsMyTodo, _myRole, row.Status);
+
+        return href.Length > 0
+            ? href
+            : $"/project/motor/lx/{Uri.EscapeDataString((row.DocGuid ?? "").Trim())}";
+    }
+
+    /// <summary>
+    /// 行内「明细」：打开当前节点对应的单据，打开前先记住列表的页码与查询条件，返回时还原。
+    /// </summary>
+    private async Task OpenDetailAsync(MotorLxListDto row)
+    {
+        var guid = (row.DocGuid ?? "").Trim();
+        if (guid.Length == 0)
+        {
+            Notify.Show("该项目当前版本还没有立项单", Severity.Warning);
+            return;
+        }
+
+        Persist(_currentPage, _rowsPerPage);
+        await TabNav.OpenAsync(EditHref(row));
+    }
+
+    private static string DocHref(string kind, string docGuid)
+        => $"/project/motor/{kind}/{Uri.EscapeDataString((docGuid ?? "").Trim())}";
+
+    // 以下归档 / 版本 / 删除方法当前列表行不再直接提供入口（行内只保留「明细」），
+    // 先原样保留，等这些操作挪到详情页时直接复用。
+
+    /// <summary>三份单据都完成、版本还没归档，才允许点归档。</summary>
+    private static bool CanArchive(MotorLxListDto row)
+        => row.StepLxDone && row.StepGgDone && row.StepCrDone && !row.StepArchived;
+
+    private async Task ArchiveAsync(MotorLxListDto row)
+    {
+        var who = string.IsNullOrWhiteSpace(row.Customer) ? "该项目" : row.Customer;
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "确认归档",
+            $"归档后版本 {row.VersionNo} 将冻结，不能再修改，也不能在此基础上新建版本。确定归档 {who} 吗？",
+            yesText: "归档",
+            cancelText: "取消");
+        if (ok != true) return;
+
+        var (askOk, remark) = await MotorRemarkDialog.AskAsync(
+            DialogService, "归档备注", "可注明归档依据，会写进流程记录的备注列。", "submit");
+        if (!askOk) return;
+
+        _busy = true;
+        try
+        {
+            var auth = await Auth.GetStoredAsync();
+            var empNo = auth?.EmpNo;
+            var empName = await ResolveNameAsync(empNo);
+            var (success, msg) = await FlowSvc.ArchiveAsync(
+                row.ProjectGuid, row.VersionNo, empNo, empName, comment: remark);
+            Notify.Show(msg, success ? Severity.Success : Severity.Warning);
+            if (success && _table is not null)
+                await _table.ReloadServerData();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("归档失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OpenVersionsAsync(MotorLxListDto row)
+    {
+        var auth = await Auth.GetStoredAsync();
+        var parameters = new DialogParameters
+        {
+            ["ProjectGuid"] = row.ProjectGuid,
+            ["CurrentVersionNo"] = row.VersionNo,
+            ["EmpNo"] = auth?.EmpNo,
+            ["EmpName"] = await ResolveNameAsync(auth?.EmpNo)
+        };
+
+        var dialog = await DialogService.ShowAsync<MotorVersionDialog>("版本管理", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is not null && !result.Canceled && _table is not null)
+            await _table.ReloadServerData();
+    }
+
+    private async Task<string?> ResolveNameAsync(string? empNo)
+    {
+        if (string.IsNullOrWhiteSpace(empNo)) return null;
+        try
+        {
+            var (ok, name, _, _) = await UserInfo.GetAsync(empNo);
+            return ok ? name : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string Dash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    /// <summary>待办项目整行标淡红（样式见下方 mpl-row-todo）。</summary>
+    private static string RowCssClass(MotorLxListDto row, int _)
+        => row.IsMyTodo ? "mpl-row-todo" : "";
+
+    /// <summary>阶段流程条的四个档位，与单据明细页的圆点条同一套口径，末档为归档。</summary>
+    private static readonly string[] StageLabels = ["立项单", "规格书", "承认书", "归档"];
+
+    private static bool StageDone(MotorLxListDto row, int index) => index switch
+    {
+        0 => row.StepLxDone,
+        1 => row.StepGgDone,
+        2 => row.StepCrDone,
+        _ => row.StepArchived
+    };
+
+    /// <summary>该档是否已存在：立项单总是有，归档只有真正归档后才有。</summary>
+    private static bool StageExists(MotorLxListDto row, int index) => index switch
+    {
+        0 => true,
+        1 => !string.IsNullOrWhiteSpace(row.GgDocGuid),
+        2 => !string.IsNullOrWhiteSpace(row.CrDocGuid),
+        _ => row.StepArchived
+    };
+
+    private static string StageClass(MotorLxListDto row, int index)
+    {
+        // 已归档：流程闭合，不再留蓝色「当前」点，四档统一绿色
+        if (row.StepArchived) return StageExists(row, index) ? "is-done" : "is-off";
+
+        var current = Math.Clamp(row.Stage, MotorFlow.StageLx, MotorFlow.StageArchive);
+
+        // 承认书阶段允许在单据还没生成时高亮：节点 4 签字版一上传就算进入承认书环节
+        if (index == current
+            && (StageExists(row, index) || index == MotorFlow.StageLx || index == MotorFlow.StageCr))
+            return "is-current";
+
+        if (!StageExists(row, index)) return "is-off";
+        return StageDone(row, index) ? "is-done" : "is-open";
+    }
+
+    /// <summary>连接线走到当前档为止；已归档则整条全亮。</summary>
+    private static bool StageLineOn(MotorLxListDto row, int index)
+        => row.StepArchived
+           || index <= Math.Clamp(row.Stage, MotorFlow.StageLx, MotorFlow.StageArchive);
+
+    private static string StageTip(MotorLxListDto row)
+    {
+        var stage = MotorFlow.StageTitle(row.Stage);
+        var node = string.IsNullOrWhiteSpace(row.StageText) ? "" : $"，{row.StageText}";
+        var time = DateDisplay.Format(row.StageTime, "");
+        return $"阶段：{stage}{node}" + (time.Length == 0 ? "" : $"（{time}）");
+    }
+
+    /// <summary>
+    /// 把当前页出现的工号一次性换成名片（负责人 + 当前处理人）。
+    /// 查不到也不报错，列上仍显示库里带出来的姓名或工号。
+    /// </summary>
+    private async Task ResolvePeopleAsync(List<MotorLxListDto> rows, CancellationToken ct)
+    {
+        var empNos = rows
+            .SelectMany(x => new[] { x.OwnerEmpNo, x.PendingEmpNo })
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var map = await People.GetManyAsync(empNos, ct);
+        foreach (var (empNo, card) in map)
+            _people[empNo] = card;
+    }
+
+    private UserDirectoryCard? Person(string? empNo)
+    {
+        var key = (empNo ?? "").Trim();
+        return key.Length > 0 && _people.TryGetValue(key, out var card) ? card : null;
+    }
+
+    /// <summary>负责人列：优先显示账号中心/项目表上的姓名，取不到才退回工号。</summary>
+    private string OwnerText(MotorLxListDto row)
+    {
+        var card = Person(row.OwnerEmpNo);
+        if (!string.IsNullOrWhiteSpace(card?.Name)) return card!.Name;
+
+        return Dash(!string.IsNullOrWhiteSpace(row.OwnerName) ? row.OwnerName : row.OwnerEmpNo);
+    }
+
+    /// <summary>负责人悬停：工号 / 姓名 / 部门 / 岗位（查不到人时只显示工号）。</summary>
+    private string OwnerTip(MotorLxListDto row)
+    {
+        var empNo = (row.OwnerEmpNo ?? "").Trim();
+        if (empNo.Length == 0) return "未指定负责人";
+
+        var card = Person(empNo);
+        if (card is null) return $"工号：{empNo}";
+
+        var name = string.IsNullOrWhiteSpace(card.Name) ? Dash(row.OwnerName) : card.Name;
+        return $"工号：{empNo}\n姓名：{name}\n部门：{Dash(card.Department)}\n岗位：{card.Position}";
+    }
+
+    /// <summary>
+    /// 「当前处理人」列：姓名后面按节点标明是在审批还是在编写。
+    /// 3/5/6 是研发经理或销售经理的审批节点，其余 1/2/4/7 是业务员或研发工程师的填写节点。
+    /// </summary>
+    private static string PendingDisplay(MotorLxListDto row)
+    {
+        if (row.StepArchived || row.Node == MotorNode.Archived) return "已归档";
+
+        var name = Dash(row.PendingName);
+        if (string.IsNullOrWhiteSpace(row.PendingName)) return name;
+
+        var approving = row.Node is MotorNode.GgApprove or MotorNode.CrApprove or MotorNode.CrFinal
+                        || (!string.IsNullOrWhiteSpace(row.PendingRole)
+                            && (AppRoleService.RoleMatches(row.PendingRole, MotorFlow.RoleRdManager)
+                                || AppRoleService.RoleMatches(row.PendingRole, MotorFlow.RoleFinalApprover)));
+
+        return name + (approving ? "（审批中）" : "（编写中）");
+    }
+
+    /// <summary>
+    /// 「当前处理人」列的悬停提示：说清流程停在哪一步、在等谁（角色节点补上角色名），
+    /// 再带上处理人的部门 / 岗位。
+    /// </summary>
+    private string PendingTip(MotorLxListDto row)
+    {
+        if (row.StepArchived) return "流程已走完，整版归档";
+
+        var node = string.IsNullOrWhiteSpace(row.NodeText) ? MotorNode.Title(row.Node) : row.NodeText!;
+        var who = string.IsNullOrWhiteSpace(row.PendingName) ? "—" : row.PendingName!;
+        var role = string.IsNullOrWhiteSpace(row.PendingRole) ? "" : $"（{MotorFlow.RoleName(row.PendingRole)}）";
+        var emp = string.IsNullOrWhiteSpace(row.PendingEmpNo) ? "" : $"\n工号：{row.PendingEmpNo}";
+
+        var card = Person(row.PendingEmpNo);
+        var dept = card is null ? "" : $"\n部门：{Dash(card.Department)}\n岗位：{card.Position}";
+
+        return $"当前节点：{node}\n处理人：{who}{role}{emp}{dept}";
+    }
+}

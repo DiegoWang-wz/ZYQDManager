@@ -14,21 +14,27 @@
         <MudAppBar Elevation="0" Dense="true" Color="Color.Dark" Class="zyqd-appbar">
             <div class="zyqd-nav">
                 <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Home" Class="zyqd-nav-icon"/>
                     <span>首页</span>
                 </button>
 
-                @if (_canSeeBusinessModules)
+                @if (_canSeeProject)
                 {
                     <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/project"))">
+                        <MudIcon Icon="@Icons.Material.Filled.Folder" Class="zyqd-nav-icon"/>
                         <span>项目管理</span>
                     </button>
+                }
 
+                @if (_canSeeBusinessModules)
+                {
                     <MudMenu Dense="true"
                              Class="zyqd-nav-menu"
                              AnchorOrigin="Origin.BottomLeft"
                              TransformOrigin="Origin.TopLeft">
                         <ActivatorContent>
                             <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                                <MudIcon Icon="@Icons.Material.Filled.Description" Class="zyqd-nav-icon"/>
                                 <span>合同管理</span>
                                 <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
                             </button>
@@ -48,6 +54,7 @@
                              TransformOrigin="Origin.TopLeft">
                         <ActivatorContent>
                             <button type="button" class="zyqd-nav-btn" @onclick="context.ToggleAsync">
+                                <MudIcon Icon="@Icons.Material.Filled.RequestQuote" Class="zyqd-nav-icon"/>
                                 <span>报价</span>
                                 <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown" Class="zyqd-nav-caret"/>
                             </button>
@@ -61,12 +68,14 @@
                     @if (_canViewInvoiceKp)
                     {
                         <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/invoice-kp"))">
+                            <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="zyqd-nav-icon"/>
                             <span>开票管理</span>
                         </button>
                     }
                 }
 
                 <button type="button" class="zyqd-nav-btn" @onclick="@(() => GoTo("/sir"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Science" Class="zyqd-nav-icon"/>
                     <span>检测报告管理</span>
                 </button>
             </div>
@@ -93,7 +102,6 @@
                     </button>
                 </ActivatorContent>
                 <ChildContent>
-                    <MudMenuItem Label="首页" Icon="@Icons.Material.Filled.Home" Href="@_homePath" Target="_blank"/>
                     <MudMenuItem Label="个人信息" Icon="@Icons.Material.Filled.Person" Href="/Profile" Target="_blank"/>
                     @if (_canSeeBusinessModules)
                     {
@@ -238,7 +246,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 1px;
+        gap: 4px;
         height: var(--zyqd-appbar-height);
         margin: 0;
         padding: 0 8px;
@@ -260,7 +268,8 @@
         color: #000;
     }
 
-    .zyqd-nav-btn .zyqd-nav-caret {
+    .zyqd-nav-btn .zyqd-nav-caret,
+    .zyqd-nav-btn .zyqd-nav-icon {
         width: 16px;
         height: 16px;
         font-size: 16px;
@@ -306,8 +315,10 @@
     private bool _canManageUsers;
     private bool _canViewInvoiceKp;
     private bool _canSeeBusinessModules = true;
+    private bool _canSeeProject = true;
     private bool _isInspector;
-    private string _homePath = "/";
+    private bool _isRdRole;
+    private string _fallbackPath = "/";
 
     protected override void OnInitialized()
     {
@@ -322,9 +333,9 @@
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
-        if (_isInspector && !IsPublicPath && !IsInspectorAllowedPath(CurrentPath))
+        if (!IsPublicPath && !IsRoleAllowedPath(CurrentPath))
         {
-            Nav.NavigateTo("/sir", replace: true);
+            Nav.NavigateTo(_fallbackPath, replace: true);
             return;
         }
 
@@ -398,13 +409,15 @@
         }
 
         _isInspector = AppRoles.IsInspector(auth?.Role);
-        _canSeeBusinessModules = !_isInspector;
-        _homePath = AppRoles.HomePath(auth?.Role);
-        _canViewInvoiceKp = !_isInspector && Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
+        _isRdRole = AppRoles.IsRdRole(auth?.Role);
+        _canSeeBusinessModules = AppRoles.CanSeeFullBusinessModules(auth?.Role);
+        _canSeeProject = AppRoles.CanSeeProject(auth?.Role);
+        _fallbackPath = _isInspector ? "/sir" : _isRdRole ? "/project" : "/";
+        _canViewInvoiceKp = _canSeeBusinessModules && Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
 
-        if (_isInspector && !IsInspectorAllowedPath(CurrentPath))
+        if (!IsRoleAllowedPath(CurrentPath))
         {
-            Nav.NavigateTo("/sir", replace: true);
+            Nav.NavigateTo(_fallbackPath, replace: true);
             return;
         }
 
@@ -412,15 +425,25 @@
         StateHasChanged();
     }
 
-    private static bool IsInspectorAllowedPath(string path)
+    /// <summary>
+    /// 检测员：首页/检测报告/个人信息；
+    /// 研发角色：首页/项目管理/检测报告/个人信息；
+    /// 其它角色不限制。
+    /// </summary>
+    private bool IsRoleAllowedPath(string path)
     {
-        if (path.Length == 0) return true; // 门户首页 /
+        if (path.Length == 0) return true;
         if (Starts(path, "home")) return true;
-        if (Starts(path, "sir/items")) return false;
-        if (Starts(path, "sir")) return true;
         if (Starts(path, "Profile")) return true;
         if (Starts(path, "login")) return true;
         if (Starts(path, "Error")) return true;
+
+        if (!_isInspector && !_isRdRole)
+            return true;
+
+        if (Starts(path, "sir/items")) return false;
+        if (Starts(path, "sir")) return true;
+        if (_isRdRole && Starts(path, "project")) return true;
         return false;
     }
 
@@ -482,6 +505,10 @@
             if (Starts(path, "sir/items")) return "检测项维护";
             if (Starts(path, "sir")) return path is "sir" ? "检测报告管理" : "检测报告详情";
             if (path is "project" or "project-list") return "项目管理";
+            // 电机三张单据各自一个标题，别一律显示「电机立项单」
+            if (Starts(path, "project/motor/cr")) return "电机承认书";
+            if (Starts(path, "project/motor/gg")) return "电机规格书";
+            if (Starts(path, "project/motor/lx")) return "电机立项单";
             if (Starts(path, "project/motor")) return "电机立项单";
             if (Starts(path, "project/")) return "立项单";
             if (Starts(path, "personnel") || Starts(path, "UserManagement")) return "人员管理";

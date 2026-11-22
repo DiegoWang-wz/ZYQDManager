@@ -1,0 +1,135 @@
+@inject NavigationManager Nav
+
+@*
+    版本内三份单据的切换条：立项单 → 规格书 → 承认书。
+    - 横向贴纸张左边缘排一行，不再单独占一列，不挤占单据宽度；
+    - 高亮位置不看你打开了哪一页，而是按流程状态算出来（见 StageIndexOf）；
+    - 还没生成的单据置灰不可点，其余点击即跳到对应单据。
+
+    数据由页面传入（MotorVersionDocs），组件自身不碰数据库：
+    Blazor 会并发初始化同一渲染树里的多个子组件，若各自用注入的 scoped DbContext
+    查询，会抛 "A second operation was started on this context instance"。
+*@
+<div class="mdsteps">
+    @for (var i = 0; i < _items.Count; i++)
+    {
+        var item = _items[i];
+        var index = i;
+
+        if (index > 0)
+        {
+            <span class="mdsteps-line @(index <= _stageIndex ? "mdsteps-line-on" : null)"></span>
+        }
+
+        <button type="button"
+                class="mdsteps-step @StepClass(index)"
+                disabled="@(!CanOpen(item))"
+                title="@TitleOf(item)"
+                @onclick="() => GoAsync(item)">
+            <span class="mdsteps-dot"></span>
+            <span class="mdsteps-label">@item.Title</span>
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>当前版本三份单据的定位与状态，由页面查好后传入。</summary>
+    [Parameter] public MotorVersionDocs? Docs { get; set; }
+
+    /// <summary>规格书是否可点开：研发经理审批通过前对业务员关闭，由容器算好传入。</summary>
+    [Parameter] public bool GgVisible { get; set; } = true;
+
+    private List<NavItem> _items = [];
+    private int _stageIndex;
+
+    /// <summary>版本是否已归档：归档后没有「当前节点」，三个点统一显示已完成（绿）。</summary>
+    private bool _archived;
+
+    /// <summary>三份单据都还没有 DocGuid：新建未保存，流程停在立项单。</summary>
+    private bool _allEmpty;
+
+    private sealed record NavItem(string Key, string Title, string? DocGuid, string? Status, string BaseUrl);
+
+    protected override void OnParametersSet() => Rebuild();
+
+    private void Rebuild()
+    {
+        var docs = Docs ?? new MotorVersionDocs();
+
+        _items =
+        [
+            new NavItem("lx", "立项单", docs.LxDocGuid, docs.LxStatus, "/project/motor/lx/"),
+            new NavItem("gg", "规格书", docs.GgDocGuid, docs.GgStatus, "/project/motor/gg/"),
+            new NavItem("cr", "承认书", docs.CrDocGuid, docs.CrStatus, "/project/motor/cr/")
+        ];
+
+        _allEmpty = _items.TrueForAll(x => string.IsNullOrWhiteSpace(x.DocGuid));
+        _stageIndex = StageIndexOf(docs);
+
+        // 归档后流程闭合，不再有「当前停在承认书」这回事
+        _archived = MotorFlow.Same(docs.VersionStatus, MotorFlow.VersionArchived)
+                    || docs.CurrentNode >= MotorNode.Archived;
+    }
+
+    /// <summary>
+    /// 高亮位置由版本表的流程节点决定，和列表「明细」跳到哪一页是同一套口径：
+    /// 1 → 立项单；2、3 → 规格书；4 → 回传签字版规格书；5~8 → 承认书。
+    /// 节点还没回填（0）时退回按单据状态推，兼容老数据。
+    /// </summary>
+    private static int StageIndexOf(MotorVersionDocs docs)
+    {
+        if (MotorNode.IsValid(docs.CurrentNode))
+        {
+            var node = MotorNode.Normalize(docs.CurrentNode);
+            // 回传签字版规格书（节点 6）上传完就直接算进承认书阶段
+            if (node == MotorNode.GgSign && MotorFlow.Same(docs.GgStatus, MotorFlow.GgCompleted))
+                return MotorFlow.StageCr;
+            return MotorNode.Stage(node);
+        }
+
+        if (!string.IsNullOrWhiteSpace(docs.CrDocGuid)) return 2;
+        if (IsGgSubmitted(docs.GgStatus)) return 1;
+        return 0;
+    }
+
+    private static bool IsGgSubmitted(string? status)
+        => MotorFlow.Same(status, MotorFlow.GgPendingManager)
+           || MotorFlow.Same(status, MotorFlow.GgPendingSign)
+           || MotorFlow.Same(status, MotorFlow.GgCompleted);
+
+    private static bool HasDoc(NavItem item) => !string.IsNullOrWhiteSpace(item.DocGuid);
+
+    /// <summary>规格书在研发经理审批通过前不对业务员开放，点不动（灰显）。</summary>
+    private bool CanOpen(NavItem item) => HasDoc(item) && (GgVisible || item.Key != "gg");
+
+    private string StepClass(int index)
+    {
+        var item = _items[index];
+
+        // 已归档：三份单据都算完成，不留蓝色「当前」点
+        if (_archived) return HasDoc(item) ? "is-done" : "is-off";
+
+        if (index == _stageIndex && (HasDoc(item) || _allEmpty))
+            return "is-current";
+
+        if (!HasDoc(item)) return "is-off";
+        return IsDone(item.Status) ? "is-done" : "is-open";
+    }
+
+    private static bool IsDone(string? status)
+        => MotorFlow.IsLxDone(status) || MotorFlow.IsGgDone(status) || MotorFlow.IsCrDone(status);
+
+    private string TitleOf(NavItem item)
+    {
+        if (!HasDoc(item)) return $"该版本还没有生成{item.Title}";
+        if (!GgVisible && item.Key == "gg") return "规格书由研发编制中，审批通过后可查看";
+        return $"打开{item.Title}";
+    }
+
+    private Task GoAsync(NavItem item)
+    {
+        if (!CanOpen(item)) return Task.CompletedTask;
+        Nav.NavigateTo(item.BaseUrl + Uri.EscapeDataString(item.DocGuid!.Trim()));
+        return Task.CompletedTask;
+    }
+}

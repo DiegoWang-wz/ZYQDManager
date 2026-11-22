@@ -16,12 +16,13 @@ public static class PortalEntries
 {
     public static IReadOnlyList<PortalEntry> FilterForUser(
         bool canSeeBusinessModules,
+        bool canSeeProject,
         bool canViewInvoiceKp,
         bool canManageUsers)
     {
         var list = new List<PortalEntry>();
 
-        if (canSeeBusinessModules)
+        if (canSeeProject)
         {
             list.Add(new PortalEntry
             {
@@ -31,6 +32,10 @@ public static class PortalEntries
                 Icon = Icons.Material.Filled.Assignment,
                 Color = "#0277bd"
             });
+        }
+
+        if (canSeeBusinessModules)
+        {
             list.Add(new PortalEntry
             {
                 Key = "contract-pi",

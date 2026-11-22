@@ -225,7 +225,7 @@
     protected override async Task OnInitializedAsync()
     {
         var auth = await Auth.GetStoredAsync();
-        if (auth is null || AppRoles.IsInspector(auth.Role))
+        if (auth is null || AppRoles.IsLimitedModuleRole(auth.Role))
         {
             _busy = false;
             _listLoaded = true;

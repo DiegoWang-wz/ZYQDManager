@@ -1,0 +1,1106 @@
+@inject MotorDocService DocSvc
+@inject MotorLxService LxSvc
+@inject MotorFlowService FlowSvc
+@inject MotorSignFileService SignFiles
+@inject MotorSheetExportService SheetExport
+@inject LibreOfficePdfService LibreOffice
+@inject NavigationManager Nav
+@inject IDialogService DialogService
+
+@if (!Embedded)
+{
+    <PageTitle>@(IsNew ? "新建电机规格书" : "电机规格书")</PageTitle>
+}
+
+<div class="msheet-page">
+    @if (!Embedded)
+    {
+        <MotorDocArrows Docs="@_vDocs" Kind="gg" GgVisible="GgVisible"/>
+    }
+
+    <div class="msheet-bar msheet-bar-tools">
+        @* 工具栏顺序三页统一：返回列表 → 导出Excel → 导出PDF → 流程状态 → 签字版 → 流程动作 →（靠右）版本 → 右侧信息 *@
+        <button type="button" class="msheet-btn msheet-btn-ghost" @onclick="BackAsync">
+            <MudIcon Icon="@Icons.Material.Filled.ArrowBack"/>返回列表
+        </button>
+        @* 历史版本只留「看」：被新版本取代的老版本不给导出，免得旧参数的文件流出去 *@
+        <button type="button" class="msheet-btn msheet-btn-excel"
+                disabled="@(_busy || !_loaded || !IsLatestVersion)"
+                title="@ExportBlockedTip"
+                @onclick="ExportExcelAsync">
+            <MudIcon Icon="@Icons.Material.Filled.TableView"/>导出Excel
+        </button>
+        <button type="button" class="msheet-btn msheet-btn-pdf"
+                disabled="@(_busy || !_loaded || !IsLatestVersion)"
+                title="@ExportBlockedTip"
+                @onclick="ExportPdfAsync">
+            <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf"/>导出PDF
+        </button>
+        @if (!string.IsNullOrWhiteSpace(_head.SignFileId))
+        {
+            <a href="@SignUrl" target="_blank" class="msheet-link" title="打开已回传的签字版 PDF">
+                <MudIcon Icon="@Icons.Material.Filled.Visibility"/>查看签字版
+            </a>
+        }
+        @if (_editable)
+        {
+            <button type="button" class="msheet-btn msheet-btn-save" disabled="@_busy" @onclick="SaveAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Save"/>@(_busy ? "处理中…" : "保存")
+            </button>
+        }
+        @if (_editable && !IsNew)
+        {
+            <button type="button" class="msheet-btn msheet-btn-submit" disabled="@_busy" @onclick="SubmitAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Send"/>提交审批
+            </button>
+            <button type="button" class="msheet-btn msheet-btn-reject" disabled="@_busy"
+                    title="立项单信息有问题时退回给业务员重填"
+                    @onclick="RejectAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Undo"/>退回立项单
+            </button>
+        }
+        @if (_canApprove)
+        {
+            <button type="button" class="msheet-btn msheet-btn-approve" disabled="@_busy" @onclick="ApproveAsync">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle"/>审批通过
+            </button>
+            <button type="button" class="msheet-btn msheet-btn-reject" disabled="@_busy" @onclick="RejectAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Undo"/>退回
+            </button>
+        }
+        @if (ShowSignUpload)
+        {
+            <label class="msheet-btn msheet-btn-upload" title="@(HasSignFile ? "重新上传会替换已回传的签字版 PDF" : "上传客户回传的签字版 PDF")">
+                <MudIcon Icon="@Icons.Material.Filled.UploadFile"/>@(HasSignFile ? "重新上传签字版" : "上传签字版")
+                <InputFile OnChange="OnSignFileAsync" accept=".pdf" style="display:none"/>
+            </label>
+        }
+        @if (_editable && !string.IsNullOrWhiteSpace(_head.SourceLxDocGuid))
+        {
+            <button type="button" class="msheet-btn msheet-btn-ghost" disabled="@_busy" @onclick="ReloadFromLxAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Download"/>重新带入立项单
+            </button>
+        }
+        @if (ShowCrButton)
+        {
+            <button type="button" class="msheet-btn msheet-btn-ghost" disabled="@_busy" @onclick="GoCrAsync">
+                <MudIcon Icon="@Icons.Material.Filled.FactCheck"/>生成承认书
+            </button>
+        }
+        @if (HasLxChange)
+        {
+            @* 立项单被改过：规格书编写完成前一直留个入口，关掉弹窗后还能再看 *@
+            <button type="button" class="msheet-btn msheet-btn-ghost" @onclick="ShowLxChangeNoticeAsync">
+                <MudIcon Icon="@Icons.Material.Filled.EditNote"/>立项单修改点
+            </button>
+        }
+        <div class="msheet-meta">
+            @if (Same(_head.Status, MotorFlow.GgPendingManager) && !string.IsNullOrWhiteSpace(_managerName ?? _managerEmpNo))
+            {
+                <span>审批经理：@(_managerName ?? _managerEmpNo)</span>
+            }
+        </div>
+        @* 流程状态与版本下拉一起靠右：状态在左，版本占最右角 *@
+        <span class="msheet-tag @(_archived ? "msheet-tag-archived" : _editable ? "msheet-tag-draft" : null)">
+            @StepText
+        </span>
+        <MotorVersionPicker ProjectGuid="@_head.ProjectGuid"
+                            DocKind="gg"
+                            SelectedVersionNo="@_head.VersionNo"
+                            CurrentVersionNo="@_currentVersionNo"
+                            VersionNos="@_versionNos"
+                            Versions="@_versions"/>
+    </div>
+
+    @if (ShowRejectNotice)
+    {
+        <div class="msheet-bar msheet-reject-notice">
+            <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Style="font-size:16px"/>
+            <span><strong>从「@MotorFlow.RejectFromTitle(_lastReject!.PrevStepCode)」退回：</strong>@_lastReject.FlowComment</span>
+            <span class="msheet-reject-meta">退回人 @RejectFromDisplay · @_lastReject.ActionTime.ToString("yyyy-MM-dd HH:mm")</span>
+        </div>
+    }
+
+    @if (!_editable)
+    {
+        <div class="msheet-bar msheet-readonly-hint">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size:16px"/>@(_archived
+                ? "该版本已归档，内容已冻结，仅供查看与导出。"
+                : !IsLatestVersion
+                    ? $"该版本不是最新版本（最新为 {_currentVersionNo}），仅供查看。"
+                    : AtLxNode
+                        ? "规格书已退回立项单，等业务员重新提交后即可继续编写。"
+                        : !CanEditGg
+                        ? $"该规格书由 {EngineerLabel} 编写，只有他本人可以修改。"
+                        : $"当前状态为「{MotorFlow.StatusName(_head.Status)}」，内容已锁定，仅供查看与导出。")
+        </div>
+    }
+
+    @if (ShowNoPermissionHint)
+    {
+        <div class="msheet-bar msheet-readonly-hint">
+            <MudIcon Icon="@Icons.Material.Filled.Info" Style="font-size:16px"/>
+            @if (string.IsNullOrWhiteSpace(_managerEmpNo))
+            {
+                <text>该版本还没有指定研发经理，请退回工程师重新提交时选定。</text>
+            }
+            else if (!IsAssignedToMe(_managerEmpNo))
+            {
+                <text>该规格书已指派给 @(_managerName ?? _managerEmpNo) 审批。</text>
+            }
+            else
+            {
+                <text>当前状态为「待研发经理审批」，你的账号没有研发经理角色，看不到审批按钮。请让管理员在「用户管理」里把这个工号的本系统角色改为研发经理。</text>
+            }
+        </div>
+    }
+
+    <MotorFlowRecords Docs="@_vDocs"/>
+
+    @* fieldset disabled：锁定后连复选框一起禁用，避免「文字变灰但勾选框还能点」 *@
+    <fieldset class="msheet-wrap @(_editable ? null : "msheet-readonly")" disabled="@(!_editable)">
+        <table class="msheet">
+            <colgroup>
+                <col style="width:16%"/>
+                <col style="width:16%"/>
+                <col style="width:21%"/>
+                <col style="width:23%"/>
+                <col style="width:24%"/>
+            </colgroup>
+            <tbody>
+            <tr><td colspan="5" class="msheet-title">产品规格书</td></tr>
+            <tr><td colspan="5" class="msheet-title-en">Product Specification Sheet</td></tr>
+
+            <tr>
+                <td colspan="2" class="msheet-label">产品名称 Part name：</td>
+                <td colspan="3"><input class="msheet-input" placeholder="产品名称" value="@G(MotorDocKeys.ProductName)" @onchange='e => S(MotorDocKeys.ProductName, e)'/></td>
+            </tr>
+            <tr>
+                <td colspan="2" class="msheet-label">产品型号 Part code：</td>
+                <td colspan="3"><input class="msheet-input" placeholder="如 JCD45" value="@G(MotorDocKeys.PartCode)" @onchange='e => S(MotorDocKeys.PartCode, e)'/></td>
+            </tr>
+            <tr>
+                <td colspan="2" class="msheet-label">客户 Customer：</td>
+                <td colspan="3"><input class="msheet-input" placeholder="客户名称" value="@G(MotorDocKeys.Customer)" @onchange='e => S(MotorDocKeys.Customer, e)'/></td>
+            </tr>
+            <tr>
+                <td colspan="2" class="msheet-label">公司 Company：</td>
+                <td colspan="3"><input class="msheet-input" value="@(G(MotorDocKeys.Company) ?? DefaultCompany)" @onchange='e => S(MotorDocKeys.Company, e)'/></td>
+            </tr>
+            <tr>
+                <td colspan="5" class="msheet-hint" style="padding:4px 8px">
+                    保密要求：未经同意，不得向第三方透露　(Confidential — do not disclose to third parties without consent)
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="msheet-label msheet-center">编制/日期<br/>Created by</td>
+                <td class="msheet-label msheet-center">研发审核/日期<br/>Checked by R&amp;D</td>
+                <td class="msheet-label msheet-center">销售审核/日期<br/>Checked by Sale</td>
+                <td class="msheet-label msheet-center">客户确认<br/>Customer confirm</td>
+            </tr>
+            <tr>
+                <td colspan="2" class="msheet-sig">
+                    <input class="msheet-input msheet-boxed" placeholder="签名" value="@G("signCreatedBy")" @onchange='e => S("signCreatedBy", e)'/>
+                    <span class="motordate @(string.IsNullOrWhiteSpace(G("signCreatedDate")) ? "is-empty" : "")">
+                        <input type="date" class="msheet-input msheet-boxed motordate-input" value="@G("signCreatedDate")"
+                               @onchange='e => { S("signCreatedDate", e); }'/>
+                    </span>
+                </td>
+                <td class="msheet-sig">
+                    <input class="msheet-input msheet-boxed" placeholder="签名" value="@G("signRdCheck")" @onchange='e => S("signRdCheck", e)'/>
+                    <span class="motordate @(string.IsNullOrWhiteSpace(G("signRdDate")) ? "is-empty" : "")">
+                        <input type="date" class="msheet-input msheet-boxed motordate-input" value="@G("signRdDate")"
+                               @onchange='e => { S("signRdDate", e); }'/>
+                    </span>
+                </td>
+                <td class="msheet-sig">
+                    <input class="msheet-input msheet-boxed" placeholder="签名" value="@G("signSaleCheck")" @onchange='e => S("signSaleCheck", e)'/>
+                    <span class="motordate @(string.IsNullOrWhiteSpace(G("signSaleDate")) ? "is-empty" : "")">
+                        <input type="date" class="msheet-input msheet-boxed motordate-input" value="@G("signSaleDate")"
+                               @onchange='e => { S("signSaleDate", e); }'/>
+                    </span>
+                </td>
+                <td class="msheet-sig">
+                    <input class="msheet-input msheet-boxed" placeholder="签名" value="@G("signCustomer")" @onchange='e => S("signCustomer", e)'/>
+                    <span class="motordate @(string.IsNullOrWhiteSpace(G("signCustomerDate")) ? "is-empty" : "")">
+                        <input type="date" class="msheet-input msheet-boxed motordate-input" value="@G("signCustomerDate")"
+                               @onchange='e => { S("signCustomerDate", e); }'/>
+                    </span>
+                </td>
+            </tr>
+
+            <tr><td colspan="5" class="msheet-sec">变更履历表 ECN List</td></tr>
+            <tr>
+                <td class="msheet-subsec msheet-center">变更日期 Updated on</td>
+                <td class="msheet-subsec msheet-center">版本 Rev.</td>
+                <td class="msheet-subsec msheet-center">变更人 Updated by</td>
+                <td colspan="2" class="msheet-subsec msheet-center">变更内容描述 Description of Change</td>
+            </tr>
+            <tr>
+                <td colspan="3"></td>
+                <td class="msheet-subsec msheet-center">变更前 Before</td>
+                <td class="msheet-subsec msheet-center">变更后 After</td>
+            </tr>
+            @for (var i = 0; i < _extra.ChangeLog.Count; i++)
+            {
+                var idx = i;
+                var row = _extra.ChangeLog[idx];
+                <tr>
+                    <td>
+                        <span class="motordate @(string.IsNullOrWhiteSpace(row.Date) ? "is-empty" : "")">
+                            <input type="date" class="msheet-input motordate-input" value="@row.Date"
+                                   @onchange='e => { row.Date = e.Value?.ToString(); }'/>
+                        </span>
+                    </td>
+                    <td><input class="msheet-input msheet-center" placeholder="A" value="@row.Rev" @onchange='e => row.Rev = e.Value?.ToString()'/></td>
+                    <td><input class="msheet-input" value="@row.By" @onchange='e => row.By = e.Value?.ToString()'/></td>
+                    <td colspan="2">
+                        <div class="msheet-inline">
+                            <input class="msheet-input msheet-boxed" placeholder="变更前" value="@row.Before" @onchange='e => row.Before = e.Value?.ToString()'/>
+                            <input class="msheet-input msheet-boxed" placeholder="变更后" value="@row.After" @onchange='e => row.After = e.Value?.ToString()'/>
+                            @if (_extra.ChangeLog.Count > 1 && _editable)
+                            {
+                                <button type="button" class="msheet-del" @onclick="() => _extra.ChangeLog.RemoveAt(idx)">删</button>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+            @if (_editable)
+            {
+                <tr>
+                    <td colspan="5" style="padding:3px 6px">
+                        <button type="button" class="msheet-btn msheet-btn-ghost" style="padding:2px 10px;font-size:12px"
+                                @onclick="AddChangeLog">
+                            + 添加变更记录
+                        </button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <MotorSpecSections Extra="_extra" Editable="_editable"/>
+    </fieldset>
+</div>
+
+@code {
+    [Parameter] public string? DocGuid { get; set; }
+
+    /// <summary>
+    /// 由 MotorDocPager 统一取数后传入的一屏三单数据。
+    /// 非空时本组件不再自己查库，直接用这份数据渲染。
+    /// </summary>
+    [Parameter] public MotorDocBundle? Bundle { get; set; }
+
+    /// <summary>嵌入在三单容器里：不输出 PageTitle 与左右翻页箭头（容器统一渲染一份）。</summary>
+    [Parameter] public bool Embedded { get; set; }
+
+    /// <summary>新建时由容器从 ?projectGuid= / ?fromLx= 解析后传入。</summary>
+    [Parameter] public string? ProjectGuid { get; set; }
+    [Parameter] public string? FromLx { get; set; }
+
+    /// <summary>规格书是否可点开：研发经理审批通过前对业务员关闭，由容器算好传入。</summary>
+    [Parameter] public bool GgVisible { get; set; } = true;
+
+    /// <summary>
+    /// 当前是否停在这一页（容器按 URL 传入）。三张单据常驻 DOM，
+    /// 自动弹窗必须靠这个判断，否则业务员在立项单页也会被立项单修改点弹窗挡住。
+    /// </summary>
+    [Parameter] public bool Active { get; set; }
+
+    private MotorGgModel _head = new();
+    private MotorDocExtra _extra = MotorDocExtra.CreateDefault();
+    private bool _busy;
+    private bool _loaded;
+
+    /// <summary>上次加载/保存时的表单快照，用来判断提交前有没有未保存的修改。</summary>
+    private string _snapshot = "";
+
+    /// <summary>
+    /// 顶部标签 = 流程当前停在哪一步（规格书填写中 / 规格书审批中 / 承认书审批中 / 已归档）。
+    /// 流程图撤掉以后，这一处就是页面上唯一的进度提示。
+    /// </summary>
+    private string StepText
+    {
+        get
+        {
+            if (MotorFlow.IsVersionArchived(_vDocs.VersionStatus, _vDocs.CurrentNode)) return "已归档";
+            return MotorNode.IsValid(_vDocs.CurrentNode)
+                ? MotorNode.StepName(_vDocs.CurrentNode)
+                : MotorFlow.StatusName(_head.Status);
+        }
+    }
+
+    private string? _empNo;
+    private string? _empName;
+    private string? _myRole;
+    private bool _canApprove;
+    /// <summary>本版本指派的研发经理（节点 3 提交时指定，节点 5 沿用）。</summary>
+    private string? _managerEmpNo;
+    private string? _managerName;
+    /// <summary>项目当前研发工程师：规格书只有他能改。</summary>
+    private string? _engineerEmpNo;
+    private string? _engineerName;
+
+    /// <summary>当前版本三份单据的定位与状态，页面查一次，翻页箭头与流程判定共用。</summary>
+    private MotorVersionDocs _vDocs = new();
+
+    /// <summary>版本下拉的数据，三页共用同一份口径（见 MotorLxService.GetVersionOptionsAsync）。</summary>
+    private List<string> _versionNos = [];
+    private List<ProjectVersionModel> _versions = [];
+    private string? _currentVersionNo;
+    private ApprovalFlowModel? _lastReject;
+
+    /// <summary>退回人姓名：流转记录只存工号，加载时解析一次。</summary>
+    private string? _lastRejectFromName;
+
+    /// <summary>
+    /// 退回人显示「姓名（工号）」：姓名优先取版本对应关系表 NodeNames（含流程日志里的操作人），
+    /// 查不到再用账号中心解析的姓名兜底，最后才是工号本身。
+    /// 用计算属性是因为个别加载路径里 NodeNames 赋值晚于 _lastRejectFromName。
+    /// </summary>
+    private string RejectFromDisplay
+    {
+        get
+        {
+            var empNo = _lastReject?.FromUserCode?.Trim();
+            if (string.IsNullOrWhiteSpace(empNo)) return "—";
+            var name = _vDocs.NodeNames.TryGetValue(empNo, out var n) && !string.IsNullOrWhiteSpace(n)
+                ? n
+                : _lastRejectFromName;
+            return string.IsNullOrWhiteSpace(name) ? empNo! : $"{name}（{empNo}）";
+        }
+    }
+
+    /// <summary>
+    /// 退回原因只在「单据还停在被退回的那个节点」时显示：
+    /// 退回本身也是一步，重新提交后这一步就算处理完毕，页头不再提示；
+    /// 完整的退回记录会留在归档后的流程路径里。
+    /// </summary>
+    private bool ShowRejectNotice => !string.IsNullOrWhiteSpace(_lastReject?.FlowComment)
+        && (Same(_head.Status, _lastReject!.StepCode)
+            // 老数据状态为空：按单据类型兜底，避免把别的单据的退回显示出来
+            || (string.IsNullOrWhiteSpace(_head.Status)
+                && Same(_lastReject.DocType, MotorFlow.DocGg)));
+
+    private const string DefaultCompany = "浙江捷昌线性驱动科技股份有限公司";
+
+    private bool IsNew => string.IsNullOrWhiteSpace(DocGuid)
+                          || string.Equals(DocGuid, "new", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>整版已归档：状态标签改用「已归档」，页面整体冻结。</summary>
+    private bool _archived => MotorFlow.IsVersionArchived(_vDocs.VersionStatus, _vDocs.CurrentNode);
+
+    /// <summary>
+    /// 是不是项目的最新版本。翻到老版本时整页只读：
+    /// 老版本是留档用的，再改它 / 提交它会和最新版流程打架。
+    /// </summary>
+    private bool IsLatestVersion => string.IsNullOrWhiteSpace(_currentVersionNo)
+                                    || MotorFlow.Same(_head.VersionNo, _currentVersionNo);
+
+    /// <summary>历史版本导不出去，按钮上挂一句说明。</summary>
+    private string? ExportBlockedTip => IsLatestVersion ? null : "历史版本只能查看，不能导出";
+
+    /// <summary>
+    /// 谁能改规格书：本版本被指派的研发工程师本人（超级管理员 JcAdmin 除外，可全局维护）。
+    /// 研发经理只负责审批（表单出现时已是只读），业务员只负责回传签字版与编制承认书，
+    /// 销售经理只在被指派终审时出现审批按钮。
+    /// </summary>
+    private bool CanEditGg => AppRoles.IsStrictAdmin(_myRole, _empNo)
+                              || (!string.IsNullOrWhiteSpace(_engineerEmpNo)
+                                  && MotorFlow.Same(_empNo, _engineerEmpNo));
+
+    /// <summary>工程师展示名：姓名优先，没有姓名用工号，都没有就写角色名。</summary>
+    private string EngineerLabel => !string.IsNullOrWhiteSpace(_engineerName)
+        ? _engineerName!
+        : !string.IsNullOrWhiteSpace(_engineerEmpNo) ? _engineerEmpNo! : "研发工程师";
+
+    /// <summary>
+    /// 流程已退回立项单阶段（节点 1 编写立项单 / 节点 2 指派工程师）：规格书这时只是留档，
+    /// 工程师不能接着填，等业务员重新指派/提交、节点回到 3 之后才重新开放。
+    /// 节点 1、2 在顶部都显示「立项单编写中」，必须一起锁；历史 0 值 Normalize 后也落在这里。
+    /// 节点是流程的唯一权威，单据 Status 只管「这张纸锁不锁」，退回后它仍是 GgDraft。
+    /// </summary>
+    private bool AtLxNode => MotorNode.IsValid(_vDocs.CurrentNode)
+                             && MotorNode.Normalize(_vDocs.CurrentNode) <= MotorNode.AssignEngineer;
+
+    /// <summary>
+    /// 草稿（或历史数据的空状态）、且是本版本研发工程师本人，才允许改内容；
+    /// 归档、老版本、以及流程已退回立项单的，一律锁定。
+    /// </summary>
+    private bool _editable => !_archived
+                              && IsLatestVersion
+                              && CanEditGg
+                              && !AtLxNode
+                              && (string.IsNullOrWhiteSpace(_head.Status) || Same(_head.Status, MotorFlow.GgDraft))
+                              && !Same(_head.Status, MotorFlow.GgCompleted);
+
+    /// <summary>签字版回传、编制承认书是业务员的活：只有项目负责人本人（或 JcAdmin）能操作。</summary>
+    private bool IsDocOwner => AppRoles.IsStrictAdmin(_myRole, _empNo)
+                               || (!string.IsNullOrWhiteSpace(_vDocs.OwnerEmpNo)
+                                   && MotorFlow.Same(_empNo, _vDocs.OwnerEmpNo));
+
+    /// <summary>已经回传过签字版：按钮文案变「重新上传签字版」，上传前要求确认覆盖。</summary>
+    private bool HasSignFile => !string.IsNullOrWhiteSpace(_head.SignFileId);
+
+    /// <summary>
+    /// 上传入口：待回传签字版，或者已回传完成（允许业务员换一份扫描件）。
+    /// 都必须是最新版本、没归档、且是本项目业务员。
+    /// </summary>
+    private bool ShowSignUpload => !_archived
+                                  && IsLatestVersion
+                                  && IsDocOwner
+                                  && (Same(_head.Status, MotorFlow.GgPendingSign)
+                                      || Same(_head.Status, MotorFlow.GgCompleted));
+
+    /// <summary>规格书还在编写中（草稿）：立项单的修改点要提醒到这一步为止。</summary>
+    private bool IsGgWriting => string.IsNullOrWhiteSpace(_head.Status)
+                                || Same(_head.Status, MotorFlow.GgDraft);
+
+    /// <summary>
+    /// 本版立项单被业务员改过吗：版本表 ChangeDiff 非空即视为改过。
+    /// 只在规格书编写阶段提示，规格书提交后不再打扰研发经理与后续环节。
+    /// </summary>
+    private bool HasLxChange => !_archived
+                                && IsLatestVersion
+                                && IsGgWriting
+                                && !string.IsNullOrWhiteSpace(_vDocs.Version?.ChangeDiff);
+
+    /// <summary>弹窗只弹一次；关掉后工具栏的「立项单修改点」还能再看。</summary>
+    private bool _lxChangeShown;
+
+    private async Task ShowLxChangeNoticeAsync()
+    {
+        var version = _vDocs.Version;
+        var changes = MotorLxDiff.FromJson(version?.ChangeDiff);
+
+        await DialogService.ShowAsync<MotorLxChangeNotice>(
+            "立项单修改点",
+            new DialogParameters
+            {
+                ["Reason"] = version?.ChangeReason,
+                ["Changes"] = changes
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 打开规格书就自动提示一次：业务员刚改过立项单，工程师需要知道改了什么。
+        // 三张单据常驻 DOM，只有当前停在这一页（Active）时才弹，免得业务员在立项单页被打扰。
+        if (!Active || _lxChangeShown || !_loaded || !HasLxChange) return;
+
+        _lxChangeShown = true;
+        await ShowLxChangeNoticeAsync();
+    }
+
+    /// <summary>待研发经理审批、但当前账号不是研发经理：给出可操作的提示，而不是让按钮静默消失。</summary>
+    private bool ShowNoPermissionHint => !_canApprove && Same(_head.Status, MotorFlow.GgPendingManager);
+
+    /// <summary>单据是否指派给我：没有指派记录就一律不放行，与服务端校验保持一致。</summary>
+    private bool IsAssignedToMe(string? assignedEmpNo)
+        => !string.IsNullOrWhiteSpace(assignedEmpNo)
+           && string.Equals(assignedEmpNo.Trim(), (_empNo ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 研发经理批完（或已回传签字版）才轮到业务员编制承认书。
+    /// 两个守卫：
+    /// 1. 整版归档后不再出现——那时承认书早就生成过了；
+    /// 2. 该版本已经有承认书时也不出现——这个入口是「新建」，重复点击会造出第二份。
+    /// </summary>
+    private bool ShowCrButton => !IsNew
+        && !_archived
+        && IsLatestVersion
+        && IsDocOwner
+        && string.IsNullOrWhiteSpace(_vDocs.CrDocGuid)
+        && (Same(_head.Status, MotorFlow.GgPendingSign) || Same(_head.Status, MotorFlow.GgCompleted));
+
+    private string? G(string key) => _extra.Fields.TryGetValue(key, out var v) ? v : null;
+
+    /// <summary>
+    /// 签字版 PDF 的浏览地址：新文件存在 3.240 的 /ZYQDManger/PDF 下，用老站域名还原；
+    /// 历史数据里遗留的本地 /upLoad/... 保持相对路径，避免拼错域名打不开。
+    /// </summary>
+    private string SignUrl
+    {
+        get
+        {
+            var p = (_head.SignFileId ?? "").Trim();
+            if (p.Length == 0) return "";
+            return p.StartsWith("/upLoad/", StringComparison.OrdinalIgnoreCase)
+                ? p
+                : LegacyFileUrl.Resolve(p, Config["LegacyFiles:BaseUrl"]);
+        }
+    }
+
+    private void S(string key, ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(v)) _extra.Fields.Remove(key);
+        else _extra.Fields[key] = v!;
+    }
+
+    /// <summary>日期选择器统一显示「年/月/日」，库里仍按 yyyy-MM-dd 存。</summary>
+    private static DateTime? DateOf(string? iso) => DateTime.TryParse(iso, out var d) ? d : null;
+
+    private void SetIsoDate(string key, DateTime? value)
+    {
+        if (value is null) _extra.Fields.Remove(key);
+        else _extra.Fields[key] = value.Value.ToString("yyyy-MM-dd");
+    }
+
+    private static void SetRowDate(MotorChangeLogRow row, DateTime? value)
+        => row.Date = value?.ToString("yyyy-MM-dd");
+
+    private void AddChangeLog()
+    {
+        _extra.ChangeLog.Add(new MotorChangeLogRow
+        {
+            Date = DateTime.Today.ToString("yyyy-MM-dd"),
+            Rev = NextRev()
+        });
+    }
+
+    private string NextRev()
+    {
+        var last = _extra.ChangeLog.LastOrDefault()?.Rev;
+        if (string.IsNullOrWhiteSpace(last)) return "A";
+        var c = char.ToUpperInvariant(last.Trim()[0]);
+        return c >= 'Z' ? "Z" : ((char)(c + 1)).ToString();
+    }
+
+    /// <summary>已经套用过的 bundle 实例：父组件换了新数据才重新套用，避免覆盖正在编辑的内容。</summary>
+    private MotorDocBundle? _appliedBundle;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 容器模式：数据由 MotorDocPager 一次取好，这里只套用，不查库
+        if (Bundle is not null && !ReferenceEquals(_appliedBundle, Bundle))
+        {
+            var bundleAuth = await Auth.GetStoredAsync();
+            _empNo = bundleAuth?.EmpNo;
+            _myRole = bundleAuth?.Role;
+            _empName = await ResolveNameAsync(_empNo);
+            await ApplyBundleAsync(Bundle);
+            return;
+        }
+
+        if (_loaded)
+        {
+            if (!IsNew && string.Equals(_head.DocGuid, DocGuid, StringComparison.OrdinalIgnoreCase))
+                return;
+            if (IsNew && string.IsNullOrWhiteSpace(_head.DocGuid))
+                return;
+        }
+
+        var auth = await Auth.GetStoredAsync();
+        _empNo = auth?.EmpNo;
+        _myRole = auth?.Role;
+        _empName = await ResolveNameAsync(_empNo);
+
+        if (IsNew)
+        {
+            await InitNewAsync();
+            _loaded = true;
+            _snapshot = SnapshotNow();
+            return;
+        }
+
+        await LoadAsync(DocGuid!);
+        _loaded = true;
+    }
+
+    /// <summary>把父组件取好的整屏数据套到本页字段上（零查询）。</summary>
+    private async Task ApplyBundleAsync(MotorDocBundle bundle)
+    {
+        _appliedBundle = bundle;
+        _vDocs = bundle.Docs;
+        _versionNos = bundle.VersionNos;
+        _versions = bundle.Versions;
+        _currentVersionNo = bundle.CurrentVersionNo;
+        _managerEmpNo = bundle.Docs.ManagerEmpNo;
+        _managerName = bundle.Docs.ManagerName;
+        // 项目表上的工程师为空时退回立项单提交时记录的那位（老数据兜底）
+        _engineerEmpNo = bundle.Docs.EngineerEmpNo ?? bundle.Lx?.EngineerCode;
+        _engineerName = bundle.Docs.EngineerName;
+
+        _head = bundle.Gg ?? new MotorGgModel();
+        _lastReject = bundle.LatestReject;
+        _lastRejectFromName = await ResolveNameAsync(_lastReject?.FromUserCode);
+        _extra = MotorDocExtra.FromJson(_head.ExtraJson);
+        if (string.IsNullOrWhiteSpace(G(MotorDocKeys.Company)))
+            _extra.Fields[MotorDocKeys.Company] = DefaultCompany;
+
+        // 草稿阶段：立项单里有、规格书里还空着的字段，进页面就补齐（只填空字段、只补内存、点保存才落库）。
+        // 同版本立项单已经在 bundle 里，这里不再单独查库；指向别的版本时跳过，保持原样。
+        if (Same(_head.Status, MotorFlow.GgDraft)
+            && bundle.Lx is not null
+            && string.Equals((_head.SourceLxDocGuid ?? "").Trim(), (bundle.Lx.DocGuid ?? "").Trim(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            MotorGgFromLx.Fill(_extra, bundle.Lx);
+        }
+
+        _canApprove = IsLatestVersion
+                      && Same(_head.Status, MotorFlow.GgPendingManager)
+                      && await FlowSvc.HasRoleAsync(MotorFlow.RoleRdManager, _empNo)
+                      && IsAssignedToMe(_managerEmpNo);
+
+        _loaded = true;
+        _snapshot = SnapshotNow();
+    }
+
+    private async Task InitNewAsync()
+    {
+        _head = new MotorGgModel
+        {
+            ProjectGuid = ProjectGuid ?? "",
+            VersionNo = MotorLxService.FirstVersionNo,
+            IsDraft = true,
+            Status = MotorFlow.GgDraft,
+            SourceLxDocGuid = FromLx
+        };
+        _extra = MotorDocExtra.CreateDefault();
+        _extra.ChangeLog.Add(new MotorChangeLogRow { Date = DateTime.Today.ToString("yyyy-MM-dd"), Rev = "A" });
+
+        if (!string.IsNullOrWhiteSpace(FromLx))
+            await FillFromLxAsync(FromLx!);
+
+        _lastReject = await FlowSvc.GetLatestRejectAsync(_head.ProjectGuid, _head.VersionNo);
+        _lastRejectFromName = await ResolveNameAsync(_lastReject?.FromUserCode);
+
+        if (string.IsNullOrWhiteSpace(G(MotorDocKeys.Company)))
+            _extra.Fields[MotorDocKeys.Company] = DefaultCompany;
+    }
+
+    private async Task LoadAsync(string docGuid)
+    {
+        _busy = true;
+        try
+        {
+            var row = await DocSvc.GetGgAsync(docGuid);
+            if (row is null)
+            {
+                Notify.Show("未找到规格书", Severity.Warning);
+                Nav.NavigateTo("/project");
+                return;
+            }
+
+            _head = row;
+            _lastReject = await FlowSvc.GetLatestRejectAsync(row.ProjectGuid, row.VersionNo);
+            _lastRejectFromName = await ResolveNameAsync(_lastReject?.FromUserCode);
+            _extra = MotorDocExtra.FromJson(row.ExtraJson);
+            if (string.IsNullOrWhiteSpace(G(MotorDocKeys.Company)))
+                _extra.Fields[MotorDocKeys.Company] = DefaultCompany;
+
+            // 草稿阶段：立项单里有、规格书里还空着的字段，进页面就补齐（只填空字段、只补内存、点保存才落库）。
+            // 这样即使草稿是早些时候生成的、当时没带全，工程师打开也能看到完整参数，不用手动点「重新带入」。
+            MotorLxModel? sourceLx = null;
+            if (!string.IsNullOrWhiteSpace(row.SourceLxDocGuid))
+            {
+                sourceLx = await LxSvc.GetByDocGuidAsync(row.SourceLxDocGuid!);
+                if (sourceLx is not null && Same(row.Status, MotorFlow.GgDraft))
+                    MotorGgFromLx.Fill(_extra, sourceLx);
+            }
+
+            // 一次查回三份单据的定位与版本状态：翻页箭头、审批指派都用它
+            _vDocs = await DocSvc.GetVersionDocsAsync(row.ProjectGuid, row.VersionNo);
+            _managerEmpNo = _vDocs.ManagerEmpNo;
+            _managerName = _vDocs.ManagerName;
+            // 项目表上的工程师为空时退回立项单提交时记录的那位（老数据兜底）
+            _engineerEmpNo = _vDocs.EngineerEmpNo ?? sourceLx?.EngineerCode;
+            _engineerName = _vDocs.EngineerName ?? await ResolveNameAsync(sourceLx?.EngineerCode);
+
+            // 版本下拉：与立项单页同一套数据，切版本时跳到对应版本的规格书
+            await LoadVersionOptionsAsync(row.ProjectGuid, row.VersionNo);
+
+            _canApprove = IsLatestVersion
+                          && Same(row.Status, MotorFlow.GgPendingManager)
+                          && await FlowSvc.HasRoleAsync(MotorFlow.RoleRdManager, _empNo)
+                          && IsAssignedToMe(_managerEmpNo);
+
+            _snapshot = SnapshotNow();
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReloadFromLxAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_head.SourceLxDocGuid)) return;
+
+        var ok = await JS.InvokeAsync<bool>("confirm", "将从立项单补齐规格书里还空着的字段，已填写的内容不会被覆盖，继续？");
+        if (!ok) return;
+
+        await FillFromLxAsync(_head.SourceLxDocGuid!);
+        Notify.Show("已重新带入立项单内容", Severity.Success);
+    }
+
+    /// <summary>立项单 → 规格书：默认带入，研发可再编辑。映射规则统一在 MotorGgFromLx。</summary>
+    private async Task FillFromLxAsync(string lxDocGuid)
+    {
+        var lx = await LxSvc.GetByDocGuidAsync(lxDocGuid);
+        if (lx is null)
+        {
+            Notify.Show("未找到来源立项单，无法带入", Severity.Warning);
+            return;
+        }
+
+        MotorGgFromLx.FillHead(_head, lx);
+        MotorGgFromLx.Fill(_extra, lx);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_editable)
+        {
+            Notify.Show(IsNew
+                ? "只有研发工程师可以编写规格书"
+                : $"当前没有修改权限：规格书由 {EngineerLabel} 编写", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await DocSvc.SaveGgAsync(_head, _extra, _empNo, _empName);
+            _head.ProjectGuid = result.ProjectGuid;
+            _head.DocGuid = result.DocGuid;
+            Notify.Show(result.Created ? "规格书已保存" : "已保存", Severity.Success);
+
+            if (result.Created)
+                Nav.NavigateTo($"/project/motor/gg/{result.DocGuid}", replace: true);
+            else
+                await LoadAsync(result.DocGuid);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (IsNew || string.IsNullOrWhiteSpace(_head.DocGuid)) return;
+
+        // 提交前先落一次库，避免页面上的最后一次输入没保存
+        var saved = await TrySaveBeforeActionAsync();
+        if (!saved) return;
+
+        // 提交审批必须指派研发经理：人员来自 JcCommonApi（角色 = 研发经理）
+        // 退回后重新提交时，默认带上版本上上次指派的经理
+        var versionDocs = await DocSvc.GetVersionDocsAsync(_head.ProjectGuid, _head.VersionNo);
+
+        var dialog = await DialogService.ShowAsync<MotorSubmitDialog>(
+            "提交研发经理审批",
+            new DialogParameters
+            {
+                [nameof(MotorSubmitDialog.Title)] = "提交研发经理审批",
+                [nameof(MotorSubmitDialog.Caption)] =
+                    "选定研发经理后提交：规格书锁定并推给该经理审批，同一版本的承认书审批也由这个人负责。",
+                [nameof(MotorSubmitDialog.RoleCode)] = AppRoles.RdManager,
+                [nameof(MotorSubmitDialog.PersonLabel)] = "研发经理",
+                [nameof(MotorSubmitDialog.UseDepartment)] = false,
+                [nameof(MotorSubmitDialog.DefaultEmpNo)] = versionDocs.ManagerEmpNo,
+                [nameof(MotorSubmitDialog.EmptyHint)] =
+                    "暂无研发经理账号，请确认需要指派的人员是否创建了系统账号，且角色维护为「研发经理」。"
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not MotorSubmitPick pick) return;
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await FlowSvc.SubmitGgAsync(
+                _head.DocGuid!, pick.EmpNo, pick.Name, _empNo, _empName, comment: pick.Comment);
+            Notify.Show(msg, ok ? Severity.Success : Severity.Warning);
+            if (ok) await LoadAsync(_head.DocGuid!);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        var (askOk, remark) = await MotorRemarkDialog.AskAsync(
+            DialogService, "审批备注", "可以写明审批依据，会写进流程记录的备注列。");
+        if (!askOk) return;
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await FlowSvc.ApproveGgAsync(_head.DocGuid!, _empNo, _empName, remark);
+            Notify.Show(msg, ok ? Severity.Success : Severity.Warning);
+            if (ok) await LoadAsync(_head.DocGuid!);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// 退回：弹窗列出当前节点之前的全部步骤（含「指派研发工程师」），可任选一步退回。
+    /// 服务端按目标节点重置单据状态、接手人和后续留痕。
+    /// </summary>
+    private async Task RejectAsync()
+    {
+        var current = MotorNode.Normalize(_vDocs.CurrentNode);
+        var finalEmp = _vDocs.Version?.FinalEmpNo;
+        var finalName = _vDocs.NodeNames.TryGetValue(finalEmp ?? "", out var fn) ? fn : null;
+        var options = MotorNode.All
+            .Where(x => x.Node < current)
+            .Select(x => new MotorRejectOption(
+                x.Node,
+                MotorNode.OptionLabel(x.Node),
+                MotorNode.AssigneeLabel(x.Node,
+                    _vDocs.OwnerEmpNo, _vDocs.OwnerName,
+                    _vDocs.EngineerEmpNo, _vDocs.EngineerName,
+                    _vDocs.ManagerEmpNo, _vDocs.ManagerName,
+                    finalEmp, finalName)))
+            .ToList();
+        if (options.Count == 0) return;
+
+        var (askOk, pick) = await MotorRejectDialog.AskAsync(
+            DialogService, "退回节点", options, current - 1);
+        if (!askOk || pick is null) return;
+
+        _busy = true;
+        try
+        {
+            var (ok, msg) = await FlowSvc.RejectToNodeAsync(
+                _head.ProjectGuid, _head.VersionNo, pick.TargetNode,
+                _empNo, _empName, pick.Comment);
+            Notify.Show(msg, ok ? Severity.Success : Severity.Warning);
+            if (ok) await LoadAsync(_head.DocGuid!);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnSignFileAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy) return;
+
+        if (!ShowSignUpload)
+        {
+            Notify.Show("只有项目负责人可以回传规格书签字版", Severity.Warning);
+            return;
+        }
+
+        var file = e.File;
+        if (file is null) return;
+        if (file.Size > 20 * 1024 * 1024)
+        {
+            Notify.Show("签字版不能超过 20MB", Severity.Warning);
+            return;
+        }
+
+        var (askOk, remark) = await MotorRemarkDialog.AskAsync(
+            DialogService, "回传签字版备注", "可注明客户回传时间、签字人等，会写进流程记录的备注列。", "submit");
+        if (!askOk) return;
+
+        // 已有签字版：先确认覆盖，避免手滑把正式的那份换掉
+        if (HasSignFile)
+        {
+            var replace = await DialogService.ShowMessageBoxAsync(
+                "重新上传签字版",
+                "该规格书已经回传过签字版，重新上传会覆盖原来的 PDF，是否继续？",
+                yesText: "重新上传",
+                cancelText: "取消");
+            if (replace != true) return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+            var (url, name) = await SignFiles.SavePdfAsync(stream, file.Name);
+            var (ok, msg) = await FlowSvc.UploadSignAsync(
+                MotorFlow.DocGg, _head.DocGuid!, url, name, _empNo, _empName, comment: remark);
+            Notify.Show(msg, ok ? Severity.Success : Severity.Warning);
+            if (ok) await LoadAsync(_head.DocGuid!);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("上传失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>当前表单内容的快照（模型整体序列化，属性顺序稳定）。</summary>
+    private string SnapshotNow() => FormSnapshot.Of(_head, _extra);
+
+    /// <summary>页面上的内容是否还没保存：和加载/上次保存时的快照比字符串。</summary>
+    private bool HasUnsavedChanges => _loaded && !FormSnapshot.Same(SnapshotNow(), _snapshot);
+
+    /// <summary>
+    /// 提交前先落一次库：有未保存的修改时先问一句「是否保存后提交」，
+    /// 避免用户以为提交会带上页面上的改动。
+    /// </summary>
+    private async Task<bool> TrySaveBeforeActionAsync()
+    {
+        if (HasUnsavedChanges)
+        {
+            var ok = await DialogService.ShowMessageBoxAsync(
+                "提交审批",
+                "表单有未保存的修改，是否先保存再提交？",
+                yesText: "保存并提交",
+                cancelText: "取消");
+            if (ok != true) return false;
+        }
+
+        try
+        {
+            await DocSvc.SaveGgAsync(_head, _extra, _empNo, _empName);
+            _snapshot = SnapshotNow();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+            return false;
+        }
+    }
+
+    private Task BackAsync()
+    {
+        Nav.NavigateTo("/project");
+        return Task.CompletedTask;
+    }
+
+    /// <summary>版本下拉数据；取不到就隐藏下拉，不影响正文加载。</summary>
+    private async Task LoadVersionOptionsAsync(string? projectGuid, string? showingVersion)
+    {
+        try
+        {
+            var (nos, versions, current) = await LxSvc.GetVersionOptionsAsync(projectGuid);
+            _versionNos = nos;
+            _versions = versions;
+            _currentVersionNo = current;
+
+            // 正在看的这一版必须在选项里，否则下拉框显示不出它
+            var showing = (showingVersion ?? "").Trim();
+            if (showing.Length > 0 && !_versionNos.Any(x => MotorFlow.Same(x, showing)))
+                _versionNos.Insert(0, showing);
+        }
+        catch
+        {
+            _versionNos = [];
+            _versions = [];
+        }
+    }
+
+    private async Task ExportExcelAsync()
+    {
+        if (!IsLatestVersion)
+        {
+            Notify.Show("历史版本只能查看，不能导出", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = SheetExport.BuildGg(_head, _extra);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", ExcelName("xlsx"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+            Notify.Show("Excel 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        if (!IsLatestVersion)
+        {
+            Notify.Show("历史版本只能查看，不能导出", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Notify.Show("正在生成 PDF，请稍候…", Severity.Info);
+            var xlsx = SheetExport.BuildGg(_head, _extra);
+            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", ExcelName("pdf"),
+                "application/pdf", Convert.ToBase64String(pdf));
+            Notify.Show("PDF 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 PDF 失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task GoCrAsync()
+    {
+        // 版本号查询串统一叫 ver（MotorDocPager 的 SupplyParameterFromQuery 认这个名字），
+        // 之前写成 version 会被忽略，新建承认书就掉回 V1。
+        var url = $"/project/motor/cr/new?projectGuid={Uri.EscapeDataString(_head.ProjectGuid ?? "")}"
+                  + $"&fromGg={Uri.EscapeDataString(_head.DocGuid ?? "")}"
+                  + $"&ver={Uri.EscapeDataString(_head.VersionNo ?? "")}";
+        if (!string.IsNullOrWhiteSpace(_head.SourceLxDocGuid))
+            url += $"&fromLx={Uri.EscapeDataString(_head.SourceLxDocGuid!)}";
+        Nav.NavigateTo(url);
+        return Task.CompletedTask;
+    }
+
+    private static bool Same(string? a, string? b)
+        => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private string ExcelName(string ext)
+        => SheetExport.FileName("规格书",
+            G(MotorDocKeys.Customer),
+            G(MotorDocKeys.PartCode) ?? G(MotorDocKeys.ProductName),
+            _head.VersionNo, ext);
+
+    /// <summary>从中央用户信息取显示名，失败不影响主流程。</summary>
+    private async Task<string?> ResolveNameAsync(string? empNo)
+    {
+        if (string.IsNullOrWhiteSpace(empNo)) return null;
+        try
+        {
+            var (ok, name, _, _) = await UserInfo.GetAsync(empNo);
+            return ok ? name : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}

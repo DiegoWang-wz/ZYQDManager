@@ -1,5 +1,5 @@
 <div class="cb-spec-item @(ReadOnly ? null : "cb-spec-edit")">
-    <div class="cb-spec-label">
+    <div class="cb-spec-label @(Required && !ReadOnly ? "cb-spec-label-required" : null)">
         @Label
         @if (Required && !ReadOnly)
         {
@@ -34,6 +34,7 @@
 
     .cb-spec-item.cb-spec-edit {
         padding-bottom: 6px;
+        background: #fff;
     }
 
     .cb-spec-item .mud-input-control {
@@ -46,6 +47,10 @@
         color: var(--mud-palette-text-secondary);
         margin-bottom: 4px;
         line-height: 1.3;
+    }
+
+    .cb-spec-label.cb-spec-label-required {
+        color: var(--mud-palette-error);
     }
 
     .cb-spec-req {

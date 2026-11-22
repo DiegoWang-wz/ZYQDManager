@@ -15,6 +15,10 @@ public class SqlServerDbContext : DbContext
     public DbSet<MotorGgModel> MotorGg => Set<MotorGgModel>();
     public DbSet<MotorCrModel> MotorCr => Set<MotorCrModel>();
     public DbSet<ApprovalFlowModel> ApprovalFlows => Set<ApprovalFlowModel>();
+    public DbSet<ProjectModel> Projects => Set<ProjectModel>();
+    public DbSet<ProjectVersionModel> ProjectVersions => Set<ProjectVersionModel>();
+    public DbSet<ProjectFlowLogModel> ProjectFlowLogs => Set<ProjectFlowLogModel>();
+    public DbSet<EmployeeModel> Employees => Set<EmployeeModel>();
     public DbSet<ZyqdCotractBaseModel> CotractBases => Set<ZyqdCotractBaseModel>();
     public DbSet<ZyqdCotractPiModel> CotractPis => Set<ZyqdCotractPiModel>();
     public DbSet<ZyqdBalancePayTypeModel> BalancePayTypes => Set<ZyqdBalancePayTypeModel>();
@@ -90,6 +94,61 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Action).HasColumnName("Action");
         });
+
+        modelBuilder.Entity<EmployeeModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Employee");
+            entity.HasKey(e => e.EmpNo);
+            entity.Property(e => e.EmpNo).HasMaxLength(20).ValueGeneratedNever();
+            entity.Property(e => e.EmpName).HasMaxLength(50);
+            entity.Property(e => e.Department).HasMaxLength(100);
+            entity.Property(e => e.Position).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<ProjectModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Project");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.HasIndex(e => e.ProjectGuid).IsUnique();
+            entity.Property(e => e.ProductType).HasMaxLength(50);
+            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.DeleteFlag).HasMaxLength(1);
+        });
+
+        modelBuilder.Entity<ProjectVersionModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_ProjectVersion");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.HasIndex(e => new { e.ProjectGuid, e.VersionNo }).IsUnique();
+            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.PendingEmpNo).HasMaxLength(50);
+            entity.Property(e => e.PendingRole).HasMaxLength(50);
+            entity.Property(e => e.ManagerEmpNo).HasMaxLength(50);
+            // 列是 TINYINT（省空间），实体是 int；必须显式指定 byte 转换，
+            // 否则 EF 按 byte 物化再赋给 int 属性会抛 InvalidCastException（Byte → Int32）。
+            entity.Property(e => e.CurrentNode).HasConversion<byte>();
+            entity.HasIndex(e => new { e.CurrentNode, e.PendingEmpNo });
+        });
+
+        modelBuilder.Entity<ProjectFlowLogModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_ProjectFlowLog");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.ProjectGuid).HasMaxLength(50);
+            entity.Property(e => e.VersionNo).HasMaxLength(20);
+            entity.Property(e => e.NodeName).HasMaxLength(50);
+            entity.Property(e => e.OperatorCode).HasMaxLength(50);
+            entity.Property(e => e.RelatedCode).HasMaxLength(50);
+            entity.Property(e => e.State).HasMaxLength(20);
+            entity.Property(e => e.Remark).HasMaxLength(500);
+            entity.Property(e => e.ChangeReason).HasMaxLength(500);
+            // 流程记录表按「项目 + 版本 + 序号」整段取，索引照着这个走
+            entity.HasIndex(e => new { e.ProjectGuid, e.VersionNo, e.Seq });
+        });
+
 
         modelBuilder.Entity<ZyqdCotractBaseModel>(entity =>
         {

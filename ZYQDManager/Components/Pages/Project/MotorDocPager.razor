@@ -1,0 +1,243 @@
+@page "/project/motor/{Kind}/{DocGuid}"
+@inject MotorDocService DocSvc
+
+@*
+    一屏三单容器：立项单 / 规格书 / 承认书。
+
+    - 三张单据同版本常驻 DOM，左右切换只做 transform 平移，不整页重载；
+    - 数据由本组件用 GetBundleAsync 一次取齐（6 条查询），三个子组件共用，切换时零查询；
+    - 离屏的两张用 CSS content-visibility 跳过布局与绘制，首帧成本接近单张；
+    - 路由仍是 /project/motor/{kind}/{docGuid}，URL 可直接分享、刷新、后退。
+
+    子组件不查库是有意为之：同一渲染树里的多个子组件会并发初始化，
+    各自用注入的 scoped DbContext 查询会撞 "A second operation was started on this context instance"。
+*@
+
+<PageTitle>@Title</PageTitle>
+
+@if (_loading)
+{
+    <div class="mdpager-state">正在加载单据…</div>
+}
+else if (IsNew)
+{
+    <div class="mdpager-single">
+        @switch (_currentKind)
+        {
+            case "gg":
+                <MotorGgSheet DocGuid="new" Embedded="true"
+                              ProjectGuid="@ProjectGuidQuery" FromLx="@FromLx"/>
+                break;
+            case "cr":
+                <MotorCrSheet DocGuid="new" Embedded="true"
+                              ProjectGuid="@ProjectGuidQuery" FromGg="@FromGg" FromLx="@FromLx"
+                              VersionNo="@VersionQuery"/>
+                break;
+            default:
+                <MotorLxSheet DocGuid="new" Embedded="true" VersionQuery="@VersionQuery"/>
+                break;
+        }
+    </div>
+}
+else if (_bundle is null)
+{
+    <div class="mdpager-state">
+        @(_error ?? "未找到单据，可能已被删除。")
+        <a href="/project">返回项目列表</a>
+    </div>
+}
+else
+{
+    <div class="mdpager">
+        <div class="mdpager-track" style="@TrackStyle">
+            <div class="mdpager-slide @SlideClass("lx")">
+                @if (_bundle.Lx is not null)
+                {
+                    <MotorLxSheet DocGuid="@_bundle.Lx.DocGuid" Bundle="@_bundle" Embedded="true"
+                                  GgVisible="_ggVisible" VersionQuery="@VersionQuery"
+                                  AutoSubmit="IsSubmitRequested"/>
+                }
+                else
+                {
+                    <div class="mdpager-empty">该版本还没有立项单</div>
+                }
+            </div>
+
+            <div class="mdpager-slide @SlideClass("gg")">
+                @if (!_ggVisible)
+                {
+                    @* 规格书还在研发手里：业务员侧连 DOM 都不渲染，避免草稿内容随页面下发 *@
+                    <div class="mdpager-empty">规格书由研发工程师编制中，研发经理审批通过后可查看</div>
+                }
+                else if (_bundle.Gg is not null)
+                {
+                    <MotorGgSheet DocGuid="@_bundle.Gg.DocGuid" Bundle="@_bundle" Embedded="true"
+                                  GgVisible="_ggVisible" Active="@(_currentKind == "gg")"/>
+                }
+                else
+                {
+                    <div class="mdpager-empty">该版本还没有规格书</div>
+                }
+            </div>
+
+            <div class="mdpager-slide @SlideClass("cr")">
+                @if (_bundle.Cr is not null)
+                {
+                    <MotorCrSheet DocGuid="@_bundle.Cr.DocGuid" Bundle="@_bundle" Embedded="true"
+                                  GgVisible="_ggVisible"/>
+                }
+                else
+                {
+                    <div class="mdpager-empty">该版本还没有承认书</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* 箭头固定贴视口边缘，必须放在带 transform 的容器外，否则 fixed 会以 track 为包含块 *@
+    <MotorDocArrows Docs="@_bundle.Docs" Kind="@_currentKind" GgVisible="_ggVisible"/>
+}
+
+@code {
+    [Parameter] public string? Kind { get; set; }
+    [Parameter] public string? DocGuid { get; set; }
+
+    [SupplyParameterFromQuery(Name = "ver")] public string? VersionQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "projectGuid")] public string? ProjectGuidQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "fromLx")] public string? FromLx { get; set; }
+    [SupplyParameterFromQuery(Name = "fromGg")] public string? FromGg { get; set; }
+
+    /// <summary>
+    /// 修改立项单生成新版本后，希望接着提交：URL 带 ?submit=1，
+    /// 由立项单页在加载完成后自动弹出提交框。
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "submit")] public string? SubmitQuery { get; set; }
+
+    private bool IsSubmitRequested => !string.IsNullOrWhiteSpace(SubmitQuery);
+
+    private static readonly string[] Order = ["lx", "gg", "cr"];
+
+    private MotorDocBundle? _bundle;
+    private string _currentKind = "lx";
+    private bool _loading;
+    private string? _error;
+
+    /// <summary>登录人工号 / 角色，用于判定规格书是否对当前人开放。</summary>
+    private string? _myEmpNo;
+    private string? _myRole;
+
+    /// <summary>
+    /// 规格书是否可见：研发经理审批通过（节点 4）之前，只有研发侧能看，
+    /// 业务员直接从立项单开始 —— 规则见 <see cref="MotorNode.CanViewGg"/>。
+    /// </summary>
+    private bool _ggVisible = true;
+
+    private bool IsNew => string.IsNullOrWhiteSpace(DocGuid)
+                          || string.Equals(DocGuid, "new", StringComparison.OrdinalIgnoreCase);
+
+    private int Index
+    {
+        get
+        {
+            var i = Array.IndexOf(Order, _currentKind);
+            return i < 0 ? 0 : i;
+        }
+    }
+
+    /// <summary>轨道宽 300%，平移按轨道宽度的 1/3 步进，即一个视口宽度。</summary>
+    private string TrackStyle => $"transform: translateX(-{Index * 100.0 / Order.Length:0.####}%);";
+
+    private string? SlideClass(string kind) => _currentKind == kind ? "is-active" : null;
+
+    private string Title => _currentKind switch
+    {
+        "gg" => "电机规格书",
+        "cr" => "电机承认书",
+        _ => IsNew ? "新建电机立项单" : "电机立项单"
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var kind = NormalizeKind(Kind);
+        var docGuid = (DocGuid ?? "").Trim();
+
+        _currentKind = kind;
+        _error = null;
+
+        // 新建：单页渲染，不需要整屏数据
+        if (IsNewGuid(docGuid))
+        {
+            _bundle = null;
+            _loading = false;
+            return;
+        }
+
+        // 同版本切换：目标单据已经在 bundle 里，只移动视口，不查库
+        if (_bundle is not null && _bundle.ContainsDocGuid(docGuid))
+        {
+            await ApplyVisibilityAsync();
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var (projectGuid, versionNo) = await DocSvc.LocateAsync(kind, docGuid);
+            if (string.IsNullOrWhiteSpace(projectGuid) || string.IsNullOrWhiteSpace(versionNo))
+            {
+                _bundle = null;
+                _error = "未找到该单据所属的项目或版本。";
+                return;
+            }
+
+            _bundle = await DocSvc.GetBundleAsync(projectGuid, versionNo);
+            await ApplyVisibilityAsync();
+        }
+        catch (Exception ex)
+        {
+            _bundle = null;
+            _error = "加载失败：" + ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// 算一次「规格书能不能看」：节点 1~3 只有研发侧可见，节点 4 起与归档后所有人可见。
+    /// 业务员直接从规格书地址进来（收藏、粘贴链接）时退回立项单，不留一个打不开的页面。
+    /// </summary>
+    private async Task ApplyVisibilityAsync()
+    {
+        var docs = _bundle?.Docs;
+        if (docs is null)
+        {
+            _ggVisible = true;
+            return;
+        }
+
+        var auth = await Auth.GetStoredAsync();
+        _myEmpNo = auth?.EmpNo;
+        _myRole = auth?.Role;
+
+        var node = MotorNode.Normalize(docs.CurrentNode);
+        if (MotorFlow.IsVersionArchived(docs.VersionStatus, node)) node = MotorNode.Archived;
+
+        _ggVisible = MotorNode.CanViewGg(
+            node, _myEmpNo, _myRole, docs.Version?.PendingEmpNo, docs.Version?.PendingRole);
+
+        if (!_ggVisible && _currentKind == "gg") _currentKind = "lx";
+    }
+
+    private static string NormalizeKind(string? kind)
+    {
+        var k = (kind ?? "lx").Trim().ToLowerInvariant();
+        return Array.IndexOf(Order, k) >= 0 ? k : "lx";
+    }
+
+    private static bool IsNewGuid(string? docGuid)
+        => string.IsNullOrWhiteSpace(docGuid)
+           || string.Equals(docGuid, "new", StringComparison.OrdinalIgnoreCase);
+}

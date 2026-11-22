@@ -302,12 +302,12 @@ public class CentralAuthService
         return await _localStorage.GetOperatorIdAsync(ct);
     }
 
+    /// <summary>
+    /// 人员管理权限：管理员 / 固定超管 / 销售经理（销售经理权限等同管理员）。
+    /// 统一走 <see cref="AppRoles.IsAdmin"/>，避免这里和页面各自维护一份 admin 判断。
+    /// </summary>
     public bool CanManageUsers(StoredCentralAuth? auth)
-    {
-        if (auth is null) return false;
-        return string.Equals(auth.Role, "admin", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(auth.EmpNo, "JcAdmin", StringComparison.OrdinalIgnoreCase);
-    }
+        => auth is not null && AppRoles.IsAdmin(auth.Role, auth.EmpNo);
 
     /// <summary>全部客户：合同基础数据、项目等按客户过滤的模块。</summary>
     public bool CanViewAllCustomers(StoredCentralAuth? auth, ZyqdUserInformationDto? info)

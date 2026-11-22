@@ -1,3 +1,5 @@
+@inject IWebHostEnvironment Env
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -6,6 +8,9 @@
     <base href="/"/>
     <link rel="stylesheet" href="@Assets["app.css"]"/>
     <link rel="stylesheet" href="@Assets["ZYQDManager.styles.css"]"/>
+    <!-- 项目模块（立项单/规格书/承认书）类 Excel 表格样式，仅使用 msheet- 前缀，不影响其它页面。
+         带文件写入时间做版本号：开发期改完 CSS 刷新即生效，不会被浏览器缓存的旧样式表盖掉。 -->
+    <link rel="stylesheet" href="css/motor-sheet.css?v=@MotorSheetCssVersion"/>
     <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet"/>
     <ImportMap/>
     <link rel="icon" type="image/png" href="favicon.png"/>
@@ -24,3 +29,28 @@
 <script src="@Assets["js/site.js"]"></script>
 </body>
 </html>
+
+@code {
+    /// <summary>
+    /// 单据样式表的版本号：取文件最后写入时间。
+    /// 开发期改完 motor-sheet.css 刷新页面就能拿到新样式，不会被浏览器缓存里的旧文件盖掉。
+    /// </summary>
+    private string MotorSheetCssVersion
+    {
+        get
+        {
+            try
+            {
+                var root = Env.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
+                var path = Path.Combine(root, "css", "motor-sheet.css");
+                return File.Exists(path)
+                    ? File.GetLastWriteTimeUtc(path).Ticks.ToString()
+                    : "1";
+            }
+            catch
+            {
+                return "1";
+            }
+        }
+    }
+}

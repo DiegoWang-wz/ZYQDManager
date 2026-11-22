@@ -152,12 +152,19 @@
                     <MudTextField @bind-Value="_edit.Phone" Label="电话" Variant="Variant.Outlined" Margin="Margin.Dense"/>
                     <MudSelect T="string" @bind-Value="RoleBind" Label="本系统角色" Variant="Variant.Outlined" Margin="Margin.Dense">
                         <MudSelectItem Value="@("operator")">业务员</MudSelectItem>
+                        <MudSelectItem Value="@("sales_manager")">销售经理</MudSelectItem>
                         <MudSelectItem Value="@("inspector")">检测员</MudSelectItem>
+                        <MudSelectItem Value="@("rd_manager")">研发经理</MudSelectItem>
+                        <MudSelectItem Value="@("rd_engineer")">研发工程师</MudSelectItem>
                         <MudSelectItem Value="@("admin")">管理员</MudSelectItem>
                     </MudSelect>
                     @if (IsInspectorRole)
                     {
                         <MudAlert Severity="Severity.Info" Dense="true">检测员仅可访问「检测报告管理」模块。</MudAlert>
+                    }
+                    else if (IsRdRole)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">研发经理/工程师当前仅可访问「项目管理」「检测报告管理」；其它权限后续再开。</MudAlert>
                     }
                     else
                     {
@@ -177,7 +184,7 @@
                     }
                     <MudSwitch T="bool" @bind-Value="_edit.CanViewInvoiceKp"
                                Color="Color.Primary"
-                               Disabled="@(IsAdminRole || IsInspectorRole)"
+                               Disabled="@(IsAdminRole || IsLimitedRole)"
                                Label="@(IsAdminRole ? "遮阳开票汇总（管理员默认可用）" : "可查看遮阳开票汇总")"/>
                 </MudStack>
             </MudTabPanel>
@@ -630,6 +637,10 @@
 
     private bool IsInspectorRole => AppRoles.IsInspector(_edit.Role);
 
+    private bool IsRdRole => AppRoles.IsRdRole(_edit.Role);
+
+    private bool IsLimitedRole => AppRoles.IsLimitedModuleRole(_edit.Role);
+
     private bool EffectiveViewAll => IsAdminRole || _edit.ViewAllCustomers;
 
     private string RoleBind
@@ -831,7 +842,7 @@
             _edit.ViewAllPacking = true;
             _edit.CanViewInvoiceKp = true;
         }
-        else if (AppRoles.IsInspector(role))
+        else if (AppRoles.IsLimitedModuleRole(role))
         {
             _edit.ViewAllCustomers = false;
             _edit.ViewAllPiCi = false;
@@ -1046,11 +1057,11 @@
         {
             var role = string.IsNullOrWhiteSpace(_edit.Role) ? AppRoles.Operator : _edit.Role.Trim();
             var isAdminRole = AppRoles.IsAdmin(role);
-            var isInspectorRole = AppRoles.IsInspector(role);
-            var viewAllCustomers = isAdminRole || (!isInspectorRole && _edit.ViewAllCustomers);
-            var viewAllPiCi = isAdminRole || (!isInspectorRole && _edit.ViewAllPiCi);
-            var viewAllPacking = isAdminRole || (!isInspectorRole && _edit.ViewAllPacking);
-            var canInvoice = isAdminRole || (!isInspectorRole && _edit.CanViewInvoiceKp);
+            var isLimitedRole = AppRoles.IsLimitedModuleRole(role);
+            var viewAllCustomers = isAdminRole || (!isLimitedRole && _edit.ViewAllCustomers);
+            var viewAllPiCi = isAdminRole || (!isLimitedRole && _edit.ViewAllPiCi);
+            var viewAllPacking = isAdminRole || (!isLimitedRole && _edit.ViewAllPacking);
+            var canInvoice = isAdminRole || (!isLimitedRole && _edit.CanViewInvoiceKp);
             var controls = BuildAppControls(role, canInvoice, _existingControls);
             var created = _edit.IsCreate;
             var empNo = _edit.EmpNo.Trim();
@@ -1276,7 +1287,10 @@
         {
             "超级管理员" => Color.Error,
             "管理员" => Color.Warning,
+            "销售经理" => Color.Success,
             "检测员" => Color.Tertiary,
+            "研发经理" => Color.Secondary,
+            "研发工程师" => Color.Primary,
             _ => Color.Info
         };
     }
@@ -1399,7 +1413,7 @@
 
     /// <summary>
     /// 写入 JcCommonApi Controls：
-    /// 管理员可不带 Controls；检测员仅开放检测报告；业务员保留其它页并更新开票页。
+    /// 管理员可不带 Controls；检测员仅检测报告；研发角色为项目+检测报告；业务员保留其它页并更新开票页。
     /// </summary>
     private static Dictionary<string, ControlPermissionApiDto>? BuildAppControls(
         string role,
@@ -1409,17 +1423,8 @@
         if (AppRoles.IsAdmin(role))
             return null;
 
-        if (AppRoles.IsInspector(role))
-        {
-            return new Dictionary<string, ControlPermissionApiDto>(StringComparer.OrdinalIgnoreCase)
-            {
-                [CentralApiOptions.SirRoute] = new ControlPermissionApiDto
-                {
-                    Visible = true,
-                    Disabled = false
-                }
-            };
-        }
+        if (AppRoles.IsInspector(role) || AppRoles.IsRdRole(role))
+            return AppRoles.DefaultJoinControls(role);
 
         var map = new Dictionary<string, ControlPermissionApiDto>(StringComparer.OrdinalIgnoreCase);
         var invoiceKey = CentralApiOptions.NormalizeControlKey(CentralApiOptions.InvoiceKpRoute);

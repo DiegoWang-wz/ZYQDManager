@@ -1,0 +1,107 @@
+@*
+    通用退回弹窗：列出当前节点之前的全部步骤，选目标节点并显示接手人，填退回原因。
+*@
+<MudDialog Class="motor-reject-dialog">
+    <TitleContent>
+        <div class="motor-dialog-title reject">@Title</div>
+    </TitleContent>
+    <DialogContent>
+        <MudSelect T="int?" Label="退回到" @bind-Value="_target"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2"
+                   Dense="true">
+            @foreach (var option in Options)
+            {
+                <MudSelectItem T="int?" Value="@option.Node">
+                    @option.Label（接手人：@option.Assignee）
+                </MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudTextField @bind-Value="_reason"
+                      Label="退回原因（选填）"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="3"
+                      MaxLength="200"/>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled"
+                   Disabled="@(_target is null)"
+                   StartIcon="@Icons.Material.Filled.Undo"
+                   OnClick="Confirm">确认退回</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .motor-dialog-title { margin: -16px -24px 0; padding: 14px 24px; font-size: 18px; font-weight: 600; }
+    .motor-dialog-title.reject { background: #fdecec; color: #b91c1c; }
+
+    /* 退回弹窗内容少：设高并隐藏 Y 轴滚动条但保留滚动能力 */
+    .mud-dialog.motor-reject-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE / Edge */
+    }
+    .mud-dialog.motor-reject-dialog {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE / Edge */
+    }
+    .mud-dialog.motor-reject-dialog::-webkit-scrollbar,
+    .mud-dialog.motor-reject-dialog .mud-dialog-content::-webkit-scrollbar {
+        display: none; /* Chrome / Safari / Edge */
+    }
+</style>
+
+@code {
+    /// <summary>页面里一行调用：弹退回框，返回「是否确认」+「目标节点/退回原因」。</summary>
+    public static async Task<(bool Ok, MotorRejectPick? Pick)> AskAsync(
+        IDialogService dialogService,
+        string title,
+        IReadOnlyList<MotorRejectOption> options,
+        int? defaultValue = null)
+    {
+        var dialog = await dialogService.ShowAsync<MotorRejectDialog>(title,
+            new DialogParameters
+            {
+                [nameof(MotorRejectDialog.Title)] = title,
+                [nameof(MotorRejectDialog.Options)] = options,
+                [nameof(MotorRejectDialog.DefaultValue)] = defaultValue
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not MotorRejectPick pick)
+            return (false, null);
+        return (true, pick);
+    }
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string Title { get; set; } = "退回节点";
+    [Parameter] public IReadOnlyList<MotorRejectOption> Options { get; set; } = [];
+    [Parameter] public int? DefaultValue { get; set; }
+
+    private int? _target;
+    private string? _reason;
+
+    protected override void OnInitialized()
+    {
+        _target = DefaultValue;
+        if (_target is null && Options.Count > 0)
+            _target = Options[0].Node;
+    }
+
+    private void Confirm()
+    {
+        if (_target is null || _target.Value < 1) return;
+        MudDialog.Close(DialogResult.Ok(new MotorRejectPick
+        {
+            TargetNode = _target.Value,
+            Comment = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim()
+        }));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

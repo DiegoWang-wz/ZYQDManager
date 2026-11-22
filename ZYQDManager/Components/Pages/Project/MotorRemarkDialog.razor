@@ -1,0 +1,86 @@
+@*
+    通用备注弹窗：审批 / 回传签字版 / 归档等动作前收集一句说明。
+    弹窗只收集文本，由页面把返回值传给流程服务；服务同时写
+    T_ZYQD_ApprovalFlow.FlowComment 与 T_ZYQD_ProjectFlowLog.Remark。
+*@
+<MudDialog Class="motor-remark-dialog">
+    <TitleContent>
+        <div class="motor-dialog-title @ToneClass">@Title</div>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_comment"
+                      Label="备注（可选）"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="3"
+                      MaxLength="200"
+                      AutoFocus="true"/>
+    </DialogContent>
+    <DialogActions>
+        @if (!string.IsNullOrWhiteSpace(Caption))
+        {
+            <span class="motor-dialog-hint">@Caption</span>
+        }
+        <MudButton OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm">确认</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .motor-dialog-title { margin: -16px -24px 0; padding: 14px 24px; font-size: 18px; font-weight: 600; }
+    .motor-dialog-title.approve { background: #e7f6ec; color: #166534; }
+    .motor-dialog-title.submit { background: #fff1dd; color: #9a5b00; }
+
+    /* 提示靠左、按钮靠右；内容区设高并隐藏 Y 滚动条 */
+    .mud-dialog.motor-remark-dialog .mud-dialog-actions { justify-content: space-between; gap: 8px; }
+    .motor-dialog-hint { flex: 1; font-size: 12px; line-height: 1.4; text-align: left; color: #9a5b00; }
+    .mud-dialog.motor-remark-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .mud-dialog.motor-remark-dialog .mud-dialog-content::-webkit-scrollbar { display: none; }
+</style>
+
+@code {
+    /// <summary>
+    /// 页面里一行调用：弹备注框，返回「是否确认」+「备注文本」。
+    /// 取消返回 Ok=false，调用方应中止动作；确认但没填备注照样放行（备注可选）。
+    /// </summary>
+    public static async Task<(bool Ok, string? Comment)> AskAsync(
+        IDialogService dialogService, string title, string caption, string tone = "approve")
+    {
+        var dialog = await dialogService.ShowAsync<MotorRemarkDialog>(title,
+            new DialogParameters
+            {
+                [nameof(MotorRemarkDialog.Title)] = title,
+                [nameof(MotorRemarkDialog.Caption)] = caption,
+                [nameof(MotorRemarkDialog.Tone)] = tone
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is null || result.Canceled) return (false, null);
+        return (true, result.Data as string);
+    }
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string Title { get; set; } = "填写备注";
+
+    [Parameter] public string Caption { get; set; } = "这一步会写入流程记录，方便以后追溯。";
+
+    /// <summary>抬头配色：approve 淡绿 / submit 淡橙。</summary>
+    [Parameter] public string Tone { get; set; } = "approve";
+
+    private string ToneClass => string.Equals(Tone, "submit", StringComparison.OrdinalIgnoreCase)
+        ? "submit" : "approve";
+
+    private string? _comment;
+
+    private void Confirm()
+        => MudDialog.Close(DialogResult.Ok(string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim()));
+
+    private void Cancel() => MudDialog.Cancel();
+}

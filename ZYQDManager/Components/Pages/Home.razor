@@ -113,11 +113,11 @@
     protected override async Task OnInitializedAsync()
     {
         var auth = await Auth.GetStoredAsync();
-        var isInspector = AppRoles.IsInspector(auth?.Role);
-        var canSeeBusiness = !isInspector;
+        var canSeeBusiness = AppRoles.CanSeeFullBusinessModules(auth?.Role);
+        var canSeeProject = AppRoles.CanSeeProject(auth?.Role);
         var canInvoice = canSeeBusiness && Auth.IsPageVisible(auth, CentralApiOptions.InvoiceKpRoute);
         var canUsers = Auth.CanManageUsers(auth);
-        _entries = PortalEntries.FilterForUser(canSeeBusiness, canInvoice, canUsers).ToList();
+        _entries = PortalEntries.FilterForUser(canSeeBusiness, canSeeProject, canInvoice, canUsers).ToList();
         _ready = true;
     }
 

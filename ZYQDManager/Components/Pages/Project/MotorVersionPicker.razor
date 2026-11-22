@@ -1,0 +1,153 @@
+@inject MotorLxService LxSvc
+@inject MotorDocService DocSvc
+@inject NavigationManager Nav
+@inject SnackbarHelper Notify
+
+@*
+    三张单据页统一的「版本」下拉选择器。
+    排在工具栏最右侧（右侧信息之前），三页位置和外观一致。
+
+    切换逻辑按单据类型取目标 DocGuid：
+    - lx 走立项单表；
+    - gg / cr 走版本聚合（GetVersionDocsAsync），该版本没这份单据就提示而不是跳空白页。
+*@
+@if (!string.IsNullOrWhiteSpace(ProjectGuid) && VersionNos.Count > 0)
+{
+    @* title 挂在外层：鼠标停到「版本」两个字上也能看到这一版改了什么 *@
+    <span class="msheet-version" title="@Title">
+        <span class="msheet-bar-label">版本</span>
+        <select class="msheet-version-select"
+                value="@(SelectedVersionNo ?? "")"
+                disabled="@_busy"
+                @onchange="SwitchAsync"
+                title="@Title">
+            @foreach (var no in VersionNos)
+            {
+                <option value="@no" selected="@MotorFlow.Same(no, SelectedVersionNo)">@Label(no)</option>
+            }
+        </select>
+    </span>
+}
+
+@code {
+    /// <summary>项目 Guid，空值时不渲染下拉（新建未保存）。</summary>
+    [Parameter] public string? ProjectGuid { get; set; }
+
+    /// <summary>当前正在看的版本号（下拉框的选中项）。</summary>
+    [Parameter] public string? SelectedVersionNo { get; set; }
+
+    /// <summary>项目表上的当前版本号（下拉框里标「（当前）」用），与正在看的版本可能不同。</summary>
+    [Parameter] public string? CurrentVersionNo { get; set; }
+
+    /// <summary>项目下的版本号列表，由页面用 GetVersionOptionsAsync 查好传入。</summary>
+    [Parameter] public List<string> VersionNos { get; set; } = [];
+
+    /// <summary>版本行，用于在下拉里标注「已归档」。</summary>
+    [Parameter] public List<ProjectVersionModel> Versions { get; set; } = [];
+
+    /// <summary>当前是哪张单据：lx / gg / cr，决定切换后跳到哪个路由。</summary>
+    [Parameter] public string DocKind { get; set; } = "lx";
+
+    /// <summary>
+    /// 附加说明，挂在悬停提示上。承认书用它交代「来源规格书版本」，
+    /// 这样工具栏最右侧不必再多一串静态文字。
+    /// </summary>
+    [Parameter] public string? SourceHint { get; set; }
+
+    private bool _busy;
+
+    /// <summary>悬停提示里最多列几条修改点，剩下的用一行省略号带过。</summary>
+    private const int MaxTipChanges = 12;
+
+    /// <summary>
+    /// 悬停提示：说明当前这一版改了什么（修改说明 + 逐字段修改点）。
+    /// 用原生 title，多行文本浏览器会按行显示；这一版没有改动记录就退回「切换版本」。
+    /// </summary>
+    private string Title
+    {
+        get
+        {
+            var version = Versions.FirstOrDefault(x => MotorFlow.Same(x.VersionNo, SelectedVersionNo));
+            var lines = new List<string>();
+
+            var reason = (version?.ChangeReason ?? "").Trim();
+            if (reason.Length > 0) lines.Add($"修改说明：{reason}");
+
+            var changes = MotorLxDiff.FromJson(version?.ChangeDiff);
+            if (changes.Count > 0)
+            {
+                lines.Add($"修改点（{changes.Count} 项）：");
+                lines.AddRange(changes.Take(MaxTipChanges)
+                                     .Select(x => $"· {x.Field}：{x.OldText} → {x.NewText}"));
+                if (changes.Count > MaxTipChanges)
+                    lines.Add($"… 其余 {changes.Count - MaxTipChanges} 项");
+            }
+
+            if (lines.Count == 0)
+                return string.IsNullOrWhiteSpace(SourceHint) ? "切换版本" : $"切换版本（{SourceHint}）";
+
+            if (!string.IsNullOrWhiteSpace(SourceHint)) lines.Add(SourceHint!);
+            lines.Add("点击可切换版本");
+
+            return string.Join("\n", lines);
+        }
+    }
+
+    private string Kind => string.IsNullOrWhiteSpace(DocKind) ? "lx" : DocKind.Trim().ToLowerInvariant();
+
+    private string DocTitle => Kind switch
+    {
+        "gg" => "规格书",
+        "cr" => "承认书",
+        _ => "立项单"
+    };
+
+    private string Label(string no)
+    {
+        if (no.Length == 0) return "(未命名)";
+        if (MotorFlow.Same(no, CurrentVersionNo)) return $"{no}（当前）";
+
+        var row = Versions.FirstOrDefault(x => MotorFlow.Same(x.VersionNo, no));
+        if (row is not null && MotorFlow.Same(row.Status, MotorFlow.VersionArchived))
+            return $"{no}（已归档）";
+
+        return no;
+    }
+
+    private async Task SwitchAsync(ChangeEventArgs e)
+    {
+        var version = (e.Value?.ToString() ?? "").Trim();
+        if (version.Length == 0 || MotorFlow.Same(version, SelectedVersionNo)) return;
+        if (string.IsNullOrWhiteSpace(ProjectGuid)) return;
+
+        _busy = true;
+        try
+        {
+            string? docGuid = Kind switch
+            {
+                "gg" => (await DocSvc.GetVersionDocsAsync(ProjectGuid!, version)).GgDocGuid,
+                "cr" => (await DocSvc.GetVersionDocsAsync(ProjectGuid!, version)).CrDocGuid,
+                _ => await LxSvc.GetLxDocGuidAsync(ProjectGuid!, version)
+            };
+
+            if (string.IsNullOrWhiteSpace(docGuid))
+            {
+                Notify.Show($"版本 {version} 还没有{DocTitle}", Severity.Warning);
+                return;
+            }
+
+            var url = $"/project/motor/{Kind}/{Uri.EscapeDataString(docGuid!.Trim())}";
+            if (Kind == "lx") url += $"?ver={Uri.EscapeDataString(version)}";
+
+            Nav.NavigateTo(url);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("切换版本失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

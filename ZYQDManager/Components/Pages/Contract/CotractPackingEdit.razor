@@ -164,44 +164,45 @@
         <MudPaper Class="pa-1 cpk-lines-panel" Outlined="true">
             <MudTable T="CustomsAndPackingLineDto" Items="_lines" Dense="true" Hover="true" Bordered="true"
                       Breakpoint="Breakpoint.None" Elevation="0" Class="cpk-line-table"
-                      Height="100%">
+                      Height="100%"
+                      SortMode="SortMode.Single">
                 <HeaderContent>
                     <MudTh Style="width:40px">
                         <MudCheckBox T="bool" Dense="true" Value="_selectAll" ValueChanged="OnSelectAllChanged"
                                      Disabled="_busy"/>
                     </MudTh>
                     <MudTh>客户外箱标识</MudTh>
-                    <MudTh>客户PO号</MudTh>
-                    <MudTh>客户型号</MudTh>
-                    <MudTh>SAP订单*</MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Client_poNo">客户PO号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.materialModel">客户型号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.SAP_order_NO">SAP订单*</MudTableSortLabel></MudTh>
                     <MudTh>铭牌1</MudTh>
-                    <MudTh>铭牌1类型</MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.nameplate_type">铭牌1类型</MudTableSortLabel></MudTh>
                     <MudTh>铭牌2</MudTh>
-                    <MudTh>铭牌2类型</MudTh>
-                    <MudTh Class="cpk-sticky-l1">物料号</MudTh>
-                    <MudTh Class="cpk-sticky-l2">物料名</MudTh>
-                    <MudTh Class="cpk-sticky-l3">数量</MudTh>
-                    <MudTh>打包方式</MudTh>
-                    <MudTh>打包单位</MudTh>
-                    <MudTh>箱数</MudTh>
-                    <MudTh>尾箱量</MudTh>
-                    <MudTh>纸箱尺寸</MudTh>
-                    <MudTh>托盘尺寸</MudTh>
-                    <MudTh>打托方式</MudTh>
-                    <MudTh>打托单位</MudTh>
-                    <MudTh>整托数</MudTh>
-                    <MudTh>不足托箱</MudTh>
-                    <MudTh>尾托尺寸</MudTh>
-                    <MudTh>尾托打托</MudTh>
-                    <MudTh>净重</MudTh>
-                    <MudTh>毛重</MudTh>
-                    <MudTh>总净重</MudTh>
-                    <MudTh>总毛重</MudTh>
-                    <MudTh>托重</MudTh>
-                    <MudTh>体积</MudTh>
-                    <MudTh>托盘编号</MudTh>
-                    <MudTh>散发</MudTh>
-                    <MudTh>行类型</MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.nameplate_type2">铭牌2类型</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-sticky-l1"><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.materialNo">物料号</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-sticky-l2"><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.materialName">物料名</MudTableSortLabel></MudTh>
+                    <MudTh Class="cpk-sticky-l3"><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.qty">数量</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Packing_method">打包方式</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Packing_method_unit">打包单位</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.box_qty">箱数</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.var1">尾箱量</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Carton_Size">纸箱尺寸</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Pallet_Size">托盘尺寸</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.palletizing_method">打托方式</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.palletizing_method_unit">打托单位</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Pallet_qty">整托数</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.var3">不足托箱</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.var2">尾托尺寸</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.var4">尾托打托</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Net_weight">净重</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.gross_weight">毛重</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.total_Net_weight">总净重</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.total_gross_weight">总毛重</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Pallet_weight">托重</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.volume">体积</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.Pallet_code">托盘编号</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.emit">散发</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="CustomsAndPackingLineDto" SortBy="x => x.var7">行类型</MudTableSortLabel></MudTh>
                     <MudTh Class="cpk-sticky-ops">操作</MudTh>
                 </HeaderContent>
                 <RowTemplate>

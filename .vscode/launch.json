@@ -1,0 +1,56 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ZYQDManager · HTTP 启动 (5240)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build: ZYQDManager (Debug)",
+      "program": "${workspaceFolder}/ZYQDManager/bin/Debug/net9.0/ZYQDManager.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/ZYQDManager",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5240"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "ZYQDManager · 热重载启动 (dotnet watch)",
+      "type": "coreclr",
+      "request": "attach",
+      "processName": "ZYQDManager",
+      "preLaunchTask": "watch: ZYQDManager (Hot Reload)",
+      "postDebugTask": "kill: ZYQDManager",
+      "justMyCode": false
+    },
+    {
+      "name": "ZYQDManager · 打包并运行 (Release → W:\\ZYQManger)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "publish: ZYQDManager (Release)",
+      "program": "W:/ZYQManger/ZYQDManager.dll",
+      "args": [],
+      "cwd": "W:/ZYQManger",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "DOTNET_ENVIRONMENT": "Production",
+        "ASPNETCORE_URLS": "http://localhost:5241"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)"
+      },
+      "justMyCode": false
+    }
+  ]
+}

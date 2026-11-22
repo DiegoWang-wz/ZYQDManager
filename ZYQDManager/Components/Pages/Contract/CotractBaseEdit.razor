@@ -104,12 +104,14 @@
                         <div class="cb-hero-fields">
                             <MudTextField @bind-Value="_model.ClientName"
                                           Label="客户名称"
+                                          Class="cb-hero-required"
                                           Variant="Variant.Outlined"
                                           Margin="Margin.Dense"
                                           Required="true"
                                           Disabled="_busy"/>
                             <MudTextField @bind-Value="_model.materialNo"
                                           Label="物料编号"
+                                          Class="cb-hero-required"
                                           Variant="Variant.Outlined"
                                           Margin="Margin.Dense"
                                           Required="true"
@@ -441,6 +443,10 @@
     .cb-hero-fields .mud-input-control {
         margin-top: 0;
         margin-bottom: 0;
+    }
+
+    .cb-hero-required .mud-input-label {
+        color: var(--mud-palette-error) !important;
     }
 
     .cb-detail-hero {

@@ -54,7 +54,7 @@
                                  ToStringFunc="@(p => p is null ? "" : ProductLabel(p))"
                                  Placeholder="@(_products.Count == 0 ? "先填客户编号回车" : "输入物料号/名称/型号筛选")"/>
             </div>
-            <button type="button" class="cpi-btn cpi-btn-add" disabled="@(_busy || _selectedProduct is null)" @onclick="AddLineAsync">+</button>
+            <button type="button" class="cpi-btn cpi-btn-add" disabled="@(_busy || _selectedProduct is null)" @onclick="AddLineAsync">+ 新增</button>
         </div>
     </div>
 
@@ -176,7 +176,7 @@
             {
                 var idx = i;
                 var line = _lines[idx];
-                <tr @key="@(line.Uid + "-a")">
+                <tr @key="@(line.Uid + "-a")" class="@(idx % 2 == 0 ? "cpi-block-even" : "cpi-block-odd")">
                     <td colspan="1" rowspan="4" class="cpi-center">@(idx + 1)</td>
                     <td colspan="1" class="cpi-label">Cust#:</td>
                     <td colspan="7"><input class="cpi-cell" readonly value="@line.materiaCust"/></td>
@@ -205,15 +205,15 @@
                     <td colspan="1"><input class="cpi-cell cpi-center" readonly value="@Curr"/></td>
                     <td colspan="2"><input class="cpi-cell cpi-center" readonly value="@line.ext.ToString("0.00")"/></td>
                 </tr>
-                <tr @key="@(line.Uid + "-b")">
+                <tr @key="@(line.Uid + "-b")" class="@(idx % 2 == 0 ? "cpi-block-even" : "cpi-block-odd")">
                     <td colspan="1" class="cpi-label">Specs:</td>
                     <td colspan="26"><input class="cpi-cell" readonly value="@line.materiaSpecs"/></td>
                 </tr>
-                <tr @key="@(line.Uid + "-c")">
+                <tr @key="@(line.Uid + "-c")" class="@(idx % 2 == 0 ? "cpi-block-even" : "cpi-block-odd")">
                     <td colspan="1" class="cpi-label">Powered:</td>
                     <td colspan="26"><input class="cpi-cell" readonly value="@line.materiaPowered"/></td>
                 </tr>
-                <tr @key="@(line.Uid + "-d")">
+                <tr @key="@(line.Uid + "-d")" class="@(idx % 2 == 0 ? "cpi-block-even" : "cpi-block-odd")">
                     <td colspan="1" class="cpi-label">Notes:</td>
                     <td colspan="@(IsDerivedDoc ? 14 : 24)">
                         <input class="cpi-cell cpi-edit" placeholder="Notes" @bind="_lines[idx].Notes" @bind:event="oninput"/>
@@ -630,6 +630,13 @@
         line-height: 1.3;
         height: auto !important;
     }
+    /* 物料块斑马纹：每 4 行（一个物料）同色，按物料序号交替 */
+    .cpi-sheet tbody tr.cpi-block-even td { background: #f5f8fc; }
+    .cpi-sheet tbody tr.cpi-block-odd td { background: #fff; }
+    /* 可编辑输入框默认背景是白色，会盖住斑马纹，这里让它在斑马块内透出底色 */
+    .cpi-sheet tbody tr.cpi-block-even .cpi-cell.cpi-edit { background: transparent; }
+    .cpi-sheet tbody tr.cpi-block-even .cpi-cell.cpi-edit:focus { background: #fff; }
+
     .cpi-sheet td { padding: 2px; }
     .cpi-cell {
         width: 100%;
@@ -1769,9 +1776,10 @@
         CotractPiTypes.ApplyCustomsPartyOverrides(_header, forceCustoms: true);
         if (CotractPiTypes.IsJsConsignmentOrder(_header.var6))
         {
+            // 寄售报关 PI 名称段 = JS21(原客户 PI 真实客户名)，用 ClientName_old 而非可能已被覆盖的 ClientName
             _header.INVOICE_NO = await CotractPi.BuildInvoiceNoAsync(
                 _header.ClientNo,
-                CotractPiTypes.ConsignmentCustomsInvoiceName,
+                _header.ClientName_old,
                 _header.var6,
                 _header.DocumentGuid);
         }
