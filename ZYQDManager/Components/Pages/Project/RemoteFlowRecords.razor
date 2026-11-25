@@ -1,0 +1,194 @@
+﻿@*
+    流程记录：按「版本 / 节点 / 操作人 / 相关人 / 状态 / 时间」列事件。
+
+    数据源只有一个：T_ZYQD_ProjectFlowLog。
+    每走完一步（或每次退回）就在那张表追加一行，这里按版本分组、按序号排列，
+    不做任何倒推 —— 操作人、相关人、时间都是当时落库的值，读出来就是对的。
+
+    只对已归档的版本显示 —— 归档后留下的是查档依据，流程进行中看左侧时间线即可。
+    三页共用，默认收起，点开看明细。
+*@
+@if (_version is not null && Archived)
+{
+    <div class="mflow @(IsOpen ? "is-open" : null)">
+        <button type="button" class="mflow-head" @onclick="Toggle">
+            <MudIcon Icon="@Icons.Material.Filled.History" Style="font-size:16px"/>
+            <span class="mflow-title">流程记录</span>
+            <span class="mflow-count @(EventCount > 0 ? "is-all" : null)">@EventCount 条记录</span>
+            <MudIcon Icon="@(IsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                     Style="font-size:18px;margin-left:auto"/>
+        </button>
+
+        @if (IsOpen)
+        {
+            <div class="mftable-wrap">
+                <table class="mftable">
+                    <colgroup>
+                        <col style="width:76px"/>
+                        <col/>
+                        <col style="width:96px"/>
+                        <col style="width:96px"/>
+                        <col style="width:90px"/>
+                        <col style="width:180px"/>
+                        <col style="width:140px"/>
+                    </colgroup>
+                    <thead>
+                    <tr>
+                        <th>版本</th>
+                        <th>节点</th>
+                        <th>操作人</th>
+                        <th>相关人</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th>时间</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        if (row.IsHeader)
+                        {
+                            <tr class="mftable-version-row">
+                                <td class="mftable-version">@row.VersionLabel</td>
+                                <td colspan="6" class="mftable-version-reason">@row.Reason</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr class="@(row.IsReject ? "mftable-reject" : null)">
+                                <td class="mftable-version"></td>
+                                <td title="@row.Node">@row.Node</td>
+                                <td title="@row.Operator">@NameOf(row.Operator)</td>
+                                <td title="@row.Related">@NameOf(row.Related)</td>
+                                <td title="@row.State">@row.State</td>
+                                <td title="@row.Remark">@row.Remark</td>
+                                <td class="mftable-time">@row.Time</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>三份单据页面查一次就有的定位信息，里面带着版本行和流程日志。</summary>
+    [Parameter] public RemoteVersionDocs? Docs { get; set; }
+
+    private ProjectVersionModel? _version;
+    private int _seenVersionId = -1;
+
+    private List<FlowRow> _rows = [];
+
+    /// <summary>默认收起：标题条上只显示「流程记录 N 条记录」，点开才看明细。</summary>
+    private bool IsOpen { get; set; }
+
+    /// <summary>整版已归档：只有归档版本才渲染这块记录。</summary>
+    private bool Archived { get; set; }
+
+    /// <summary>标题条上的数量：实际展开的事件行数（表头行不算）。</summary>
+    private int EventCount => _rows.Count(r => !r.IsHeader);
+
+    protected override void OnParametersSet()
+    {
+        _version = Docs?.Version;
+        Archived = RemoteFlow.IsVersionArchived(Docs?.VersionStatus, Docs?.CurrentNode ?? 0);
+        _rows = BuildRows();
+
+        // 默认收起，用户点标题条才展开。
+        // 只在换了版本行（切版本 / 重新载入）时把展开状态复位，
+        // 否则手动展开后，页面每次重渲染都会被打回去。
+        var id = _version?.Id ?? -1;
+        if (id != _seenVersionId)
+        {
+            _seenVersionId = id;
+            IsOpen = false;
+        }
+    }
+
+    private void Toggle() => IsOpen = !IsOpen;
+
+    /// <summary>父组件一次查回的姓名表；查不到时退回工号。</summary>
+    private string NameOf(string? empNo)
+    {
+        if (string.IsNullOrWhiteSpace(empNo)) return "—";
+        return Docs?.NodeNames.TryGetValue(empNo, out var name) == true && !string.IsNullOrWhiteSpace(name)
+            ? name!
+            : empNo!;
+    }
+
+    /// <summary>表格一行：表头行（版本号 + 修改原因）或事件行。</summary>
+    private sealed record FlowRow(
+        string VersionLabel, string Node, string? Operator, string? Related,
+        string State, string? Remark, string Time,
+        bool IsReject = false, bool IsHeader = false, string? Reason = null);
+
+    /// <summary>
+    /// 本项目所有版本（按创建顺序，V1 在最前）：流程记录按版本分组逐组展开，
+    /// 老版本是查档依据，不能因为页面停在最新版就把它们藏起来。
+    /// </summary>
+    private IReadOnlyList<ProjectVersionModel> Versions
+    {
+        get
+        {
+            var all = Docs?.Versions;
+            if (all is { Count: > 0 }) return all.OrderBy(v => v.Id).ToList();
+            return _version is null ? [] : [_version];
+        }
+    }
+
+    /// <summary>
+    /// 组装表格：每个版本先出表头行（版本号 + 修改原因），
+    /// 再按序号把 T_ZYQD_ProjectFlowLog 里的日志行原样铺开。
+    /// </summary>
+    private List<FlowRow> BuildRows()
+    {
+        var rows = new List<FlowRow>();
+        foreach (var v in Versions)
+        {
+            rows.Add(VersionHeaderRow(v));
+            rows.AddRange(LogRows(v));
+        }
+        return rows;
+    }
+
+    /// <summary>某版本的日志行，已按版本 + 序号排好（服务层排序，这里保持原序）。</summary>
+    private IEnumerable<FlowRow> LogRows(ProjectVersionModel v)
+    {
+        var logs = (Docs?.FlowLogs ?? [])
+            .Where(x => RemoteFlow.Same(x.VersionNo, v.VersionNo))
+            .OrderBy(x => x.Seq)
+            .ThenBy(x => x.Id);
+
+        foreach (var log in logs)
+        {
+            var isReject = RemoteFlow.Same(log.State, RemoteFlow.LogReject);
+            var state = isReject ? "退回" : log.State;
+
+            yield return new FlowRow(
+                "",
+                string.IsNullOrWhiteSpace(log.NodeName) ? RemoteNode.RecordTitle(log.Node) : log.NodeName,
+                log.OperatorCode,
+                log.RelatedCode,
+                state,
+                OneLine(log.Remark),
+                log.ActionTime.ToString("yyyy/MM/dd HH:mm"),
+                IsReject: isReject);
+        }
+    }
+
+    /// <summary>表头行：版本号 + 修改原因（改版派生的版本才有原因）。</summary>
+    private static FlowRow VersionHeaderRow(ProjectVersionModel v)
+    {
+        var versionNo = (v.VersionNo ?? "").Trim();
+        var reason = OneLine(v.ChangeReason);
+        return new FlowRow(versionNo, "", null, null, "", null, "", IsHeader: true,
+            Reason: reason.Length == 0 ? null : reason);
+    }
+
+    private static string OneLine(string? text)
+        => (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+}
+

@@ -45,7 +45,7 @@ public class CotractPiExcelService
 
         ApplyInvoiceTitle(ws, english, main.var6);
 
-        var extra = Math.Max(0, rows.Count - 1) * 6;
+        var extra = Math.Max(0, rows.Count - 1) * 6 + SourcePiGroups(rows, main.var6).Count;
         ApplyTradeFeeLayout(ws, extra, english, main.BILL_TO_FOB);
         WriteCompletion(ws, rows);
         OmitEmptyRemarkRow(ws, extra, english, main, rows);
@@ -111,12 +111,25 @@ public class CotractPiExcelService
         Set(ws, 8, 1, main.SHIP_TO_info3);
         Set(ws, 9, 1, main.SHIP_TO_info4); Set(ws, 9, 9, main.BILL_TO_FOB);
 
-        var extra = Math.Max(0, rows.Count - 1) * 6;
+        var groups = SourcePiGroups(rows, main.var6);
+        var extra = Math.Max(0, rows.Count - 1) * 6 + groups.Count;
         EnsureBlocks(ws, 11, 16, 6, rows.Count);
+
+        var shift = 0;
         for (var i = 0; i < rows.Count; i++)
         {
+            // 报关 PI / 客户 CI：不同来源 PI 前插一行，单独显示 PI 号
+            var group = groups.FirstOrDefault(g => g.Index == i);
+            if (group.Pi is { Length: > 0 })
+            {
+                var sepExcel = 12 + 6 * i + shift;
+                ws.Row(sepExcel - 1).InsertRowsBelow(1);
+                WriteSourcePiRow(ws, sepExcel, sepExcel + 1, group.Pi);
+                shift++;
+            }
+
             var item = rows[i];
-            var r = 11 + 6 * i;
+            var r = 11 + 6 * i + shift;
             Set(ws, r, 2, item.materiaCust);
             Set(ws, r, 8, FmtQty(item.qty));
             Set(ws, r, 9, item.var7);
@@ -155,12 +168,25 @@ public class CotractPiExcelService
         Set(ws, 9, 1, main.SHIP_TO_info3);
         Set(ws, 10, 1, main.SHIP_TO_info4); Set(ws, 10, 9, main.BILL_TO_FOB);
 
-        var extra = Math.Max(0, rows.Count - 1) * 6;
+        var groups = SourcePiGroups(rows, main.var6);
+        var extra = Math.Max(0, rows.Count - 1) * 6 + groups.Count;
         EnsureBlocks(ws, 12, 17, 6, rows.Count);
+
+        var shift = 0;
         for (var i = 0; i < rows.Count; i++)
         {
+            // 报关 PI / 客户 CI：不同来源 PI 前插一行，单独显示 PI 号
+            var group = groups.FirstOrDefault(g => g.Index == i);
+            if (group.Pi is { Length: > 0 })
+            {
+                var sepExcel = 13 + 6 * i + shift;
+                ws.Row(sepExcel - 1).InsertRowsBelow(1);
+                WriteSourcePiRow(ws, sepExcel, sepExcel + 1, group.Pi);
+                shift++;
+            }
+
             var item = rows[i];
-            var r = 12 + 6 * i;
+            var r = 12 + 6 * i + shift;
             Set(ws, r, 2, item.materiaCust);
             Set(ws, r, 8, FmtQty(item.qty));
             Set(ws, r, 9, item.var7);
@@ -373,8 +399,8 @@ public class CotractPiExcelService
     }
 
     /// <summary>
-    /// 模板 F19:J19 为合并单元格，和 Shipping_Fee 同行；明细插入后整行下移。
-    /// 必须在清理运费之后写，否则清 J 列会把合并格内容一起清掉。
+    /// 预计完成时间写在 Shipping_Fee 同行的 H 列（三套模板统一），靠右、不换行；
+    /// 明细插入后整行下移。必须在清理运费之后写，否则清 K:M 列会碰到同行的运费格。
     /// </summary>
     private static void WriteCompletion(IXLWorksheet ws, IReadOnlyList<ZyqdCotractPiModel> rows)
     {
@@ -384,11 +410,14 @@ public class CotractPiExcelService
         var row = FindCompletionExcelRow(ws);
         if (row <= 0) return;
 
-        var cell = ws.Cell(row, 6);
-        if (cell.IsMerged())
-            cell = cell.MergedRange().FirstCell();
+        // H 列（Excel 第 8 列）。三套模板该格都是独立单元格，不取合并首格，
+        // 否则老模板里 F:J 合并时会把文字挪回 F 列。
+        var cell = ws.Cell(row, 8);
         cell.Style.NumberFormat.Format = "@";
         cell.SetValue("Estimated Time of Completion: " + text);
+        cell.Style.Alignment.WrapText = false;
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
     }
 
     private static int FindCompletionExcelRow(IXLWorksheet ws)
@@ -728,32 +757,97 @@ public class CotractPiExcelService
     }
 
     /// <summary>
-    /// 写 Specs 下方那一行：报关 PI / 客户 CI 且该行本为空时，显示来源客户 PI（PI: xxx）并靠右对齐；
-    /// 其余情况原样写入 Specs 折行。客户 PI 不写（其 var13 是本单号）。
+    /// 写 Specs 下方那一行：这里只放 Specs 折行，不再塞来源 PI。
+    /// 客户 PI 的行级来源号放到同一行的 M 列（更靠右）；报关 PI / 客户 CI 的来源号
+    /// 由 WriteSourcePiRow 在每个 PI 分组前单独起一行显示。
     /// </summary>
     private static void WriteSpecsLine(
         IXLWorksheet ws, int npoiRow, ZyqdCotractPiModel item, string? specsLastLine)
     {
-        var last = specsLastLine ?? "";
-        var isSource = false;
-        var text = last;
-        if (last.Trim().Length == 0
-            && (CotractPiTypes.IsCustomerCi(item.var6) || CotractPiTypes.IsCustomsPi(item.var6)))
+        Set(ws, npoiRow, 2, specsLastLine ?? "");
+
+        // 客户 PI 的 var13 是本单号，不能当来源号；只认行级 var15。
+        var source = (item.var15 ?? "").Trim();
+        if (source.Length == 0) return;
+        if (CotractPiTypes.IsCustomerCi(item.var6) || CotractPiTypes.IsCustomsPi(item.var6)) return;
+
+        // npoi 12 → Excel M 列；与 Specs 同一行，靠右显示
+        var cell = ws.Cell(npoiRow + 1, 13);
+        cell.Style.NumberFormat.Format = "@";
+        cell.Value = "PI: " + source;
+        cell.Style.Alignment.WrapText = false;
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+    }
+
+    /// <summary>
+    /// 报关 PI / 客户 CI：连续的同一来源客户 PI 为一组，组前插入一行显示 PI 号，
+    /// 方便一眼区分不同来源单。返回「明细起始行之前的额外行数」，供后续费用/付款行偏移使用。
+    /// </summary>
+    private static List<(int Index, string Pi)> SourcePiGroups(
+        IReadOnlyList<ZyqdCotractPiModel> rows, string? orderType)
+    {
+        var result = new List<(int, string)>();
+        if (!CotractPiTypes.IsCustomerCi(orderType) && !CotractPiTypes.IsCustomsPi(orderType))
+            return result;
+
+        string? previous = null;
+        for (var i = 0; i < rows.Count; i++)
         {
-            var source = SourceInvoiceOf(item);
-            if (!string.IsNullOrWhiteSpace(source))
-            {
-                text = "PI: " + source;
-                isSource = true;
-            }
+            var pi = SourceInvoiceOf(rows[i]);
+            if (string.IsNullOrWhiteSpace(pi)) continue;
+            if (string.Equals(pi, previous, StringComparison.OrdinalIgnoreCase)) continue;
+            result.Add((i, pi));
+            previous = pi;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 在明细块前插入一行 PI 分隔行，样式取自该组第一行，文字写在 B:H 合并格里。
+    /// </summary>
+    private static void WriteSourcePiRow(
+        IXLWorksheet ws, int excelRow, int prototypeExcelRow, string pi)
+    {
+        try
+        {
+            ws.Range(prototypeExcelRow, 2, prototypeExcelRow, 8)
+                .CopyTo(ws.Cell(excelRow, 2));
+        }
+        catch
+        {
+            // 模板合并/边框异常时忽略，至少保证文字能写进去
         }
 
-        Set(ws, npoiRow, 2, text);
-        if (isSource)
+        ws.Range(excelRow, 1, excelRow, 13).Clear(XLClearOptions.Contents);
+        try
         {
-            // 该格是横向合并格（如 C16:M16），取首格设右对齐，让 PI 号贴在右侧显示
-            ResolveCell(ws, npoiRow + 1, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            ws.Range(excelRow, 2, excelRow, 8).Merge();
         }
+        catch
+        {
+            // 已合并则跳过
+        }
+
+        // 四边框照抄模板明细行 A 列的边框（同样的线型与颜色），
+        // 不手写黑色细线，否则比表格其它线明显更粗更黑。
+        var borderSource = ws.Cell(prototypeExcelRow, 1);
+        var bottomSource = ws.Cell(prototypeExcelRow, 3);
+        for (var c = 2; c <= 8; c++)
+        {
+            var target = ws.Cell(excelRow, c);
+            CopyBorderStyle(borderSource, target);
+            // A 列在这时没有被序号合并格包住，底边可能为空；用同排 C 格的底边补齐
+            target.Style.Border.BottomBorder = bottomSource.Style.Border.BottomBorder;
+            target.Style.Border.BottomBorderColor = bottomSource.Style.Border.BottomBorderColor;
+        }
+
+        var cell = ws.Cell(excelRow, 2);
+        cell.Style.NumberFormat.Format = "@";
+        cell.Value = "PI: " + pi;
+        cell.Style.Alignment.WrapText = false;
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        ws.Row(excelRow).Height = ws.Row(prototypeExcelRow).Height;
     }
 
     private static (string First, string Last) SplitSpecs(string? specs)

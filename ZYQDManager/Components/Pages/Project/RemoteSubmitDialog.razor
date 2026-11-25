@@ -1,0 +1,313 @@
+﻿@inject RdEngineerDirectoryService Directory
+
+@*
+    统一的「指派研发人员」弹窗：
+      - 立项单提交：按部门选研发工程师（默认用法）；
+      - 规格书提交审批：选研发经理（不按部门筛）。
+    人员都来自 JcCommonApi 账号库（按角色过滤），不读本地表。
+*@
+
+<MudDialog Class="motor-submit-dialog">
+    <TitleContent>
+        <div class="motor-dialog-title submit">@Title</div>
+    </TitleContent>
+    <DialogContent>
+        @if (UseDepartment)
+        {
+            <MudSelect T="string" Label="部门"
+                       Value="_department" ValueChanged="OnDepartmentChanged"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                       Disabled="@_loadingDept">
+                @foreach (var d in _departments)
+                {
+                    <MudSelectItem T="string" Value="@d">@d</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        @if (ShowPrimary)
+        {
+            <MudSelect T="string" Label="@PersonLabel" @bind-Value="_empNo"
+                       Variant="Variant.Outlined" Margin="Margin.Dense"
+                       ToStringFunc="@PersonText"
+                       Disabled="@(_loading || _people.Count == 0)">
+                @foreach (var e in _people)
+                {
+                    <MudSelectItem T="string" Value="@e.EmpNo">@e.Display</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_loading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mt-3"/>
+            }
+            else if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+            }
+            else if (_people.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@EmptyHint</MudAlert>
+            }
+        }
+
+        @if (HasSecondary)
+        {
+            <MudSelect T="string" Label="@SecondaryPersonLabel" @bind-Value="_empNo2"
+                       Variant="Variant.Outlined" Margin="Margin.Dense"
+                       ToStringFunc="@SecondaryText"
+                       Disabled="@(_loading2 || _people2.Count == 0)">
+                @foreach (var e in _people2)
+                {
+                    <MudSelectItem T="string" Value="@e.EmpNo">@e.Display</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_loading2)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mt-3"/>
+            }
+            else if (!string.IsNullOrWhiteSpace(_error2))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error2</MudAlert>
+            }
+            else if (_people2.Count == 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@SecondaryEmptyHint</MudAlert>
+            }
+        }
+
+        <MudTextField @bind-Value="_comment"
+                      Label="备注（可选）"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="2"
+                      MaxLength="200"/>
+    </DialogContent>
+    <DialogActions>
+        @if (!string.IsNullOrWhiteSpace(Caption))
+        {
+            <span class="motor-submit-hint">@Caption</span>
+        }
+        <MudButton OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(!CanConfirm || _busy)" OnClick="Confirm">
+            提交
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .motor-dialog-title { margin: -16px -24px 0; padding: 14px 24px; font-size: 18px; font-weight: 600; }
+    .motor-dialog-title.submit { background: #fff1dd; color: #9a5b00; }
+
+    /* 底部提示靠左，按钮靠右 */
+    .mud-dialog.motor-submit-dialog .mud-dialog-actions { justify-content: space-between; gap: 8px; }
+    .motor-submit-hint { flex: 1; color: #9a5b00; font-size: 12px; line-height: 1.4; text-align: left; }
+
+    /* 内容区设高，去掉 Y 滚动条 */
+    .mud-dialog.motor-submit-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE / Edge */
+    }
+    .mud-dialog.motor-submit-dialog .mud-dialog-content::-webkit-scrollbar { display: none; } /* Chrome / Safari / Edge */
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>弹窗标题，默认按立项单提交的口径。</summary>
+    [Parameter] public string Title { get; set; } = "提交立项单";
+
+    /// <summary>标题下的说明文字。</summary>
+    [Parameter]
+    public string Caption { get; set; } =
+        "选好部门与研发工程师后提交：立项单锁定，同时生成该版本的规格书草稿并推给工程师。";
+
+    /// <summary>要取哪个角色的人：rd_engineer / rd_manager。</summary>
+    [Parameter] public string RoleCode { get; set; } = AppRoles.RdEngineer;
+
+    /// <summary>下拉标签。</summary>
+    [Parameter] public string PersonLabel { get; set; } = "研发工程师";
+
+    /// <summary>是否按部门筛选（工程师要筛，经理不筛）。</summary>
+    [Parameter] public bool UseDepartment { get; set; } = true;
+
+    /// <summary>无人可选时的提示。</summary>
+    [Parameter]
+    public string EmptyHint { get; set; } =
+        "该部门下暂无可选工程师，请确认需要指派的工程师是否创建了系统账号，和部门信息维护正确。";
+
+    /// <summary>默认选中的人（例如退回后重新提交时沿用上次指派的经理）。</summary>
+    [Parameter] public string? DefaultEmpNo { get; set; }
+
+    /// <summary>是否显示第一个人（承认书提交时可能只需要补选终审人）。</summary>
+    [Parameter] public bool ShowPrimary { get; set; } = true;
+
+    /// <summary>
+    /// 第二个人：承认书提交时的终审人（销售经理）。
+    /// 传了角色码就多出一个下拉，跟研发经理一起选完再提交。
+    /// </summary>
+    [Parameter] public string? SecondaryRoleCode { get; set; }
+    [Parameter] public string SecondaryPersonLabel { get; set; } = "终审人（销售经理）";
+    [Parameter] public string? SecondaryDefaultEmpNo { get; set; }
+    [Parameter]
+    public string SecondaryEmptyHint { get; set; } =
+        "暂无销售经理账号，请确认需要终审的人员是否创建了系统账号，且角色维护为「销售经理」。";
+
+    private List<string> _departments = [];
+    private List<RdEngineerOption> _people = [];
+    private string _department = "";
+    private string? _empNo;
+    private bool _loading;
+    private bool _loadingDept = true;
+    private bool _busy;
+    private string? _error;
+
+    private List<RdEngineerOption> _people2 = [];
+    private string? _empNo2;
+    private bool _loading2;
+    private string? _error2;
+    private string? _comment;
+
+    private bool HasSecondary => !string.IsNullOrWhiteSpace(SecondaryRoleCode);
+
+    private bool CanConfirm => !_busy
+                               && (!ShowPrimary || _empNo is not null)
+                               && (!HasSecondary || _empNo2 is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UseDepartment)
+        {
+            try
+            {
+                var (ok, departments, msg) = await Directory.GetDepartmentsAsync();
+                _departments = departments;
+                if (!ok && !string.IsNullOrWhiteSpace(msg)) _error = msg;
+
+                _department = _departments.FirstOrDefault() ?? ZyqdDepartments.RdOne;
+            }
+            finally
+            {
+                _loadingDept = false;
+            }
+        }
+        else
+        {
+            _loadingDept = false;
+        }
+
+        if (ShowPrimary) await LoadPeopleAsync();
+        if (HasSecondary) await LoadSecondaryAsync();
+    }
+
+    /// <summary>第二个人（终审人/销售经理）：按角色查，不按部门筛。</summary>
+    private async Task LoadSecondaryAsync()
+    {
+        _loading2 = true;
+        _error2 = null;
+        StateHasChanged();
+
+        try
+        {
+            var (ok, list, msg) = await Directory.QueryByRoleAsync(SecondaryRoleCode!, null);
+            _people2 = list;
+            if (!ok) _error2 = msg;
+
+            if (_people2.Count > 0 && !string.IsNullOrWhiteSpace(SecondaryDefaultEmpNo))
+            {
+                var hit = _people2.FirstOrDefault(
+                    x => string.Equals(x.EmpNo, SecondaryDefaultEmpNo.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (hit is not null) _empNo2 = hit.EmpNo;
+            }
+
+            if (_empNo2 is null && _people2.Count == 1) _empNo2 = _people2[0].EmpNo;
+        }
+        finally
+        {
+            _loading2 = false;
+        }
+    }
+
+    private async Task OnDepartmentChanged(string department)
+    {
+        if (string.Equals(department, _department, StringComparison.Ordinal)) return;
+        _department = department;
+        _empNo = null;
+        await LoadPeopleAsync();
+    }
+
+    private async Task LoadPeopleAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var (ok, list, msg) = await Directory.QueryByRoleAsync(
+                RoleCode, UseDepartment ? _department : null);
+
+            _people = list;
+            if (!ok) _error = msg;
+
+            // 退回后重新提交：沿用上次指派的人，省一次选择
+            if (_people.Count > 0 && !string.IsNullOrWhiteSpace(DefaultEmpNo))
+            {
+                var hit = _people.FirstOrDefault(
+                    x => string.Equals(x.EmpNo, DefaultEmpNo.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (hit is not null) _empNo = hit.EmpNo;
+            }
+
+            // 只有一个人时直接选好，少点一次
+            if (_empNo is null && _people.Count == 1) _empNo = _people[0].EmpNo;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>下拉里把工号显示成「姓名（工号）」。</summary>
+    private string PersonText(string? empNo)
+    {
+        if (string.IsNullOrWhiteSpace(empNo)) return "";
+        var hit = _people.FirstOrDefault(x => string.Equals(x.EmpNo, empNo, StringComparison.OrdinalIgnoreCase));
+        return hit?.Display ?? empNo;
+    }
+
+    /// <summary>第二个下拉同样显示「姓名（工号）」。</summary>
+    private string SecondaryText(string? empNo)
+    {
+        if (string.IsNullOrWhiteSpace(empNo)) return "";
+        var hit = _people2.FirstOrDefault(x => string.Equals(x.EmpNo, empNo, StringComparison.OrdinalIgnoreCase));
+        return hit?.Display ?? empNo;
+    }
+
+    private void Confirm()
+    {
+        if (!CanConfirm) return;
+
+        var hit = _people.FirstOrDefault(
+            x => string.Equals(x.EmpNo, _empNo, StringComparison.OrdinalIgnoreCase));
+        var hit2 = _people2.FirstOrDefault(
+            x => string.Equals(x.EmpNo, _empNo2, StringComparison.OrdinalIgnoreCase));
+
+        _busy = true;
+        MudDialog.Close(DialogResult.Ok(new MotorSubmitPick
+        {
+            Department = _department,
+            EmpNo = (_empNo ?? "").Trim(),
+            Name = hit?.Name ?? "",
+            SecondEmpNo = (_empNo2 ?? "").Trim(),
+            SecondName = hit2?.Name ?? "",
+            Comment = string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim()
+        }));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
+

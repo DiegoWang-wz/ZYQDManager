@@ -15,6 +15,9 @@ public sealed class MotorLxListDto
     public string ProjectGuid { get; set; } = "";
     public string DocGuid { get; set; } = "";
 
+    /// <summary>产品类型（Motor / Remote），「全部」列表据此决定三单路由前缀与流程口径。</summary>
+    public string ProductType { get; set; } = "";
+
     /// <summary>当前版本的规格书 / 承认书标识，列表直接跳转用；没有则为空。</summary>
     public string GgDocGuid { get; set; } = "";
     public string CrDocGuid { get; set; } = "";

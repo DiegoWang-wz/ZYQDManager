@@ -1484,6 +1484,13 @@ public class MotorFlowService
         // target 及之后打回未开始，target 置进行中。
         var completed = ApplyNodeRecords(version, target, now, empNo, pendingEmp);
 
+        // 备注只属于本次实际操作的那一步：completed 里 target 的前一个节点
+        // （提交立项单=节点2 指派工程师、提交规格书=节点4、提交承认书=节点8）。
+        // 一并补齐的前序节点（创建立项单 / 编写规格书 / 编写承认书）不写备注，
+        // 否则用户在一个弹窗填的备注会重复出现在同一批次的所有日志行上。
+        var remarkNode = completed.Count > 0 ? completed[^1] : target - 1;
+        var remark = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
         // 每个刚完成的节点往流程日志表追加一行（操作人 / 相关人 / 时间都取落库值）
         if (completed.Count > 0)
         {
@@ -1507,7 +1514,7 @@ public class MotorFlowService
                     RelatedCode = MotorNode.RelatedOf(
                         doneNode, project?.OwnerEmpNo, engineerCode, version.ManagerEmpNo, version.FinalEmpNo),
                     State = MotorFlow.LogSuccess,
-                    Remark = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
+                    Remark = doneNode == remarkNode ? remark : null,
                     ActionTime = doneTime ?? now,
                     ChangeReason = version.ChangeReason,
                     CreateTime = now

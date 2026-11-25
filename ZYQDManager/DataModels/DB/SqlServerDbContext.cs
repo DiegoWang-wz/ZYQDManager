@@ -14,6 +14,9 @@ public class SqlServerDbContext : DbContext
     public DbSet<MotorLxModel> MotorLx => Set<MotorLxModel>();
     public DbSet<MotorGgModel> MotorGg => Set<MotorGgModel>();
     public DbSet<MotorCrModel> MotorCr => Set<MotorCrModel>();
+    public DbSet<RemoteLxModel> RemoteLx => Set<RemoteLxModel>();
+    public DbSet<RemoteGgModel> RemoteGg => Set<RemoteGgModel>();
+    public DbSet<RemoteCrModel> RemoteCr => Set<RemoteCrModel>();
     public DbSet<ApprovalFlowModel> ApprovalFlows => Set<ApprovalFlowModel>();
     public DbSet<ProjectModel> Projects => Set<ProjectModel>();
     public DbSet<ProjectVersionModel> ProjectVersions => Set<ProjectVersionModel>();
@@ -85,6 +88,27 @@ public class SqlServerDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedOnAdd();
             entity.Property(e => e.Status).HasColumnName("Status");
             entity.Property(e => e.Description).HasColumnName("Description");
+        });
+
+        modelBuilder.Entity<RemoteLxModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Remote_LX");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+
+        modelBuilder.Entity<RemoteGgModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Remote_GG");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+
+        modelBuilder.Entity<RemoteCrModel>(entity =>
+        {
+            entity.ToTable("T_ZYQD_Remote_CR");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
         });
 
         modelBuilder.Entity<ApprovalFlowModel>(entity =>

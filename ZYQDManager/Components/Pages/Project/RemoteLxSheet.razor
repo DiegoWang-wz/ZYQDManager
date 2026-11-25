@@ -1,0 +1,1239 @@
+@inject RemoteLxService LxDb
+@inject RemoteDocService DocSvc
+@inject RemoteFlowService FlowSvc
+@inject RemoteSheetExportService SheetExport
+@inject LibreOfficePdfService LibreOffice
+@inject NavigationManager Nav
+@inject SnackbarHelper Notify
+
+@if (!Embedded)
+{
+    <PageTitle>@(IsNew ? "新建遥控器立项单" : "遥控器立项单")</PageTitle>
+}
+
+<div class="msheet-page">
+    @if (!Embedded)
+    {
+        <RemoteDocArrows Docs="@_vDocs" Kind="lx" GgVisible="GgVisible"/>
+    }
+
+    <div class="msheet-bar msheet-bar-tools">
+        @* 工具栏顺序三页统一：返回列表 → 导出Excel → 导出PDF → 流程动作 →（靠右）右侧信息 → 流程状态 → 版本 *@
+        <button type="button" class="msheet-btn msheet-btn-ghost" @onclick="BackAsync">
+            <MudIcon Icon="@Icons.Material.Filled.ArrowBack"/>返回列表
+        </button>
+        @* 历史版本只留「看」：被新版本取代的老版本不给导出，免得旧参数的文件流出去 *@
+        <button type="button" class="msheet-btn msheet-btn-excel"
+                disabled="@(_busy || IsNew || !IsLatestVersion)"
+                title="@ExportBlockedTip"
+                @onclick="ExportExcelAsync">
+            <MudIcon Icon="@Icons.Material.Filled.TableView"/>导出Excel
+        </button>
+        <button type="button" class="msheet-btn msheet-btn-pdf"
+                disabled="@(_busy || IsNew || !IsLatestVersion)"
+                title="@ExportBlockedTip"
+                @onclick="ExportPdfAsync">
+            <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf"/>导出PDF
+        </button>
+        @if (_editable)
+        {
+            <button type="button" class="msheet-btn msheet-btn-save" disabled="@_busy" @onclick="SaveAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Save"/>@(_busy ? "处理中…" : "保存")
+            </button>
+            <button type="button" class="msheet-btn msheet-btn-submit" disabled="@_busy" @onclick="OpenSubmitDialogAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Send"/>提交
+            </button>
+        }
+        @* 立项单不再显示「研发工程师」；留一个空的 meta 只负责把右边这组顶到最右 *@
+        <div class="msheet-meta"></div>
+        @* 流程状态与版本下拉一起靠右：状态在左，版本占最右角 *@
+        <span class="msheet-tag @(_archived ? "msheet-tag-archived" : _editable ? "msheet-tag-draft" : null)">
+            @StepText
+        </span>
+        <RemoteVersionPicker ProjectGuid="@_m.ProjectGuid"
+                            DocKind="lx"
+                            SelectedVersionNo="@_m.VersionNo"
+                            CurrentVersionNo="@_currentVersionNo"
+                            VersionNos="@_versionNos"
+                            Versions="@_versions"/>
+    </div>
+
+    @if (ShowRejectNotice)
+    {
+        <div class="msheet-bar msheet-reject-notice">
+            <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Style="font-size:16px"/>
+            <span><strong>从「@RemoteFlow.RejectFromTitle(_lastReject!.PrevStepCode)」退回：</strong>@_lastReject.FlowComment</span>
+            <span class="msheet-reject-meta">退回人 @RejectFromDisplay · @_lastReject.ActionTime.ToString("yyyy-MM-dd HH:mm")</span>
+        </div>
+    }
+
+    @if (!_editable && !IsNew)
+    {
+        <div class="msheet-bar msheet-readonly-hint">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size:16px"/>@LockedHintText
+            @if (CanModifyLx)
+            {
+                @* 修改立项单的入口：进入修改模式，保存/提交时自动派生新版本 *@
+                <button type="button" class="msheet-modify-link" disabled="@_busy" @onclick="ModifyLxAsync">点击此处修改立项单</button>
+            }
+        </div>
+    }
+
+    @if (_modifyMode)
+    {
+        <div class="msheet-bar msheet-modify-banner">
+            <MudIcon Icon="@Icons.Material.Filled.EditNote" Style="font-size:16px"/>
+            正在修改立项单：保存或提交时会自动生成新版本，并记录本次修改的字段与说明。
+            <button type="button" class="msheet-btn msheet-btn-ghost" disabled="@_busy" @onclick="CancelModifyAsync">退出修改</button>
+        </div>
+    }
+
+    <RemoteFlowRecords Docs="@_vDocs"/>
+
+    @* 用 fieldset disabled 兜住整张表：提交后 / 归档后所有 input、textarea、checkbox
+       都由浏览器原生禁用，不会出现「文字灰了但复选框还能点」的情况。 *@
+    <fieldset class="msheet-wrap @(_editable ? null : "msheet-readonly")" disabled="@(!_editable)">
+        <table class="msheet">
+            <colgroup>
+                <col style="width:5%"/>
+                <col style="width:16%"/>
+                <col style="width:29%"/>
+                <col style="width:19%"/>
+                <col style="width:14%"/>
+                <col style="width:17%"/>
+            </colgroup>
+            <tbody>
+            <tr>
+
+                <td colspan="6" class="msheet-title">遮阳驱动立项申请输入项目清单</td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-label">需求人:</td>
+
+                <td><input class="msheet-input" placeholder="工号 / 姓名" @bind="_m.DemandPerson" @bind:event="oninput"/></td>
+
+                <td class="msheet-label">提出需求日期：</td>
+
+                <td>
+
+                    <span class="motordate @(_timeToRequest is null ? "is-empty" : "")">
+
+                        <input type="date" class="msheet-input motordate-input" value="@_timeToRequest?.ToString("yyyy-MM-dd")"
+
+                               @onchange='e => { _timeToRequest = ParseDateInput(e); }'/>
+
+                    </span>
+
+                </td>
+
+                <td class="msheet-label">要求完成日期：</td>
+
+                <td>
+
+                    <span class="motordate @(_requiredCompletion is null ? "is-empty" : "")">
+
+                        <input type="date" class="msheet-input motordate-input" value="@_requiredCompletion?.ToString("yyyy-MM-dd")"
+
+                               @onchange='e => { _requiredCompletion = ParseDateInput(e); }'/>
+
+                    </span>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-label is-required">客户:<span class="msheet-req">*</span></td>
+
+                <td colspan="2"><input class="msheet-input" placeholder="客户名称" @bind="_m.Customer" @bind:event="oninput"/></td>
+
+                <td class="msheet-label">客户产品编号：</td>
+
+                <td colspan="2"><input class="msheet-input" placeholder="客户料号" @bind="_m.CustomerPartCode" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">1</td>
+
+                <td class="msheet-label is-required">型号 Model No.<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="遥控器型号" @bind="_m.MotorModelSpec" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">2</td>
+
+                <td class="msheet-label is-required">描述 Description<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="产品描述 / 用途简述" @bind="_m.Description" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">3</td>
+
+                <td class="msheet-label is-required">遥控器尺寸 Remote Size<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="长 x 宽 x 高 (mm)" @bind="_m.RemoteSize" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">4</td>
+
+                <td class="msheet-label is-required">支架尺寸 Bracket Size<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="支架尺寸 (mm)" @bind="_m.BracketSize" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">5</td>
+
+                <td class="msheet-label is-required">遥控器重量 Remote Weight<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-inline">
+
+                        <input class="msheet-input msheet-boxed" placeholder="重量" @bind="_m.RemoteWeight" @bind:event="oninput"/>
+
+                        <span class="msheet-unit">g</span>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">6</td>
+
+                <td class="msheet-label is-required">遥控器颜色 Remote Color<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="颜色" @bind="_m.RemoteColor" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">7</td>
+
+                <td class="msheet-label is-required">电池型号 Battery Type<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="电池型号" @bind="_m.BatteryType" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">8</td>
+
+                <td class="msheet-label is-required">充电口要求 Charging port for chargable remote<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-chk">
+
+                        @foreach (var v in ChargingPorts)
+
+                        {
+
+                            <label>
+
+                                <input type="checkbox" checked="@Has(_m.ChargingMethod, v)"
+
+                                       @onchange='e => _m.ChargingMethod = Toggle(_m.ChargingMethod, v, e.Value is true)'/>@v
+
+                            </label>
+
+                        }
+
+                        <input class="msheet-input msheet-boxed" style="max-width:140px" placeholder="其它"
+
+                               @bind="_m.ChargingMethodNo" @bind:event="oninput"/>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">9</td>
+
+                <td class="msheet-label is-required">发射功率 Transmit Power<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="发射功率" @bind="_m.TransmitPower" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">10</td>
+
+                <td class="msheet-label is-required">频率 Radio Frequency<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-chk">
+
+                        @foreach (var v in RadioFreqs)
+
+                        {
+
+                            <label>
+
+                                <input type="checkbox" checked="@Has(_m.RemoteFrequency, v)"
+
+                                       @onchange='e => _m.RemoteFrequency = Toggle(_m.RemoteFrequency, v, e.Value is true)'/>@v
+
+                            </label>
+
+                        }
+
+                        <input class="msheet-input msheet-boxed" style="max-width:120px" placeholder="其它频率"
+
+                               @bind="_m.RemoteFrequencyOther" @bind:event="oninput"/>
+
+                        <span class="msheet-unit">MHz</span>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">11</td>
+
+                <td class="msheet-label is-required">遥控技术 Radio Mode<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-chk">
+
+                        @foreach (var v in RadioModes)
+
+                        {
+
+                            <label>
+
+                                <input type="checkbox" checked="@Has(_m.RemoteTechnology, v)"
+
+                                       @onchange='e => _m.RemoteTechnology = Toggle(_m.RemoteTechnology, v, e.Value is true)'/>@v
+
+                            </label>
+
+                        }
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">12</td>
+
+                <td class="msheet-label is-required">遥控协议 Protocol<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-chk">
+
+                        <input class="msheet-input msheet-boxed" style="max-width:240px" placeholder="协议"
+
+                               @bind="_m.RemoteProtocol" @bind:event="oninput"/>
+
+                        <input class="msheet-input msheet-boxed" style="max-width:140px" placeholder="其它协议"
+
+                               @bind="_m.RemoteProtocolOther" @bind:event="oninput"/>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">13</td>
+
+                <td class="msheet-label is-required">通道数量 Channel Quantity<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="如 2 / 6 / 16" @bind="_m.ChannelQuantity" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">14</td>
+
+                <td class="msheet-label is-required">工作温度 Working Temperature<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="工作温度范围" @bind="_m.WorkingTemperature" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">15</td>
+
+                <td class="msheet-label is-required">传输距离 Transmit Distance<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-inline">
+
+                        <span class="msheet-unit">室内 Indoor</span>
+
+                        <input class="msheet-input msheet-boxed" style="max-width:100px" placeholder="室内" @bind="_m.RemoteDistanceIndoor" @bind:event="oninput"/>
+
+                        <span class="msheet-unit">m</span>
+
+                        <span class="msheet-unit">室外 Outdoor</span>
+
+                        <input class="msheet-input msheet-boxed" style="max-width:100px" placeholder="室外" @bind="_m.RemoteDistanceOutdoor" @bind:event="oninput"/>
+
+                        <span class="msheet-unit">m</span>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">16</td>
+
+                <td class="msheet-label is-required">应用场景 Application<span class="msheet-req">*</span></td>
+
+                <td colspan="4"><input class="msheet-input" placeholder="应用场景" @bind="_m.Application" @bind:event="oninput"/></td>
+
+            </tr>
+
+            <tr>
+
+                <td class="msheet-idx">17</td>
+
+                <td class="msheet-label is-required">防水等级 IP Degree<span class="msheet-req">*</span></td>
+
+                <td colspan="4">
+
+                    <div class="msheet-inline">
+
+                        <input class="msheet-input msheet-boxed" style="max-width:160px" placeholder="如 IP44" @bind="_m.IpLevel" @bind:event="oninput"/>
+
+                        <input class="msheet-input msheet-boxed" style="max-width:200px" placeholder="其它"
+
+                               @bind="_m.IpLevelOther" @bind:event="oninput"/>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+
+            </tbody>
+        </table>
+    </fieldset>
+</div>
+
+@code {
+    [Parameter] public string? DocGuid { get; set; }
+
+    /// <summary>
+    /// 由 RemoteDocPager 统一取数后传入的一屏三单数据。
+    /// 非空时本组件不再自己查库，直接用这份数据渲染（避免三单各查一遍、也避免并发用同一个 DbContext）。
+    /// </summary>
+    [Parameter] public RemoteDocBundle? Bundle { get; set; }
+
+    /// <summary>嵌入在三单容器里：不输出 PageTitle 与左右翻页箭头（容器统一渲染一份）。</summary>
+    [Parameter] public bool Embedded { get; set; }
+
+    /// <summary>
+    /// 用户从版本下拉里主动选了某一版时才带这个参数。
+    /// 带了就不再往「项目当前版本」上跳，否则切到旧版本会被立刻弹回来。
+    /// </summary>
+    /// <summary>由容器从 ?ver= 解析后传入（本组件已不是路由页，不再直接读查询串）。</summary>
+    [Parameter] public string? VersionQuery { get; set; }
+
+    /// <summary>规格书是否可点开：研发经理审批通过前对业务员关闭，由容器算好传入。</summary>
+    [Parameter] public bool GgVisible { get; set; } = true;
+
+    /// <summary>
+    /// 修改立项单生成新版本后，希望接着提交 —— 容器从 ?submit=1 解析后传进来。
+    /// 页面加载完成后自动弹一次提交弹窗，业务员不用再点一遍。
+    /// </summary>
+    [Parameter] public bool AutoSubmit { get; set; }
+
+    private bool _autoSubmitDone;
+
+    private RemoteLxModel _m = new();
+    private DateTime? _timeToRequest;
+    private DateTime? _requiredCompletion;
+    private bool _busy;
+
+    private static DateTime? ParseDateInput(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(v)) return null;
+        return DateTime.TryParse(v, out var d) ? d : null;
+    }
+    private ApprovalFlowModel? _lastReject;
+
+    /// <summary>退回人姓名：流转记录只存工号，加载时从账号中心解析一次。</summary>
+    private string? _lastRejectFromName;
+
+    /// <summary>
+    /// 退回人显示「姓名（工号）」：姓名优先取版本对应关系表 NodeNames（含流程日志里的操作人），
+    /// 查不到再用账号中心解析的姓名兜底，最后才是工号本身。
+    /// 用计算属性是因为个别加载路径里 NodeNames 赋值晚于 _lastRejectFromName。
+    /// </summary>
+    private string RejectFromDisplay
+    {
+        get
+        {
+            var empNo = _lastReject?.FromUserCode?.Trim();
+            if (string.IsNullOrWhiteSpace(empNo)) return "—";
+            var name = _vDocs.NodeNames.TryGetValue(empNo, out var n) && !string.IsNullOrWhiteSpace(n)
+                ? n
+                : _lastRejectFromName;
+            return string.IsNullOrWhiteSpace(name) ? empNo! : $"{name}（{empNo}）";
+        }
+    }
+
+    /// <summary>
+    /// 规格书退回到立项单时，立项单就停在 LxDraft，正好等于退回记录的退回目标；
+    /// 业务员重填并提交后状态离开 LxDraft，这条退回就算处理完，提示自动收起。
+    /// </summary>
+    private bool ShowRejectNotice => !string.IsNullOrWhiteSpace(_lastReject?.FlowComment)
+        && (RemoteFlow.Same(_m.Status, _lastReject!.StepCode)
+            // 老数据状态为空：只认规格书的退回（立项单自己不会产生退回）
+            || (string.IsNullOrWhiteSpace(_m.Status)
+                && RemoteFlow.Same(_lastReject.DocType, RemoteFlow.DocGg)));
+
+    private bool _loaded;
+
+    /// <summary>版本下拉的数据源：版本号（按立项单实际存在的版本，最新在前）+ 版本表里的归档信息。</summary>
+    private List<string> _versionNos = [];
+
+    /// <summary>当前版本三份单据的定位与状态，页面查一次，翻页箭头与流程判定共用。</summary>
+    private RemoteVersionDocs _vDocs = new();
+    private List<ProjectVersionModel> _versions = [];
+    private string? _currentVersionNo;
+
+    /// <summary>
+    /// 顶部标签 = 流程当前停在哪一步（立项单填写中 / 规格书填写中 / 承认书审批中 / 已归档）。
+    /// 流程图撤掉以后，这一处就是页面上唯一的进度提示。
+    /// </summary>
+    private string StepText
+    {
+        get
+        {
+            if (RemoteFlow.IsVersionArchived(_vDocs.VersionStatus, _vDocs.CurrentNode)) return "已归档";
+            if (!RemoteNode.IsValid(_vDocs.CurrentNode))
+                return RemoteFlow.StatusName(string.IsNullOrWhiteSpace(_m.Status) ? RemoteFlow.LxDraft : _m.Status);
+            return RemoteNode.StepName(_vDocs.CurrentNode);
+        }
+    }
+
+    private string? _empNo;
+
+    /// <summary>登录人的本系统角色，判定「谁能改立项单」用（管理员放行）。</summary>
+    private string? _myRole;
+
+    private bool IsNew => string.IsNullOrWhiteSpace(DocGuid)
+                          || string.Equals(DocGuid, "new", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>整版已归档：状态标签改用「已归档」，页面整体冻结。</summary>
+    private bool _archived => RemoteFlow.IsVersionArchived(_vDocs.VersionStatus, _vDocs.CurrentNode);
+
+    /// <summary>
+    /// 可编辑：草稿（或历史数据空状态）本来就能改；
+    /// 锁单后点「点击此处修改立项单」进入修改模式，也临时打开编辑，
+    /// 只是这种编辑保存时会生成新版本。归档一律锁定。
+    /// </summary>
+    private bool _editable => !_archived
+                              && IsLatestVersion
+                              && (_modifyMode || IsNew || IsLxOwner)
+                              // 修改模式本来就是给「已完成的立项单」用的：进来后必须解开锁定，
+                              // 保存/提交时再派生新版本，不能因为状态不是草稿又把字段禁掉。
+                              && (_modifyMode
+                                  || string.IsNullOrWhiteSpace(_m.Status)
+                                  || RemoteFlow.Same(_m.Status, RemoteFlow.LxDraft));
+
+    /// <summary>修改模式：单据已锁定，点修改后临时放开编辑，保存/提交时派生新版本。</summary>
+    private bool _modifyMode;
+
+    /// <summary>进入修改模式那一刻的业务字段快照，保存时拿它比出改了什么。</summary>
+    private RemoteLxModel? _modifyBase;
+
+    /// <summary>草稿之外（提交过 / 审批中 / 已完成）的单据，才需要「修改」入口。</summary>
+    private bool IsLockedDoc => !IsNew
+                                && !_archived
+                                && !string.IsNullOrWhiteSpace(_m.Status)
+                                && !RemoteFlow.Same(_m.Status, RemoteFlow.LxDraft);
+
+    /// <summary>只能改最新版本：旧版本已经整版留档，改它没意义。</summary>
+    private bool IsLatestVersion => string.IsNullOrWhiteSpace(_currentVersionNo)
+                                    || RemoteFlow.Same(_m.VersionNo, _currentVersionNo);
+
+    /// <summary>
+    /// 谁能改立项单：项目负责人本人或管理员。
+    /// 研发工程师、检测员也能打开这一页看内容（要照着做规格书），
+    /// 但立项单是业务员的单据，不给「修改」入口，免得研发替客户改需求。
+    /// </summary>
+    private bool CanModifyLx => IsLockedDoc && IsLatestVersion && IsLxOwner;
+
+    /// <summary>
+    /// 当前登录人是不是这张立项单的主人：负责人本人（超级管理员 JcAdmin 除外，可全局维护）。
+    /// 销售经理不算管理员 —— 他只在被指派终审时能审批承认书，其余单据一律只读。
+    /// 项目没记负责人时谁都不能改，与服务端护栏一致。
+    /// </summary>
+    private bool IsLxOwner => AppRoles.IsStrictAdmin(_myRole, _empNo)
+                              || (!string.IsNullOrWhiteSpace(_vDocs.OwnerEmpNo)
+                                  && RemoteFlow.Same(_empNo, _vDocs.OwnerEmpNo));
+
+    /// <summary>
+    /// 只读提示文案：归档 / 老版本 / 不是本人单据 / 状态锁定，四种原因说清楚，
+    /// 用户才知道该找谁、为什么按钮没了。
+    /// </summary>
+    private string LockedHintText => _archived
+        ? "该版本已归档，内容已冻结，仅供查看与导出。"
+        : !IsLatestVersion
+            ? $"该版本不是最新版本（最新为 {_currentVersionNo}），仅供查看。"
+            : !IsLxOwner
+                ? "该立项单由业务员编制中，只有项目负责人可以编辑。"
+                : $"当前状态为「{RemoteFlow.StatusName(_m.Status)}」，内容已锁定，仅供查看与导出。";
+
+    /// <summary>历史版本导不出去，按钮上挂一句说明。</summary>
+    private string? ExportBlockedTip => IsLatestVersion ? null : "历史版本只能查看，不能导出";
+
+    private string ShortGuid => (_m.DocGuid ?? "").Length > 10 ? _m.DocGuid![..10] : _m.DocGuid ?? "";
+
+    private static readonly string[] Voltages = ["5V", "8.4V", "12V", "24V", "110V", "230V", "100-240V"];
+    private static readonly string[] RadioFreqs = ["433.92 MHz", "447.x MHz", "868.x MHz"];
+    private static readonly string[] RadioModes = ["单向 Single-way", "双向 Bi-directional"];
+    private static readonly string[] ChargingPorts = ["None", "Micro-USB", "Type-C"];
+    private static readonly string[] Protocols = ["Standard 标准", "Customized 定制"];
+    private static readonly string[] Functions = ["None", "RS485", "Dry Contact 干接点", "Others 其它"];
+    private static readonly string[] SmartModules = ["None", "ZigBee 3.0", "Bluetooth", "Matter", "Wi-Fi", "Matter/Bluetooth"];
+    private static readonly string[] IpLevels = ["IP40", "IP44", "IP45", "IP66"];
+    private static readonly string[] YesNo = ["是 Yes", "否 No"];
+    private static readonly string[] InputPowers =
+    [
+        "AC110V/60Hz", "AC230V/50Hz", "AC100-240V",
+        "12V/2A Adapter", "12V/3A Adapter", "12V/4A Adapter",
+        "8.4V/1A Adapter", "24V/1A Adapter",
+        "Li-ion Battery 2 cell", "Li-ion Battery 3 cell", "Li-ion Battery 4 cell"
+    ];
+    private static readonly string[] ChargePorts = ["Type-C", "Micro-USB", "JST Plug", "其它"];
+    private static readonly string[] Applications =
+    [
+        "卷帘 Roller shade", "蜂巢帘 Honeycomb Shade", "香格里拉帘 Shangri-la Blinds",
+        "罗马帘 Roman Shade", "木百叶帘 Wooden Venetian Blinds", "斑马帘 Zebra Shade",
+        "遮阳篷 Ceiling Blinds", "铝百叶帘 Aluminum Venetian Blinds", "投影屏 Projection screen", "开合帘 Curtain"
+    ];
+    private static readonly string[] UsageEnvs = ["室内 Indoor", "室外 Outdoor", "特殊环境 Special"];
+
+    private static bool Has(string? value, string option)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return value.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Any(x => string.Equals(x, option, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? Toggle(string? value, string option, bool on)
+    {
+        var set = (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (on) set.Add(option); else set.Remove(option);
+        return set.Count == 0 ? null : string.Join(",", set);
+    }
+
+    /// <summary>已经套用过的 bundle 实例：父组件换了新数据才重新套用，避免重复覆盖用户正在编辑的内容。</summary>
+    private RemoteDocBundle? _appliedBundle;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 容器模式：数据由 RemoteDocPager 一次取好，这里只套用，不查库
+        if (Bundle is not null && !ReferenceEquals(_appliedBundle, Bundle))
+        {
+            var bundleAuth = await Auth.GetStoredAsync();
+            _empNo = bundleAuth?.EmpNo;
+            _myRole = bundleAuth?.Role;
+            await ApplyBundleAsync(Bundle);
+            return;
+        }
+
+        if (_loaded && !IsNew && string.Equals(_m.DocGuid, DocGuid, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var auth = await Auth.GetStoredAsync();
+        _empNo = auth?.EmpNo;
+        _myRole = auth?.Role;
+
+        if (IsNew)
+        {
+            await InitNewAsync();
+            _loaded = true;
+            return;
+        }
+
+        await LoadAsync(DocGuid!);
+        _loaded = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 修改立项单生成新版本后带 ?submit=1 跳过来：渲染完成再弹提交框，
+        // 这样弹窗里的必填校验针对的是新版本的正式内容。
+        if (!AutoSubmit || _autoSubmitDone || !_loaded || IsNew || !_editable) return;
+
+        _autoSubmitDone = true;
+        await OpenSubmitDialogAsync();
+    }
+
+    /// <summary>把父组件取好的整屏数据套到本页字段上（零查询）。</summary>
+    private async Task ApplyBundleAsync(RemoteDocBundle bundle)
+    {
+        _appliedBundle = bundle;
+        _vDocs = bundle.Docs;
+        _versionNos = bundle.VersionNos;
+        _versions = bundle.Versions;
+        _currentVersionNo = bundle.CurrentVersionNo;
+
+        _m = bundle.Lx ?? new RemoteLxModel();
+        _lastReject = bundle.LatestReject;
+        _lastRejectFromName = await ResolveEmpNameAsync(_lastReject?.FromUserCode);
+        _timeToRequest = _m.TimeToRequest?.Date;
+        _requiredCompletion = _m.RequiredCompletionTime?.Date;
+
+        // 换了单据（切版本 / 修改后跳到新版本）：退出修改模式，避免把上一张的快照带过来
+        _modifyMode = false;
+        _modifyBase = null;
+
+        _loaded = true;
+    }
+
+    private async Task InitNewAsync()
+    {
+        var auth = await Auth.GetStoredAsync();
+        _m = new RemoteLxModel
+        {
+            VersionNo = RemoteLxService.FirstVersionNo,
+            IsDraft = true,
+            Status = RemoteFlow.LxDraft,
+            DemandPerson = auth?.EmpNo,
+            TimeToRequest = DateTime.Today
+        };
+        _timeToRequest = DateTime.Today;
+        _requiredCompletion = null;
+        _versionNos = [];
+        _vDocs = new();
+        _versions = [];
+        _currentVersionNo = null;
+    }
+
+    private async Task LoadAsync(string docGuid)
+    {
+        _busy = true;
+        try
+        {
+            var row = await LxDb.GetByDocGuidAsync(docGuid);
+            if (row is null)
+            {
+                Notify.Show("未找到立项单", Severity.Warning);
+                Nav.NavigateTo("/project");
+                return;
+            }
+
+            _m = row;
+            _lastReject = await FlowSvc.GetLatestRejectAsync(row.ProjectGuid, row.VersionNo);
+            _lastRejectFromName = await ResolveEmpNameAsync(_lastReject?.FromUserCode);
+
+            // 重新按库加载（退出修改 / 切单据）：退出修改模式
+            _modifyMode = false;
+            _modifyBase = null;
+
+            // 进来先对齐项目表的当前版本：旧标签页 / 收藏的链接可能还指着上一个版本，
+            // 直接切到最新版本的立项单，避免在老版本上看着还是「当前」。
+            // 用户手动从版本下拉选过版本（带 ?ver=）时不跳，否则切旧版会被弹回来。
+            if (string.IsNullOrWhiteSpace(VersionQuery))
+            {
+                var latestDocGuid = await ResolveLatestVersionDocAsync(row);
+                if (!string.IsNullOrWhiteSpace(latestDocGuid))
+                {
+                    Nav.NavigateTo($"/project/remote/lx/{Uri.EscapeDataString(latestDocGuid)}", replace: true);
+                    return;
+                }
+            }
+
+            await LoadVersionsAsync(row.ProjectGuid);
+
+            // 翻页箭头用：同版本三份单据的定位与流程节点
+            _vDocs = await DocSvc.GetVersionDocsAsync(row.ProjectGuid, row.VersionNo);
+
+            _timeToRequest = row.TimeToRequest?.Date;
+            _requiredCompletion = row.RequiredCompletionTime?.Date;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("加载失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>版本下拉的数据：同一项目的所有版本（最新在前）+ 项目表上的当前版本号。</summary>
+    private async Task LoadVersionsAsync(string? projectGuid)
+    {
+        _versionNos = [];
+        _versions = [];
+        _currentVersionNo = null;
+        if (string.IsNullOrWhiteSpace(projectGuid)) return;
+
+        try
+        {
+            // 三页共用同一份口径，下拉框的选项与标注才能在三个页面上完全一致
+            var (nos, versions, current) = await LxDb.GetVersionOptionsAsync(projectGuid);
+            _versionNos = nos;
+            _versions = versions;
+            _currentVersionNo = current;
+
+            // 当前正在看的这一版必须在列表里，否则下拉框显示不出它
+            var showing = (_m.VersionNo ?? "").Trim();
+            if (showing.Length > 0 && !_versionNos.Any(x => RemoteFlow.Same(x, showing)))
+                _versionNos.Insert(0, showing);
+        }
+        catch
+        {
+            // 版本列表取不到不影响正文，下拉直接不显示
+            _versionNos = [];
+            _versions = [];
+        }
+    }
+
+    /// <summary>
+    /// 打开的不是项目当前版本的立项单时，返回当前版本立项单的 DocGuid（调用方跳转过去）；
+    /// 已经是最新版本则返回 null。
+    /// </summary>
+    private async Task<string?> ResolveLatestVersionDocAsync(RemoteLxModel row)
+    {
+        if (string.IsNullOrWhiteSpace(row.ProjectGuid)) return null;
+
+        try
+        {
+            var current = await LxDb.GetCurrentVersionNoAsync(row.ProjectGuid);
+            if (string.IsNullOrWhiteSpace(current)
+                || string.Equals(current.Trim(), (row.VersionNo ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var docGuid = await LxDb.GetLxDocGuidAsync(row.ProjectGuid, current.Trim());
+            if (string.IsNullOrWhiteSpace(docGuid)) return null;
+
+            return string.Equals(docGuid.Trim(), row.DocGuid, StringComparison.OrdinalIgnoreCase)
+                ? null
+                : docGuid.Trim();
+        }
+        catch
+        {
+            // 查版本失败不影响正常打开，按原单据展示
+            return null;
+        }
+    }
+
+    private Task SaveAsync()
+    {
+        if (!_editable)
+        {
+            Notify.Show(IsNew
+                ? "只有项目业务员可以编制立项单"
+                : "当前没有修改权限：立项单只有项目负责人本人可以修改", Severity.Warning);
+            return Task.CompletedTask;
+        }
+
+        return _modifyMode ? SaveModifyAsync(wantSubmit: false) : SaveCoreAsync();
+    }
+
+    private Task BackAsync()
+    {
+        Nav.NavigateTo("/project");
+        return Task.CompletedTask;
+    }
+
+    /// <summary>取当前登录人姓名写入审计列；取不到就退回工号，不阻断保存。</summary>
+    private async Task<string?> ResolveEmpNameAsync(string? empNo)
+    {
+        if (string.IsNullOrWhiteSpace(empNo)) return null;
+        try
+        {
+            var (ok, displayName, _, _) = await UserInfo.GetAsync(empNo);
+            return ok && !string.IsNullOrWhiteSpace(displayName) ? displayName : empNo;
+        }
+        catch
+        {
+            return empNo;
+        }
+    }
+
+    /// <summary>
+    /// 「点击此处修改立项单」的落点：单据锁定后，业务员想回去改内容就走这里。
+    /// 现在只给提示占位——修改流程（撤回 / 重开编辑 / 顺带把下游规格书、承认书标记失效）
+    /// 定下来以后，把真正的动作接在这个方法里，界面不用再改。
+    /// </summary>
+    private async Task ModifyLxAsync()
+    {
+        if (IsNew) return;
+
+        if (_archived)
+        {
+            Notify.Show("该版本已归档，整版冻结，不能修改", Severity.Warning);
+            return;
+        }
+
+        if (!IsLatestVersion)
+        {
+            Notify.Show($"只能修改最新版本（当前 {_currentVersionNo}）的立项单", Severity.Warning);
+            return;
+        }
+
+        if (!IsLxOwner)
+        {
+            Notify.Show("只有项目负责人本人可以修改立项单", Severity.Warning);
+            return;
+        }
+
+        _modifyBase = RemoteLxDiff.Snapshot(_m);
+        _modifyMode = true;
+        Notify.Show("已进入修改状态：保存或提交时会自动生成新版本", Severity.Info);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>退出修改：丢掉页面上的改动，重新按库里内容加载。</summary>
+    private async Task CancelModifyAsync()
+    {
+        _modifyMode = false;
+        _modifyBase = null;
+        await LoadAsync(_m.DocGuid!);
+    }
+
+    /// <summary>
+    /// 「保存 / 提交」在修改模式下的走法：
+    /// 比出字段差异 → 弹窗写修改说明 → 建新版本 → 把内容写进新版本的立项单 → 跳过去。
+    /// </summary>
+    private async Task SaveModifyAsync(bool wantSubmit)
+    {
+        if (!CheckRequired()) return;
+        if (_modifyBase is null)
+        {
+            Notify.Show("修改状态已失效，请重新点击「修改立项单」", Severity.Warning);
+            return;
+        }
+
+        // 日期控件的值在本地字段里，先回写到模型再比差异
+        _m.TimeToRequest = _timeToRequest;
+        _m.RequiredCompletionTime = _requiredCompletion;
+
+        var changes = RemoteLxDiff.Compare(_modifyBase, _m);
+        if (changes.Count == 0)
+        {
+            Notify.Show("内容没有变化，不需要生成新版本", Severity.Info);
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<RemoteLxModifyDialog>(
+            "修改立项单",
+            new DialogParameters { ["Changes"] = changes },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not string reason || reason.Length == 0) return;
+
+        _busy = true;
+        try
+        {
+            var empName = await ResolveEmpNameAsync(_empNo);
+
+            // 1. 以当前版本为底派生新版本。立项单是另外两张的源头，
+            //    所以三份都列入改动范围一起重走：规格书要按新参数重编，承认书随后重做，
+            //    否则新版本会出现「立项单改了、规格书还是旧参数」的错位。
+            var (ok, msg, newVersionNo) = await FlowSvc.CreateVersionAsync(
+                _m.ProjectGuid!,
+                _m.VersionNo!,
+                reason,
+                [RemoteFlow.DocLx, RemoteFlow.DocGg, RemoteFlow.DocCr],
+                _empNo, empName);
+
+            if (!ok || string.IsNullOrWhiteSpace(newVersionNo))
+            {
+                Notify.Show(msg, Severity.Warning);
+                return;
+            }
+
+            // 2. 把页面上的内容写进新版本的立项单，同时落「修改说明 + 修改点」
+            var (saved, saveMsg, docGuid) = await LxDb.SaveRevisionAsync(
+                _m.ProjectGuid!, newVersionNo, _m, reason,
+                RemoteLxDiff.ToJson(changes), _empNo, empName);
+
+            if (!saved || string.IsNullOrWhiteSpace(docGuid))
+            {
+                Notify.Show(saveMsg, Severity.Warning);
+                return;
+            }
+
+            _modifyMode = false;
+            _modifyBase = null;
+
+            Notify.Show($"已生成版本 {newVersionNo}，修改内容与说明已记录", Severity.Success);
+
+            // 3. 跳到新版本的立项单：新单据是草稿，提交入口就在上面
+            var url = $"/project/remote/lx/{Uri.EscapeDataString(docGuid!)}?ver={Uri.EscapeDataString(newVersionNo)}";
+            if (wantSubmit) url += "&submit=1";
+            Nav.NavigateTo(url);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("修改失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// 提交：先弹窗选「部门 + 研发工程师」（人员数据来自 JcCommonApi 的账号库），
+    /// 选完再走原来的提交流程（落库 → 锁单 → 生成规格书草稿）。
+    /// </summary>
+    private async Task OpenSubmitDialogAsync()
+    {
+        if (!_editable)
+        {
+            Notify.Show("当前没有提交权限：立项单只有项目负责人本人可以提交", Severity.Warning);
+            return;
+        }
+
+        // 修改模式下「提交」= 先派生新版本并落库，再由新单据去提交
+        if (_modifyMode)
+        {
+            await SaveModifyAsync(wantSubmit: true);
+            return;
+        }
+
+        if (!CheckRequired()) return;
+
+        if (IsNew && string.IsNullOrWhiteSpace(_m.Customer))
+        {
+            Notify.Show("请先填写客户并保存后再提交", Severity.Warning);
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<RemoteSubmitDialog>(
+            "提交立项单",
+            new DialogParameters(),
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not MotorSubmitPick pick) return;
+
+        await SubmitAsync(pick);
+    }
+
+    private async Task SubmitAsync(MotorSubmitPick pick)
+    {
+        if (string.IsNullOrWhiteSpace(pick.EmpNo))
+        {
+            Notify.Show("请选择研发工程师", Severity.Warning);
+            return;
+        }
+
+        // 先落库，保证提交的是页面上的最新内容
+        if (!await SaveCoreAsync()) return;
+
+        _busy = true;
+        try
+        {
+            var empName = await ResolveEmpNameAsync(_empNo);
+            var (ok, msg) = await FlowSvc.SubmitLxAsync(
+                _m.DocGuid!,
+                pick.EmpNo.Trim(),
+                string.IsNullOrWhiteSpace(pick.Name) ? null : pick.Name.Trim(),
+                _empNo, empName, comment: pick.Comment);
+            Notify.Show(msg, ok ? Severity.Success : Severity.Warning);
+
+            if (ok)
+            {
+                // 提交后留在立项单页（已锁成只读），不再自动跳进规格书：
+                // 「编写规格书」是研发工程师的活，业务员不该被带进别人的草稿里。
+                // 规格书草稿已经由服务端建好并推送，工程师登录后在待办里就能打开。
+                await LoadAsync(_m.DocGuid!);
+            }
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("提交失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// 模板里字段名标红的必填项（导出的 Excel 里就是红色字），保存与提交前必须填完。
+    /// 顺序和页面 / 模板一致，提示缺项时按这个顺序列出。
+    /// </summary>
+    private static readonly (string Name, Func<RemoteLxModel, bool> Filled)[] RequiredFields =
+    [
+        ("客户", m => !string.IsNullOrWhiteSpace(m.Customer)),
+        ("型号 Model No.", m => !string.IsNullOrWhiteSpace(m.MotorModelSpec)),
+        ("描述 Description", m => !string.IsNullOrWhiteSpace(m.Description)),
+        ("遥控器尺寸", m => !string.IsNullOrWhiteSpace(m.RemoteSize)),
+        ("支架尺寸", m => !string.IsNullOrWhiteSpace(m.BracketSize)),
+        ("遥控器重量", m => !string.IsNullOrWhiteSpace(m.RemoteWeight)),
+        ("遥控器颜色", m => !string.IsNullOrWhiteSpace(m.RemoteColor)),
+        ("电池型号", m => !string.IsNullOrWhiteSpace(m.BatteryType)),
+        ("充电口要求", m => !string.IsNullOrWhiteSpace(m.ChargingMethod) || !string.IsNullOrWhiteSpace(m.ChargingMethodNo)),
+        ("发射功率", m => !string.IsNullOrWhiteSpace(m.TransmitPower)),
+        ("频率", m => !string.IsNullOrWhiteSpace(m.RemoteFrequency) || !string.IsNullOrWhiteSpace(m.RemoteFrequencyOther)),
+        ("遥控技术", m => !string.IsNullOrWhiteSpace(m.RemoteTechnology)),
+        ("遥控协议", m => !string.IsNullOrWhiteSpace(m.RemoteProtocol) || !string.IsNullOrWhiteSpace(m.RemoteProtocolOther)),
+        ("通道数量", m => !string.IsNullOrWhiteSpace(m.ChannelQuantity)),
+        ("工作温度", m => !string.IsNullOrWhiteSpace(m.WorkingTemperature)),
+        ("传输距离", m => !string.IsNullOrWhiteSpace(m.RemoteDistanceIndoor) || !string.IsNullOrWhiteSpace(m.RemoteDistanceOutdoor)),
+        ("应用场景", m => !string.IsNullOrWhiteSpace(m.Application)),
+        ("防水等级", m => !string.IsNullOrWhiteSpace(m.IpLevel) || !string.IsNullOrWhiteSpace(m.IpLevelOther))
+    ];
+
+    /// <summary>必填项没填全时提示缺哪些，并拦住保存 / 提交。</summary>
+    private bool CheckRequired()
+    {
+        var missing = RequiredFields.Where(f => !f.Filled(_m)).Select(f => f.Name).ToList();
+        if (missing.Count == 0) return true;
+
+        Notify.Show("请先填写必填项：" + string.Join("、", missing), Severity.Warning);
+        return false;
+    }
+
+    /// <summary>保存主体逻辑，供按钮和提交前复用。</summary>
+    private async Task<bool> SaveCoreAsync()
+    {
+        if (!CheckRequired()) return false;
+
+        _busy = true;
+        try
+        {
+            _m.TimeToRequest = _timeToRequest;
+            _m.RequiredCompletionTime = _requiredCompletion;
+
+            var (projectGuid, docGuid, created) = await LxDb.SaveDraftAsync(
+                _m, _empNo, await ResolveEmpNameAsync(_empNo));
+            _m.ProjectGuid = projectGuid;
+            _m.DocGuid = docGuid;
+            _m.CreateTime ??= DateTime.Now;
+            _m.UpdateTime = DateTime.Now;
+            if (string.IsNullOrWhiteSpace(_m.Status))
+                _m.Status = RemoteFlow.LxDraft;
+
+            Notify.Show(created ? "已保存，项目已建立" : "已保存", Severity.Success);
+
+            if (created)
+                Nav.NavigateTo($"/project/remote/lx/{docGuid}", replace: true);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("保存失败：" + ex.Message, Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string ExcelName(string ext)
+        => SheetExport.FileName("立项单", _m.Customer, _m.MotorModelSpec ?? _m.Description, _m.VersionNo, ext);
+
+    private async Task ExportExcelAsync()
+    {
+        if (!IsLatestVersion)
+        {
+            Notify.Show("历史版本只能查看，不能导出", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = SheetExport.BuildLx(_m);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", ExcelName("xlsx"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                Convert.ToBase64String(bytes));
+            Notify.Show("Excel 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        if (!IsLatestVersion)
+        {
+            Notify.Show("历史版本只能查看，不能导出", Severity.Warning);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Notify.Show("正在生成 PDF，请稍候…", Severity.Info);
+            var xlsx = SheetExport.BuildLx(_m);
+            var pdf = await LibreOffice.ConvertXlsxToPdfAsync(xlsx);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", ExcelName("pdf"),
+                "application/pdf", Convert.ToBase64String(pdf));
+            Notify.Show("PDF 已导出", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("导出 PDF 失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
+

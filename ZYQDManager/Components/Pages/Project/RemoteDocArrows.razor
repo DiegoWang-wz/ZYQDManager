@@ -1,0 +1,88 @@
+﻿@inject NavigationManager Nav
+
+@*
+    单据页左右两侧的大箭头：立项单 ⇄ 规格书 ⇄ 承认书 顺序翻页。
+    - 立项单页只出右箭头，规格书页左右都出，承认书页只出左箭头；
+    - 目标单据还没生成时按钮置灰不可点（不是隐藏），让用户知道后面还有一张；
+    - 固定贴视口左右边缘，不占纸张宽度。
+
+    单据定位由页面传入（RemoteVersionDocs），组件不查库：
+    同一渲染树里的多个子组件会并发初始化，各自用注入的 scoped DbContext
+    查询会撞 "A second operation was started on this context instance"。
+*@
+@if (_prev is not null)
+{
+    <button type="button"
+            class="msheet-navarrow msheet-navarrow-prev"
+            disabled="@(!CanGo(_prev))"
+            title="@TipOf(_prev)"
+            @onclick="() => GoAsync(_prev)">
+        <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" Style="font-size:30px"/>
+    </button>
+}
+
+@if (_next is not null)
+{
+    <button type="button"
+            class="msheet-navarrow msheet-navarrow-next"
+            disabled="@(!CanGo(_next))"
+            title="@TipOf(_next)"
+            @onclick="() => GoAsync(_next)">
+        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Style="font-size:30px"/>
+    </button>
+}
+
+@code {
+    /// <summary>当前版本三份单据的定位信息，由页面查好后传入。</summary>
+    [Parameter] public RemoteVersionDocs? Docs { get; set; }
+
+    /// <summary>当前页面对应的单据类型：lx / gg / cr。</summary>
+    [Parameter] public string Kind { get; set; } = "lx";
+
+    /// <summary>规格书是否可点开：研发经理审批通过前对业务员关闭，由容器算好传入。</summary>
+    [Parameter] public bool GgVisible { get; set; } = true;
+
+    private static readonly string[] Order = ["lx", "gg", "cr"];
+    private static readonly string[] Titles = ["立项单", "规格书", "承认书"];
+
+    private NavTarget? _prev;
+    private NavTarget? _next;
+
+    private sealed record NavTarget(string Key, string Title, string? DocGuid);
+
+    protected override void OnParametersSet()
+    {
+        var index = Array.IndexOf(Order, Kind);
+        if (index < 0) index = 0;
+
+        var docs = Docs ?? new RemoteVersionDocs();
+        string?[] guids = [docs.LxDocGuid, docs.GgDocGuid, docs.CrDocGuid];
+
+        // 只出相邻的一张：上一张 / 下一张
+        _prev = index > 0
+            ? new NavTarget(Order[index - 1], Titles[index - 1], guids[index - 1])
+            : null;
+
+        _next = index < Order.Length - 1
+            ? new NavTarget(Order[index + 1], Titles[index + 1], guids[index + 1])
+            : null;
+    }
+
+    /// <summary>规格书在研发经理审批通过前不对业务员开放，箭头置灰。</summary>
+    private bool CanGo(NavTarget target)
+        => !string.IsNullOrWhiteSpace(target.DocGuid) && (GgVisible || target.Key != "gg");
+
+    private string TipOf(NavTarget target)
+        => !string.IsNullOrWhiteSpace(target.DocGuid) && !CanGo(target)
+            ? "规格书由研发编制中，审批通过后可查看"
+            : CanGo(target) ? $"打开{target.Title}" : $"该版本还没有{target.Title}";
+
+    private Task GoAsync(NavTarget target)
+    {
+        if (!CanGo(target)) return Task.CompletedTask;
+
+        Nav.NavigateTo($"/project/remote/{target.Key}/{Uri.EscapeDataString(target.DocGuid!.Trim())}");
+        return Task.CompletedTask;
+    }
+}
+

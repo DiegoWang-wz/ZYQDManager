@@ -456,7 +456,7 @@ public class MotorLxService
         var guids = page.Select(x => x.ProjectGuid).Distinct().ToList();
 
         // 只取定位当前版本需要的列，不把 120 多个业务字段拉回来
-        var lxRows = await _db.MotorLx.AsNoTracking()
+        var motorLxRows = await _db.MotorLx.AsNoTracking()
             .Where(x => x.DeleteFlag != "X" && guids.Contains(x.ProjectGuid))
             .Select(x => new MotorLxListDto
             {
@@ -466,11 +466,12 @@ public class MotorLxService
                 VersionNo = x.VersionNo,
                 Status = x.Status,
                 IsDraft = x.IsDraft,
-                EngineerEmpNo = x.EngineerCode
+                EngineerEmpNo = x.EngineerCode,
+                ProductType = ProjectTypes.Motor
             })
             .ToListAsync(ct);
 
-        var byProject = lxRows
+        var byProject = motorLxRows
             .GroupBy(x => x.ProjectGuid)
             .ToDictionary(g => g.Key, g => g.ToList());
 
@@ -490,6 +491,7 @@ public class MotorLxService
                 ProjectGuid = p.ProjectGuid,
                 DocGuid = lx?.DocGuid ?? "",
                 VersionNo = lx?.VersionNo ?? p.CurrentVersionNo ?? "",
+                ProductType = string.IsNullOrWhiteSpace(p.ProductType) ? ProjectTypes.Motor : p.ProductType,
                 Customer = p.Customer,
                 DemandPerson = p.DemandPerson,
                 CustomerPartCode = p.CustomerPartCode,
@@ -564,7 +566,7 @@ public class MotorLxService
                         .ToList();
         if (guids.Count == 0) return;
 
-        // 规格书 / 承认书按「项目 + 版本」取最新一条，旧数据没有版本号时会落到同一个 key 上
+        // 规格书 / 承认书按「项目 + 版本」取最新一条，旧数据没有版本号时会落到同一个 key 上。
         var ggRows = await _db.MotorGg.AsNoTracking()
             .Where(x => x.DeleteFlag != "X" && guids.Contains(x.ProjectGuid))
             .Select(x => new { x.ProjectGuid, x.VersionNo, x.Status, x.Id, x.UpdateTime, x.DocGuid })
@@ -690,39 +692,55 @@ public class MotorLxService
     /// 避免详情页按 DocGuid 打开时还能看到已删项目。
     /// 返回受影响的项目数。
     /// </summary>
-    public async Task<int> SoftDeleteAsync(IEnumerable<string> docGuids, string? empNo, CancellationToken ct = default)
+    public async Task<int> SoftDeleteAsync(
+        IEnumerable<string> docGuids,
+        string? empNo,
+        IEnumerable<string>? projectGuids = null,
+        CancellationToken ct = default)
     {
         var guids = docGuids
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (guids.Count == 0) return 0;
 
-        // 列表给的是当前版本立项单的 DocGuid，先反查项目
-        var projectGuids = await _db.MotorLx.AsNoTracking()
-            .Where(x => guids.Contains(x.DocGuid) && x.DeleteFlag != "X")
-            .Select(x => x.ProjectGuid)
-            .Distinct()
-            .ToListAsync(ct);
-        if (projectGuids.Count == 0) return 0;
+        var directProjectGuids = (projectGuids ?? Enumerable.Empty<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // 列表给的是当前版本立项单的 DocGuid；立项单缺失（老项目）时 DocGuid 为空，
+        // 这时直接用列表行的 ProjectGuid 兜底，避免「有项目却删不掉」。
+        var fromDocs = guids.Count > 0
+            ? await _db.MotorLx.AsNoTracking()
+                .Where(x => guids.Contains(x.DocGuid) && x.DeleteFlag != "X")
+                .Select(x => x.ProjectGuid)
+                .ToListAsync(ct)
+            : new List<string>();
+
+        var targetProjectGuids = directProjectGuids.Concat(fromDocs)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (targetProjectGuids.Count == 0) return 0;
 
         var now = DateTime.Now;
 
         var projects = await _db.Projects
-            .Where(x => projectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
+            .Where(x => targetProjectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
             .ToListAsync(ct);
 
         var lxs = await _db.MotorLx
-            .Where(x => projectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
+            .Where(x => targetProjectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
             .ToListAsync(ct);
 
         var ggs = await _db.MotorGg
-            .Where(x => projectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
+            .Where(x => targetProjectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
             .ToListAsync(ct);
 
         var crs = await _db.MotorCr
-            .Where(x => projectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
+            .Where(x => targetProjectGuids.Contains(x.ProjectGuid) && x.DeleteFlag != "X")
             .ToListAsync(ct);
 
         foreach (var row in lxs)

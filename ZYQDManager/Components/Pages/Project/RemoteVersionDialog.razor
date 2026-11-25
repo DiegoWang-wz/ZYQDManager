@@ -1,0 +1,194 @@
+﻿@inject RemoteFlowService FlowSvc
+@inject SnackbarHelper Notify
+
+<MudDialog Class="motor-version-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">版本管理</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTable Items="_versions" Dense="true" Hover="true" Elevation="0" Class="mb-3">
+            <HeaderContent>
+                <MudTh>版本</MudTh>
+                <MudTh>状态</MudTh>
+                <MudTh>改版原因</MudTh>
+                <MudTh>改动范围</MudTh>
+                <MudTh>归档</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    @context.VersionNo
+                    @if (string.Equals(context.VersionNo, CurrentVersionNo, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">当前</MudChip>
+                    }
+                </MudTd>
+                <MudTd>@VersionStatusName(context.Status)</MudTd>
+                <MudTd>@(string.IsNullOrWhiteSpace(context.ChangeReason) ? "-" : context.ChangeReason)</MudTd>
+                <MudTd>@ScopeName(context.ChangeScope)</MudTd>
+                <MudTd>
+                    @if (context.ArchivedTime is null)
+                    {
+                        <span>-</span>
+                    }
+                    else
+                    {
+                        <span>@DateDisplay.Format(context.ArchivedTime, "-") @context.ArchivePersonCode</span>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-3">还没有版本记录</MudText>
+            </NoRecordsContent>
+        </MudTable>
+
+        <MudDivider Class="my-3"/>
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">新建版本</MudText>
+        <MudTextField @bind-Value="_reason" Label="改版原因" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Disabled="_creating" MaxLength="200"/>
+        <div class="d-flex flex-wrap gap-4 mt-2">
+            <MudCheckBox T="bool" @bind-Value="_scopeLx" Label="立项单" Dense="true" Disabled="_creating"/>
+            <MudCheckBox T="bool" @bind-Value="_scopeGg" Label="规格书" Dense="true" Disabled="_creating"/>
+            <MudCheckBox T="bool" @bind-Value="_scopeCr" Label="承认书" Dense="true" Disabled="_creating"/>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_hint))
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_hint</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <span class="motor-version-hint">一个版本 = 立项单 + 规格书 + 承认书。改了哪份就在新建版本时勾哪份，没勾的沿用上一版、不重走审批。</span>
+        <MudButton OnClick="Cancel" Disabled="_creating">关闭</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Disabled="_creating || _archived"
+                   OnClick="CreateAsync">新建版本</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .mud-dialog.motor-version-dialog .mud-dialog-actions { justify-content: space-between; gap: 8px; }
+    .motor-version-hint { flex: 1; font-size: 12px; line-height: 1.4; text-align: left; color: #666; }
+    .mud-dialog.motor-version-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .mud-dialog.motor-version-dialog .mud-dialog-content::-webkit-scrollbar { display: none; }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string ProjectGuid { get; set; } = "";
+    [Parameter] public string? CurrentVersionNo { get; set; }
+    [Parameter] public string? EmpNo { get; set; }
+    [Parameter] public string? EmpName { get; set; }
+
+    private List<ProjectVersionModel> _versions = [];
+    private bool _creating;
+    private bool _archived;
+    private string? _reason;
+    private bool _scopeLx;
+    private bool _scopeGg = true;
+    private bool _scopeCr;
+    private string? _hint;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _versions = await FlowSvc.GetVersionsAsync(ProjectGuid);
+
+        var current = _versions.FirstOrDefault(x =>
+            string.Equals(x.VersionNo, CurrentVersionNo, StringComparison.OrdinalIgnoreCase));
+        _archived = current is not null
+                    && string.Equals(current.Status, RemoteFlow.VersionArchived, StringComparison.OrdinalIgnoreCase);
+
+        _hint = _archived
+            ? "当前版本已归档，整版冻结，不能再新建版本。"
+            : null;
+
+        _scopeLx = false;
+        _scopeGg = true;
+        _scopeCr = false;
+    }
+
+    private async Task CreateAsync()
+    {
+        var scope = new List<string>();
+        if (_scopeLx) scope.Add(RemoteFlow.DocLx);
+        if (_scopeGg) scope.Add(RemoteFlow.DocGg);
+        if (_scopeCr) scope.Add(RemoteFlow.DocCr);
+
+        if (scope.Count == 0)
+        {
+            Notify.Show("请至少勾选一项要修改的单据", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            Notify.Show("请填写改版原因", Severity.Warning);
+            return;
+        }
+
+        _creating = true;
+        try
+        {
+            var (ok, msg, _) = await FlowSvc.CreateVersionAsync(
+                ProjectGuid, CurrentVersionNo ?? RemoteLxService.FirstVersionNo,
+                _reason!.Trim(), scope, EmpNo, EmpName);
+
+            Notify.Show(msg, ok ? Severity.Success : Severity.Warning);
+            if (ok)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                return;
+            }
+
+            _hint = msg;
+        }
+        catch (Exception ex)
+        {
+            Notify.Show("新建版本失败：" + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private static string VersionStatusName(string? status)
+        => status switch
+        {
+            null or "" => "-",
+            RemoteFlow.VersionInProgress => "进行中",
+            RemoteFlow.VersionReadyToArchive => "待归档",
+            RemoteFlow.VersionArchived => "已归档",
+            _ => status!
+        };
+
+    private static string ScopeName(string? scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope)) return "-";
+        var parts = scope.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim().ToUpperInvariant())
+            .Select(x => x switch
+            {
+                RemoteFlow.DocLx => "立项单",
+                RemoteFlow.DocGg => "规格书",
+                RemoteFlow.DocCr => "承认书",
+                _ => x
+            });
+        return string.Join("、", parts);
+    }
+}
+

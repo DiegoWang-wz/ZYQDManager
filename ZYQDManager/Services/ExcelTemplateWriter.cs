@@ -45,7 +45,8 @@ public static class ExcelTemplateWriter
     /// 三种写法一起用：
     /// <paramref name="cells"/> 直接覆盖（空白格、单值格）；
     /// <paramref name="checks"/> 勾选型（值为逗号分隔的选项），在模板原有的 □ 上打勾，没有方框就在选项前补一个；
-    /// <paramref name="appends"/> 在单元格现有文本后另起一行追加（「其它____」这类自定义输入）。
+    /// <paramref name="appends"/> 填空型（「Other____」「（自定义填写）」这类）：优先写到模板的下划线上，
+    /// 模板没留位置时才另起一行追加。
     /// </summary>
     public static bool TryFill(
         string? templatePath,
@@ -138,11 +139,7 @@ public static class ExcelTemplateWriter
             foreach (var (reference, text) in appends ?? Empty)
             {
                 if (string.IsNullOrWhiteSpace(text)) continue;
-                var current = writer.Read(reference);
-                var merged = string.IsNullOrWhiteSpace(current)
-                    ? text.Trim()
-                    : current.TrimEnd() + "\n" + text.Trim();
-                writer.Write(reference, merged);
+                writer.Write(reference, MergeAppend(writer.Read(reference), text.Trim()));
             }
 
             FitToOnePageWidth(sheet);
@@ -421,6 +418,58 @@ public static class ExcelTemplateWriter
         pageSetup.SetAttributeValue("fitToWidth", "1");
         pageSetup.SetAttributeValue("fitToHeight", "0");
         pageSetup.Attribute("scale")?.Remove();
+    }
+
+    // ==================== 填空：写到模板的下划线上 ====================
+
+    private static readonly string[] CustomHints = ["（自定义填写）", "(自定义填写)", "自定义填写"];
+
+    /// <summary>
+    /// 「□Other________」「□其它Other（自定义填写）」这类格子，模板已经印好了填写位置。
+    /// 有下划线就把值写在横线上（两侧留等长下划线，像手写填进去），
+    /// 没有下划线但有「自定义填写」字样就替换那几个字，两者都没有才另起一行追加。
+    /// </summary>
+    private static string MergeAppend(string? current, string text)
+    {
+        if (string.IsNullOrWhiteSpace(current)) return text;
+
+        if (FindUnderline(current) is { } blank)
+        {
+            var padTotal = Math.Max(0, blank.Length - text.Length);
+            var left = padTotal / 2;
+            var right = padTotal - left;
+            var filled = new string('_', left) + text + new string('_', right);
+            return current[..blank.Start] + filled + current[(blank.Start + blank.Length)..];
+        }
+
+        foreach (var hint in CustomHints)
+        {
+            var index = current.IndexOf(hint, StringComparison.Ordinal);
+            if (index < 0) continue;
+            return current[..index] + " " + text + current[(index + hint.Length)..];
+        }
+
+        return current.TrimEnd() + "\n" + text;
+    }
+
+    /// <summary>找连续 3 个以上的下划线（模板的填写横线）。</summary>
+    private static (int Start, int Length)? FindUnderline(string text)
+    {
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] != '_')
+            {
+                i++;
+                continue;
+            }
+
+            var start = i;
+            while (i < text.Length && text[i] == '_') i++;
+            if (i - start >= 3) return (start, i - start);
+        }
+
+        return null;
     }
 
     // ==================== 勾选：在模板原有说明上打勾 ====================

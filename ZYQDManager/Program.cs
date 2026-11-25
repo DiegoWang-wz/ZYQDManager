@@ -172,6 +172,14 @@ builder.Services.AddScoped<MotorPermissionService>();
 builder.Services.AddScoped<MotorSignFileService>();
 builder.Services.AddScoped<MotorImageService>();
 builder.Services.AddScoped<MotorSheetExportService>();
+// 遥控器模块：单据读写、流程流转、签字版落盘、Excel/PDF 导出（与电机模块同构）
+builder.Services.AddScoped<RemoteLxService>();
+builder.Services.AddScoped<RemoteDocService>();
+builder.Services.AddScoped<RemoteFlowService>();
+builder.Services.AddScoped<RemotePermissionService>();
+builder.Services.AddScoped<RemoteSignFileService>();
+builder.Services.AddScoped<RemoteImageService>();
+builder.Services.AddScoped<RemoteSheetExportService>();
 // 研发工程师名录：跨库读 JcCommonApi 的 CommonApi.dbo.CentralUsers（按 rd_engineer + 部门过滤）
 builder.Services.AddScoped<RdEngineerDirectoryService>();
 // 通用人员名片：按工号查姓名 / 部门 / 岗位（列表悬停提示用，带 10 分钟缓存）
@@ -309,6 +317,5 @@ app.MapGet("/api/db-test", async (IAppService appService, CancellationToken ct) 
     var result = await appService.GetDbStatusAsync(ct);
     return Results.Json(result);
 });
-
 
 app.Run();

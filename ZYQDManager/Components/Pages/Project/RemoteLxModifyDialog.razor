@@ -1,0 +1,84 @@
+﻿@inject SnackbarHelper Notify
+
+@*
+    修改立项单的确认弹窗：先列清楚「改了哪些字段」，再让业务员写一句修改说明。
+    确认后由页面去建新版本 —— 弹窗只负责收集说明，不碰数据库。
+*@
+<MudDialog Class="motor-lx-modify-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6">修改立项单</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudTable Items="Changes" Dense="true" Hover="true" Elevation="0" MaxHeight="300px" Class="mb-3">
+            <HeaderContent>
+                <MudTh>字段</MudTh>
+                <MudTh>修改前</MudTh>
+                <MudTh>修改后</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Field</MudTd>
+                <MudTd Class="mlx-old">@context.OldText</MudTd>
+                <MudTd Class="mlx-new">@context.NewText</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-3">没有检测到改动</MudText>
+            </NoRecordsContent>
+        </MudTable>
+
+        <MudTextField @bind-Value="_reason"
+                      Label="修改说明（必填）"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Lines="3"
+                      MaxLength="200"
+                      Immediate="true"/>
+    </DialogContent>
+
+    <DialogActions>
+        <span class="motor-lx-modify-hint">确认后会自动生成一个新版本，下面的改动与说明会记录在版本上；研发工程师编写该版规格书时会看到这份清单。</span>
+        <MudButton OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.SaveAs"
+                   Disabled="@string.IsNullOrWhiteSpace(_reason)"
+                   OnClick="Confirm">确认修改并生成新版本</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .mlx-old { color: #c0392b; text-decoration: line-through; }
+    .mlx-new { color: #15803d; font-weight: 600; }
+    .mud-dialog.motor-lx-modify-dialog .mud-dialog-actions { justify-content: space-between; gap: 8px; }
+    .motor-lx-modify-hint { flex: 1; font-size: 12px; line-height: 1.4; text-align: left; color: #666; }
+    .mud-dialog.motor-lx-modify-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .mud-dialog.motor-lx-modify-dialog .mud-dialog-content::-webkit-scrollbar { display: none; }
+</style>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>逐字段差异，由 RemoteLxDiff.Compare 算好传入。</summary>
+    [Parameter] public List<RemoteLxChange> Changes { get; set; } = [];
+
+    private string? _reason;
+
+    private void Confirm()
+    {
+        var reason = (_reason ?? "").Trim();
+        if (reason.Length == 0)
+        {
+            Notify.Show("请填写修改说明", Severity.Warning);
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(reason));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
+

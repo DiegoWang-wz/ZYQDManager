@@ -204,7 +204,8 @@ public class SirService
     }
 
     /// <summary>
-    /// 业务员专用：只更新认证勾选 + 自己创建的留样行，不改测试明细与其它主表字段。
+    /// 业务员专用：更新 FROM/TO、报告类型勾选、认证勾选 + 自己创建的留样行，
+    /// 不改测试明细、产品信息与签名等其它主表字段。
     /// </summary>
     public async Task<(bool Ok, string? Message)> SaveOperatorAsync(
         SirDocumentDto doc, string empNo, string? displayName = null, CancellationToken ct = default)
@@ -233,7 +234,16 @@ public class SirService
         if (existing is null)
             return (false, "报告不存在，业务员不能新建检测报告，请联系检测员或管理员");
 
-        // 仅认证区（图二）
+        // 业务员可改：FROM/TO（图一）+ 报告类型勾选 + 认证区（图二）
+        existing.Department = doc.Main.Department;
+        existing.SalesmanName = doc.Main.SalesmanName;
+        existing.Client = doc.Main.Client;
+        existing.ClientDepartment = doc.Main.ClientDepartment;
+        existing.ContactName = doc.Main.ContactName;
+        existing.Appearance_Approval_Report = doc.Main.Appearance_Approval_Report;
+        existing.Dimension_Report = doc.Main.Dimension_Report;
+        existing.Material_Report = doc.Main.Material_Report;
+        existing.Function_Report = doc.Main.Function_Report;
         existing.UL = doc.Main.UL;
         existing.FCC = doc.Main.FCC;
         existing.CE = doc.Main.CE;

@@ -85,20 +85,20 @@
                     <tr>
                         <th rowspan="2" class="sir-th-side">由 FROM:</th>
                         <th>部门 Dept</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.Department" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.Department" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@_busy"/></td>
                         <td rowspan="4" colspan="5" class="sir-mid-blank"></td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Appearance_Approval_Report" Dense="true" Color="Color.Primary"
-                                         Disabled="@(!CanEditCore)"
+                                         Disabled="@_busy"
                                          Label="外观批准报告 Appearance Approval Report"/>
                         </td>
                     </tr>
                     <tr>
                         <th>业务员 Name</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.SalesmanName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.SalesmanName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@_busy"/></td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Dimension_Report" Dense="true" Color="Color.Primary"
-                                         Disabled="@(!CanEditCore)"
+                                         Disabled="@_busy"
                                          Label="尺寸检验报告 Dimension Report"/>
                         </td>
                     </tr>
@@ -109,26 +109,26 @@
                             <MudTextField Value="_main.Client"
                                           ValueChanged="@(EventCallback.Factory.Create<string>(this, OnClientChanged))"
                                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Immediate="false"
-                                          ReadOnly="@(!CanEditCore)"/>
+                                          ReadOnly="@_busy"/>
                         </td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Material_Report" Dense="true" Color="Color.Primary"
-                                         Disabled="@(!CanEditCore)"
+                                         Disabled="@_busy"
                                          Label="材料检验报告 Material Report"/>
                         </td>
                     </tr>
                     <tr>
                         <th>部门 Dept</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.ClientDepartment" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.ClientDepartment" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@_busy"/></td>
                         <td colspan="5" class="sir-check-cell">
                             <MudCheckBox T="bool" @bind-Value="_main.Function_Report" Dense="true" Color="Color.Primary"
-                                         Disabled="@(!CanEditCore)"
+                                         Disabled="@_busy"
                                          Label="性能检验报告 Function Report"/>
                         </td>
                     </tr>
                     <tr>
                         <th>联系人 Name</th>
-                        <td colspan="2"><MudTextField @bind-Value="_main.ContactName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@(!CanEditCore)"/></td>
+                        <td colspan="2"><MudTextField @bind-Value="_main.ContactName" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" ReadOnly="@_busy"/></td>
                         <td colspan="10" class="sir-mid-blank"></td>
                     </tr>
 
@@ -991,7 +991,7 @@
     private string? _cleanFingerprint;
     private string? _pageKey;
     private string _guid = "";
-    /// <summary>业务员：不能新建；只能改认证（图二）+ 自己的留样（图三）。测试明细/主表其它项仅检测员管理员。</summary>
+    /// <summary>业务员：不能新建；可改 FROM/TO、报告类型勾选、认证（图一二）+ 自己的留样（图三）。测试明细/主表其它项仅检测员管理员。</summary>
     private bool _operator;
     private string _empNo = "";
     private string _displayName = "";
@@ -1237,7 +1237,7 @@
 
     private async Task OnClientChanged(string value)
     {
-        if (!CanEditCore) return;
+        if (_busy) return;
         _main.Client = value;
         RefreshPartNo();
         var clientNo = (value ?? "").Trim();
