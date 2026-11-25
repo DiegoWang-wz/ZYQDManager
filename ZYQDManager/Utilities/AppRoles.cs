@@ -16,19 +16,14 @@ public static class AppRoles
     /// </summary>
     public const string SalesManager = "sales_manager";
 
-    /// <summary>系统内按工号认定为管理员的固定账号（王哲）。</summary>
-    public static bool IsAdminEmpNo(string? empNo)
-        => string.Equals(empNo, "JcAdmin", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(empNo, "116186", StringComparison.OrdinalIgnoreCase);
-
     /// <summary>
-    /// 管理员级权限：管理员本人、固定超管工号 / 管理员工号，以及销售经理。
+    /// 管理员级权限：管理员角色、固定超管工号 JcAdmin，以及销售经理。
     /// 销售经理按「权限等同管理员」处理（人员管理、全部项目、任意单据可改），
     /// 但流程审批不跟着放大 —— 审批仍按研发经理角色 / 蒋经理固定工号走。
     /// </summary>
     public static bool IsAdmin(string? role, string? empNo = null)
         => string.Equals(role, Admin, StringComparison.OrdinalIgnoreCase)
-           || IsAdminEmpNo(empNo)
+           || string.Equals(empNo, "JcAdmin", StringComparison.OrdinalIgnoreCase)
            || IsSalesManager(role);
 
     /// <summary>

@@ -572,13 +572,10 @@ public class RemoteSheetExportService
 
             ["C14"] = lx.BatteryType,
 
-            ["C15"] = Join(lx.ChargingMethod, lx.ChargingMethodNo),
+            // C15/C17/C18 是选项型字段：不在 cells 里直接写值，
+            // 交给下面的 checks + candidates 整排画 ☑/☐，未勾选的候选项也保留。
 
             ["C16"] = lx.TransmitPower,
-
-            ["C17"] = JoinComma(lx.RemoteFrequency, lx.RemoteFrequencyOther),
-
-            ["C18"] = lx.RemoteTechnology,
 
             ["C19"] = JoinComma(lx.RemoteProtocol, lx.RemoteProtocolOther),
 
@@ -604,9 +601,10 @@ public class RemoteSheetExportService
 
         {
 
-            ["C15"] = lx.ChargingMethod,
+            // 用逗号拼接：Other 的具体文本会作为额外打勾项追加在候选项之后
+            ["C15"] = JoinComma(lx.ChargingMethod, lx.ChargingMethodNo),
 
-            ["C17"] = lx.RemoteFrequency,
+            ["C17"] = JoinComma(lx.RemoteFrequency, lx.RemoteFrequencyOther),
 
             ["C18"] = lx.RemoteTechnology
 
@@ -618,9 +616,9 @@ public class RemoteSheetExportService
 
             ["C15"] = "None|Micro-USB|Type-C",
 
-            ["C17"] = "433.92 MHz|447.x MHz|868.x MHz|Other",
+            ["C17"] = "433.92 MHz|447.x MHz|868.x MHz",
 
-            ["C18"] = "单向Single-way|双向Bi-directional"
+            ["C18"] = "单向 Single-way|双向 Bi-directional"
 
         };
 

@@ -392,17 +392,19 @@ public class MotorSheetExportService
             ["C22"] = lx.InputPower
         };
 
+        // 候选项与 MotorLxSheet 页面上的多选常量逐字一致，
+        // 否则 SameOption 匹配不上，勾选会落到末尾的追加项、单据上出现重复选项。
         var candidates = new Dictionary<string, string?>
         {
-            ["C15"] = "433.92 MHz|447.x MHz|868.x MHz|Other",
-            ["C16"] = "None|单向Single-way|双向Bi-directional",
-            ["C17"] = "捷昌Standard|客户Customized|其它Other",
-            ["C18"] = "None|RS485|干触点Dry Contact|强电开关Power Switch|其它Other",
-            ["C19"] = "蓝牙|WiFi|Zigbee|其它Matter",
-            ["C20"] = "IP40|IP44|IP45|IP66|IP67|IP68|IP20|IP69K|其它",
-            ["C21"] = "是Yes|否No",
-            ["C22"] = "AC110V/60Hz|AC230V/50Hz|AC100-240V|Adapter12V/2A|Adapter12V/3A|Adapter12V/4A|"
-                      + "Adapter8.4V/1A|Li-onBattery2cell|Li-onBattery3cell|Li-onBattery4cell|Adapter24V/1A"
+            ["C15"] = "433.92 MHz|447.x MHz|868.x MHz",
+            ["C16"] = "单向 Single-way|双向 Bi-directional",
+            ["C17"] = "Standard 标准|Customized 定制",
+            ["C18"] = "None|RS485|Dry Contact 干接点|Others 其它",
+            ["C19"] = "None|ZigBee 3.0|Bluetooth|Matter|Wi-Fi|Matter/Bluetooth",
+            ["C20"] = "IP40|IP44|IP45|IP66",
+            ["C21"] = "是 Yes|否 No",
+            ["C22"] = "AC110V/60Hz|AC230V/50Hz|AC100-240V|12V/2A Adapter|12V/3A Adapter|12V/4A Adapter|"
+                      + "8.4V/1A Adapter|24V/1A Adapter|Li-ion Battery 2 cell|Li-ion Battery 3 cell|Li-ion Battery 4 cell"
         };
 
         return ExcelTemplateWriter.TryFill(TemplatePath("电机立项单.xlsx"), cells, checks, null, candidates, out var bytes)
