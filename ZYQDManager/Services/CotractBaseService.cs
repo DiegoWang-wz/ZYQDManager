@@ -214,6 +214,24 @@ public class CotractBaseService
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// 按客户号取合同基础表里登记的目的国（中文口径），供装箱单表头带出使用。
+    /// 同一客户可能有多条基础数据，取最近一条非空的目的国。
+    /// </summary>
+    public async Task<string?> FirstDestinationCountryAsync(string? clientNo, CancellationToken ct = default)
+    {
+        clientNo = CotractPiTypes.NormalizeClientNo(clientNo);
+        if (clientNo.Length == 0) return null;
+
+        return await Alive(_db.CotractBases.AsNoTracking())
+            .Where(x => x.ClientNo == clientNo
+                        && x.Customer_destination_country != null
+                        && x.Customer_destination_country != "")
+            .OrderByDescending(x => x.Id)
+            .Select(x => x.Customer_destination_country)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public bool CanAccess(ZyqdCotractBaseModel row, CotractBaseQueryDto query)
     {
         if (query.ViewAllCustomers) return true;

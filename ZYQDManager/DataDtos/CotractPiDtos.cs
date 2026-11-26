@@ -200,6 +200,32 @@ public static class CotractPiTypes
         return (clientName ?? "").Trim();
     }
 
+    /// <summary>
+    /// 只替换发票号里的客户名段（第一个 '-' 之后、末尾序号之前），保留日期与前缀。
+    /// 例：26JC1125-Rico blinds → 26JC1125-VP Stores；26JC1125-Rico blinds-2 → 26JC1125-VP Stores-2。
+    /// 售达方(billto)变更时用这个，避免整串重算导致日期段跟着变成当天。
+    /// </summary>
+    public static string ReplaceInvoiceName(string? invoiceNo, string? orderType, string? clientName)
+    {
+        var s = (invoiceNo ?? "").Trim();
+        if (s.Length == 0) return s;
+        var dash = s.IndexOf('-');
+        if (dash < 0)
+            return s + "-" + InvoiceNamePart(orderType, clientName).Trim();
+
+        var head = s[..dash];           // 26JC1125
+        var body = s[(dash + 1)..];     // Rico blinds 或 Rico blinds-2
+        var suffix = "";
+        var lastDash = body.LastIndexOf('-');
+        if (lastDash > 0
+            && body[(lastDash + 1)..].All(char.IsDigit))
+        {
+            suffix = body[lastDash..];              // -2
+            body = body[..lastDash];
+        }
+        return head + "-" + InvoiceNamePart(orderType, clientName).Trim() + suffix;
+    }
+
     /// <summary>改发票号前缀，保留年份和后面的日期、名称。报关 PI 固定 JC、其余按订单类型。JCK 要先于 JC 判断。</summary>
     public static string ApplyInvoicePrefix(string? invoiceNo, string? orderType)
     {

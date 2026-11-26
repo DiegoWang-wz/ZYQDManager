@@ -76,6 +76,11 @@
                     }
                 </MudSelect>
                 <div class="cpk-form-actions">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="zyqd-btn-save"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveAsync" Disabled="_busy">
+                        @(_busy ? "保存中…" : "保存")
+                    </MudButton>
                     <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || _isCreate"
@@ -91,11 +96,6 @@
                             <MudMenuItem OnClick="@(() => ExportExcelAsync("客户"))">客户</MudMenuItem>
                         </ChildContent>
                     </MudMenu>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="zyqd-btn-save"
-                               StartIcon="@Icons.Material.Filled.Save"
-                               OnClick="SaveAsync" Disabled="_busy">
-                        @(_busy ? "保存中…" : "保存")
-                    </MudButton>
                 </div>
             </div>
         </MudPaper>
@@ -1039,15 +1039,19 @@
 
         try
         {
-            var bill = await Crm.GetBillToAsync(no);
-            if (bill is not null)
+            // 目的国只取合同基础表（与老系统口径一致），取不到就留空由用户手填，
+            // 不再用 CRM 的英文国家名回填，避免中英混用。
+            if (string.IsNullOrWhiteSpace(_header.Customer_destination_country))
             {
-                if (string.IsNullOrWhiteSpace(_header.ClientName))
-                    _header.ClientName = bill.ClientName;
-                if (string.IsNullOrWhiteSpace(_header.Customer_destination_country)
-                    && !string.IsNullOrWhiteSpace(bill.Country))
-                    _header.Customer_destination_country = bill.Country;
+                var cn = await CotractBase.FirstDestinationCountryAsync(no);
+                if (!string.IsNullOrWhiteSpace(cn))
+                    _header.Customer_destination_country = cn;
             }
+
+            var bill = await Crm.GetBillToAsync(no);
+            if (bill is not null
+                && string.IsNullOrWhiteSpace(_header.ClientName))
+                _header.ClientName = bill.ClientName;
         }
         catch (Exception ex)
         {

@@ -92,7 +92,6 @@
                     <MudTh Class="mpl-no-cell">序号</MudTh>
                     <MudTh><MudTableSortLabel T="MotorLxListDto" SortLabel="Customer">客户</MudTableSortLabel></MudTh>
                     <MudTh><MudTableSortLabel T="MotorLxListDto" SortLabel="CustomerPartCode">客户产品编号</MudTableSortLabel></MudTh>
-                    <MudTh Class="mpl-type-cell" title="这个项目属于电机还是遥控器">产品类型</MudTh>
                     <MudTh><MudTableSortLabel T="MotorLxListDto" SortLabel="MotorModelSpec">产品型号</MudTableSortLabel></MudTh>
                     <MudTh>品名</MudTh>
                     <MudTh Class="mpl-stage-cell">阶段</MudTh>
@@ -107,9 +106,6 @@
                     <MudTd Class="mpl-no-cell">@RowNo(context)</MudTd>
                     <MudTd>@Dash(context.Customer)</MudTd>
                     <MudTd>@Dash(context.CustomerPartCode)</MudTd>
-                    <MudTd Class="mpl-type-cell">
-                        <span class="mpl-type-tag @TypeClass(context)">@TypeText(context)</span>
-                    </MudTd>
                     <MudTd>@Dash(context.MotorModelSpec)</MudTd>
                     <MudTd>@Dash(context.Description)</MudTd>
                     <MudTd Class="mpl-stage-cell">
@@ -141,14 +137,6 @@
                                        Class="mpl-ops-btn"
                                        Disabled="_busy"
                                        OnClick="@(() => OpenDetailAsync(context))">明细</MudButton>
-                            @if (CanDelete(context))
-                            {
-                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
-                                           StartIcon="@Icons.Material.Filled.Delete"
-                                           Class="mpl-ops-btn"
-                                           Disabled="_busy"
-                                           OnClick="@(() => DeleteAsync(context))">删除</MudButton>
-                            }
                         </div>
                     </MudTd>
                 </RowTemplate>
@@ -267,32 +255,6 @@
         white-space: nowrap;
     }
 
-    /* 产品类型：电机 / 遥控器，一眼分辨 */
-    .motor-project-table .mud-table-cell.mpl-type-cell {
-        width: 92px;
-        min-width: 92px;
-        max-width: 92px;
-        text-align: center;
-        padding: 6px 8px !important;
-    }
-
-    .mpl-type-tag {
-        display: inline-block;
-        padding: 0 8px;
-        height: 20px;
-        line-height: 20px;
-        border-radius: 10px;
-        font-size: 12px;
-        font-weight: 600;
-        white-space: nowrap;
-        border: 1px solid #cfd8dc;
-        background: #eceff1;
-        color: #546e7a;
-    }
-
-    .mpl-type-tag.is-motor { border-color: #bbdefb; background: #e3f2fd; color: #1565c0; }
-    .mpl-type-tag.is-remote { border-color: #c8e6c9; background: #e8f5e9; color: #2e7d32; }
-
     /* 我的待办：整行淡红（覆盖斑马纹与 hover） */
     .motor-project-table .mud-table-body tr.mpl-row-todo > td,
     .motor-project-table .mud-table-body tr.mpl-row-todo.mud-table-row-striped > td {
@@ -402,14 +364,14 @@
 
     .motor-project-table .mud-table-cell.mpl-ops-cell {
         right: 0;
-        width: 148px;
-        min-width: 148px;
-        max-width: 148px;
+        width: 96px;
+        min-width: 96px;
+        max-width: 96px;
         padding: 4px 6px !important;
     }
 
     .motor-project-table .mud-table-cell.mpl-createtime-cell {
-        right: 148px;
+        right: 96px;
         width: 156px;
         min-width: 156px;
         max-width: 156px;
@@ -464,7 +426,7 @@
         flex-wrap: nowrap;
         align-items: center;
         justify-content: center;
-        gap: 4px;
+        gap: 0;
         width: 100%;
     }
 
@@ -573,60 +535,25 @@
                              || string.Equals(_productType, "遥控器", StringComparison.Ordinal);
     private bool IsUnsupported => !IsSupported;
 
-    /// <summary>
-    /// 遥控器立项单行映射成列表视图行（两者显示字段一致，仅库表/服务独立）。
-    /// 注意：这里必须把 <see cref="MotorLxListDto"/> 的字段逐个带过来，
-    /// 之前只拷了一部分，导致遥控器行的阶段条、当前处理人、负责人全显示不出来
-    /// （Stage 恒为 0、StepLxDone 恒为 false、PendingName/OwnerName 为空）。
-    /// </summary>
+    /// <summary>遥控器立项单行映射成列表视图行（两者显示字段一致，仅库表/服务独立）。</summary>
     private static MotorLxListDto ToView(ZYQDManager.DataDtos.RemoteLxListDto x) => new()
     {
         Id = x.Id,
         ProjectGuid = x.ProjectGuid,
         DocGuid = x.DocGuid,
-        ProductType = ProjectTypes.Remote,
         VersionNo = x.VersionNo,
-        Status = x.Status,
-        IsDraft = x.IsDraft,
-
-        // 流程口径：节点 / 阶段 / 四档完成标记（漏一个阶段条就会画错）
-        Node = x.Node,
-        NodeText = x.NodeText,
-        Stage = x.Stage,
-        StageText = x.StageText,
-        StepLxDone = x.StepLxDone,
-        StepGgDone = x.StepGgDone,
-        StepCrDone = x.StepCrDone,
-        StepArchived = x.StepArchived,
-        StageTime = x.StageTime,
-
-        // 当前版本的规格书 / 承认书
-        GgDocGuid = x.GgDocGuid,
-        GgStatus = x.GgStatus,
-        CrDocGuid = x.CrDocGuid,
-        CrStatus = x.CrStatus,
-
-        // 业务字段
+        ProductType = ProjectTypes.Remote,
         Customer = x.Customer,
-        DemandPerson = x.DemandPerson,
         CustomerPartCode = x.CustomerPartCode,
         MotorModelSpec = x.MotorModelSpec,
         Description = x.Description,
-
-        // 人：负责人 / 研发工程师 / 当前处理人
-        OwnerEmpNo = x.OwnerEmpNo,
-        OwnerName = x.OwnerName,
+        Status = x.Status,
+        Node = x.Node,
+        GgDocGuid = x.GgDocGuid,
+        GgStatus = x.GgStatus,
+        CrDocGuid = x.CrDocGuid,
         EngineerEmpNo = x.EngineerEmpNo,
-        EngineerName = x.EngineerName,
-        PendingEmpNo = x.PendingEmpNo,
-        PendingRole = x.PendingRole,
-        PendingName = x.PendingName,
         IsMyTodo = x.IsMyTodo,
-        UpdatePersonCode = x.UpdatePersonCode,
-        UpdatePersonName = x.UpdatePersonName,
-        UpdateTime = x.UpdateTime,
-        CreatePersonCode = x.CreatePersonCode,
-        CreatePersonName = x.CreatePersonName,
         CreateTime = x.CreateTime
     };
 
@@ -717,18 +644,13 @@
             }
             else if (isAll)
             {
-                // 「全部」要真正全局排序：两类各自取全集，按同一字段统一排序后再分页。
-                // 之前是各自 skip/take 再拼接，导致创建时间看起来乱序、翻页也不对。
-                const int allTake = 100_000;
-                var (mr, mt) = await LxSvc.QueryPageAsync(mq, 0, allTake, sortLabel, descending, ct,
+                // 「全部」是两种产品各自分页后合并展示，行里带 ProductType 供跳转/删除分流。
+                var (mr, mt) = await LxSvc.QueryPageAsync(mq, _skip, take, sortLabel, descending, ct,
                     ProjectTypes.Motor, _myEmpNo, _myRole);
-                var (rr, rt) = await RemoteLxSvc.QueryPageAsync(rq, 0, allTake, sortLabel, descending, ct,
+                var (rr, rt) = await RemoteLxSvc.QueryPageAsync(rq, _skip, take, sortLabel, descending, ct,
                     ProjectTypes.Remote, _myEmpNo, _myRole);
+                rows = mr.Concat(rr.Select(ToView)).ToList();
                 total = mt + rt;
-                rows = SortMerged(mr.Concat(rr.Select(ToView)).ToList(), sortLabel, descending)
-                    .Skip(_skip)
-                    .Take(take)
-                    .ToList();
             }
             else
             {
@@ -869,32 +791,16 @@
         try
         {
             var auth = await Auth.GetStoredAsync();
-            var role = auth?.Role;
-            var empNo = auth?.EmpNo;
-
-            // 双保险：行内按钮按权限显示，真正删除时按当前 stored auth 再判一次，
-            // 避免首屏缓存的角色过期（例如刚被设为管理员）导致管理员删不掉。
-            var allowed = rows.Where(x => !IsUnsupported && CanDeleteCore(x, role, empNo)).ToList();
-            if (allowed.Count == 0)
-            {
-                Notify.Show("没有可删除的项目（仅负责人或管理员可删除）", Severity.Warning);
-                return;
-            }
-
-            var isRemote = (MotorLxListDto x) => string.Equals(RoutePrefixOf(x.ProductType), "remote", StringComparison.Ordinal);
-            var motorRows = allowed.Where(x => !isRemote(x)).ToList();
-            var remoteRows = allowed.Where(isRemote).ToList();
+            var motorGuids = rows.Where(x => !string.Equals(RoutePrefixOf(x.ProductType), "remote", StringComparison.Ordinal))
+                                 .Select(x => x.DocGuid).ToList();
+            var remoteGuids = rows.Where(x => string.Equals(RoutePrefixOf(x.ProductType), "remote", StringComparison.Ordinal))
+                                  .Select(x => x.DocGuid).ToList();
 
             var count = 0;
-            // 同时传 ProjectGuid：立项单缺失（DocGuid 为空）的历史项目也能软删除。
-            if (motorRows.Count > 0)
-                count += await LxSvc.SoftDeleteAsync(
-                    motorRows.Select(x => x.DocGuid), empNo,
-                    motorRows.Select(x => x.ProjectGuid));
-            if (remoteRows.Count > 0)
-                count += await RemoteLxSvc.SoftDeleteAsync(
-                    remoteRows.Select(x => x.DocGuid), empNo,
-                    remoteRows.Select(x => x.ProjectGuid));
+            if (motorGuids.Count > 0)
+                count += await LxSvc.SoftDeleteAsync(motorGuids, auth?.EmpNo);
+            if (remoteGuids.Count > 0)
+                count += await RemoteLxSvc.SoftDeleteAsync(remoteGuids, auth?.EmpNo);
 
             if (count == 0)
             {
@@ -1046,63 +952,6 @@
     }
 
     private static string Dash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    /// <summary>
-    /// 删除权限：项目负责本人，或管理员（admin / 固定管理员工号 / 销售经理）。
-    /// 列表行内按钮用首屏缓存的登录信息；真正删除时按最新 stored auth 再判一次。
-    /// </summary>
-    private bool CanDelete(MotorLxListDto row)
-    {
-        if (IsUnsupported || row is null) return false;
-        return CanDeleteCore(row, _myRole, _myEmpNo);
-    }
-
-    private static bool CanDeleteCore(MotorLxListDto row, string? role, string? empNo)
-    {
-        if (AppRoles.IsAdmin(role, empNo)) return true;
-        return !string.IsNullOrWhiteSpace(empNo)
-               && string.Equals((row.OwnerEmpNo ?? "").Trim(), empNo.Trim(),
-                   StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// 「全部」视图的全局排序：电机与遥控器的行合在一起按同一字段排，
-    /// 字段口径与服务端 ApplyProjectSort 一致，同值时用立项单 Id 兜底保证顺序稳定。
-    /// </summary>
-    private static List<MotorLxListDto> SortMerged(
-        List<MotorLxListDto> rows, string sortLabel, bool descending)
-    {
-        Comparison<MotorLxListDto> compare = sortLabel switch
-        {
-            "Customer" => (a, b) => TextCmp(a.Customer, b.Customer),
-            "DemandPerson" => (a, b) => TextCmp(a.DemandPerson, b.DemandPerson),
-            "CustomerPartCode" => (a, b) => TextCmp(a.CustomerPartCode, b.CustomerPartCode),
-            "MotorModelSpec" => (a, b) => TextCmp(a.MotorModelSpec, b.MotorModelSpec),
-            "Status" => (a, b) => TextCmp(a.Status, b.Status),
-            "UpdateTime" => (a, b) => Nullable.Compare(a.UpdateTime, b.UpdateTime),
-            _ => (a, b) => Nullable.Compare(a.CreateTime, b.CreateTime)
-        };
-
-        rows.Sort((a, b) =>
-        {
-            var result = compare(a, b);
-            if (result == 0) result = a.Id.CompareTo(b.Id);
-            return descending ? -result : result;
-        });
-        return rows;
-    }
-
-    private static int TextCmp(string? a, string? b)
-        => string.Compare(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>产品类型列：项目表 ProductType（Motor/Remote/...）翻成中文。</summary>
-    private static string TypeText(MotorLxListDto row)
-        => ProjectTypes.Name(row.ProductType) is { Length: > 0 } name ? name : Dash(row.ProductType);
-
-    private static string TypeClass(MotorLxListDto row)
-        => string.Equals(row.ProductType, ProjectTypes.Remote, StringComparison.OrdinalIgnoreCase) ? "is-remote"
-            : string.Equals(row.ProductType, ProjectTypes.Motor, StringComparison.OrdinalIgnoreCase) ? "is-motor"
-            : "";
 
     /// <summary>待办项目整行标淡红（样式见下方 mpl-row-todo）。</summary>
     private static string RowCssClass(MotorLxListDto row, int _)

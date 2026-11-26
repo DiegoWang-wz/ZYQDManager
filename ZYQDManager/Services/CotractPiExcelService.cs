@@ -45,7 +45,8 @@ public class CotractPiExcelService
 
         ApplyInvoiceTitle(ws, english, main.var6);
 
-        var extra = Math.Max(0, rows.Count - 1) * 6 + SourcePiGroups(rows, main.var6).Count;
+        var groups = SourcePiGroups(rows, main.var6);
+        var extra = Math.Max(0, rows.Count - 1) * 6 + InsertedPiRowCount(groups);
         ApplyTradeFeeLayout(ws, extra, english, main.BILL_TO_FOB);
         WriteCompletion(ws, rows);
         OmitEmptyRemarkRow(ws, extra, english, main, rows);
@@ -112,20 +113,27 @@ public class CotractPiExcelService
         Set(ws, 9, 1, main.SHIP_TO_info4); Set(ws, 9, 9, main.BILL_TO_FOB);
 
         var groups = SourcePiGroups(rows, main.var6);
-        var extra = Math.Max(0, rows.Count - 1) * 6 + groups.Count;
+        var extra = Math.Max(0, rows.Count - 1) * 6 + InsertedPiRowCount(groups);
         EnsureBlocks(ws, 11, 16, 6, rows.Count);
 
         var shift = 0;
         for (var i = 0; i < rows.Count; i++)
         {
-            // 报关 PI / 客户 CI：不同来源 PI 前插一行，单独显示 PI 号
+            // 报关 PI / 客户 CI：第一条来源 PI 写在表头行，后续分组才插单独一行
             var group = groups.FirstOrDefault(g => g.Index == i);
             if (group.Pi is { Length: > 0 })
             {
-                var sepExcel = 12 + 6 * i + shift;
-                ws.Row(sepExcel - 1).InsertRowsBelow(1);
-                WriteSourcePiRow(ws, sepExcel, sepExcel + 1, group.Pi);
-                shift++;
+                if (i == 0)
+                {
+                    WriteHeaderPi(ws, 11, group.Pi);
+                }
+                else
+                {
+                    var piRow = 12 + 6 * i + shift;
+                    ws.Row(piRow - 1).InsertRowsBelow(1);
+                    WriteSourcePiRow(ws, piRow, piRow + 1, group.Pi);
+                    shift++;
+                }
             }
 
             var item = rows[i];
@@ -169,20 +177,27 @@ public class CotractPiExcelService
         Set(ws, 10, 1, main.SHIP_TO_info4); Set(ws, 10, 9, main.BILL_TO_FOB);
 
         var groups = SourcePiGroups(rows, main.var6);
-        var extra = Math.Max(0, rows.Count - 1) * 6 + groups.Count;
+        var extra = Math.Max(0, rows.Count - 1) * 6 + InsertedPiRowCount(groups);
         EnsureBlocks(ws, 12, 17, 6, rows.Count);
 
         var shift = 0;
         for (var i = 0; i < rows.Count; i++)
         {
-            // 报关 PI / 客户 CI：不同来源 PI 前插一行，单独显示 PI 号
+            // 报关 PI / 客户 CI：第一条来源 PI 写在表头行，后续分组才插单独一行
             var group = groups.FirstOrDefault(g => g.Index == i);
             if (group.Pi is { Length: > 0 })
             {
-                var sepExcel = 13 + 6 * i + shift;
-                ws.Row(sepExcel - 1).InsertRowsBelow(1);
-                WriteSourcePiRow(ws, sepExcel, sepExcel + 1, group.Pi);
-                shift++;
+                if (i == 0)
+                {
+                    WriteHeaderPi(ws, 12, group.Pi);
+                }
+                else
+                {
+                    var piRow = 13 + 6 * i + shift;
+                    ws.Row(piRow - 1).InsertRowsBelow(1);
+                    WriteSourcePiRow(ws, piRow, piRow + 1, group.Pi);
+                    shift++;
+                }
             }
 
             var item = rows[i];
@@ -218,6 +233,7 @@ public class CotractPiExcelService
 
     /// <summary>
     /// 英文模板：定金行 + 付款行。第 15 条改为 UPON DESPATCH / WITHIN 10 DAYS 各 50%（按总金额）。
+    /// 付款条件 var3 写在付款行 F22:F22+extra（npoi col 5）。
     /// </summary>
     private static void WritePaymentBlockEnglish(
         IXLWorksheet ws, int depositRow, int paymentRow, ZyqdCotractPiModel main, string curr)
@@ -234,7 +250,10 @@ public class CotractPiExcelService
         Money(ws, paymentRow, 12, main.balance_before_delivery, curr);
     }
 
-    /// <summary>中文模板：同上，列位与英文略有差异。</summary>
+    /// <summary>
+    /// 中文模板（含中文-捷昌进出口）：付款条件 var3 写在 F23:F23+extra（npoi col 5），靠右显示；
+    /// 金额列与英文相同。两个中文模板共用本方法。
+    /// </summary>
     private static void WritePaymentBlockChinese(
         IXLWorksheet ws, int depositRow, int paymentRow, ZyqdCotractPiModel main, string curr)
     {
@@ -247,6 +266,7 @@ public class CotractPiExcelService
         Money(ws, depositRow, 12, main.Payment_ratio_Ext, curr);
         Set(ws, depositRow, 11, main.Payment_ratio.ToString("0.##") + "%");
         Set(ws, paymentRow, 5, main.var3);
+        ws.Cell(paymentRow + 1, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
         Money(ws, paymentRow, 12, main.balance_before_delivery, curr);
     }
 
@@ -399,8 +419,8 @@ public class CotractPiExcelService
     }
 
     /// <summary>
-    /// 预计完成时间写在 Shipping_Fee 同行的 H 列（三套模板统一），靠右、不换行；
-    /// 明细插入后整行下移。必须在清理运费之后写，否则清 K:M 列会碰到同行的运费格。
+    /// 预计完成时间写在 SUB-TOTAL 上两行的 A 列（三套模板统一），靠左、不换行；
+    /// 明细插入后整行下移。必须在清理运费之后写，否则清 K:M 列会碰到同行的费用格。
     /// </summary>
     private static void WriteCompletion(IXLWorksheet ws, IReadOnlyList<ZyqdCotractPiModel> rows)
     {
@@ -410,13 +430,12 @@ public class CotractPiExcelService
         var row = FindCompletionExcelRow(ws);
         if (row <= 0) return;
 
-        // H 列（Excel 第 8 列）。三套模板该格都是独立单元格，不取合并首格，
-        // 否则老模板里 F:J 合并时会把文字挪回 F 列。
-        var cell = ws.Cell(row, 8);
+        // A 列（Excel 第 1 列）。三套模板统一靠左显示。
+        var cell = ws.Cell(row, 1);
         cell.Style.NumberFormat.Format = "@";
         cell.SetValue("Estimated Time of Completion: " + text);
         cell.Style.Alignment.WrapText = false;
-        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
         cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
     }
 
@@ -780,8 +799,8 @@ public class CotractPiExcelService
     }
 
     /// <summary>
-    /// 报关 PI / 客户 CI：连续的同一来源客户 PI 为一组，组前插入一行显示 PI 号，
-    /// 方便一眼区分不同来源单。返回「明细起始行之前的额外行数」，供后续费用/付款行偏移使用。
+    /// 报关 PI / 客户 CI：连续的同一来源客户 PI 为一组。第一组写在表头行，
+    /// 后续组插单独一行显示，方便一眼区分不同来源单。
     /// </summary>
     private static List<(int Index, string Pi)> SourcePiGroups(
         IReadOnlyList<ZyqdCotractPiModel> rows, string? orderType)
@@ -802,16 +821,37 @@ public class CotractPiExcelService
         return result;
     }
 
+    /// <summary>第一组不占新增行，返回的才是真正插入的行数。</summary>
+    private static int InsertedPiRowCount(IReadOnlyCollection<(int Index, string Pi)> groups)
+        => groups.Count - (groups.Any(g => g.Index == 0) ? 1 : 0);
+
+    /// <summary>第一条来源 PI 直接写在表头行 B:H，不插新行。</summary>
+    private static void WriteHeaderPi(IXLWorksheet ws, int headerExcelRow, string pi)
+    {
+        var cell = ws.Cell(headerExcelRow, 2);
+        // A/B 之间的竖线明细行本来就有，表头行补上同样的左边框
+        var borderSource = ws.Cell(headerExcelRow + 1, 1);
+        cell.Style.Border.LeftBorder = borderSource.Style.Border.RightBorder;
+        cell.Style.Border.LeftBorderColor = borderSource.Style.Border.RightBorderColor;
+        cell.Style.NumberFormat.Format = "@";
+        cell.Value = "PI: " + pi;
+        cell.Style.Alignment.WrapText = false;
+        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+    }
+
     /// <summary>
-    /// 在明细块前插入一行 PI 分隔行，样式取自该组第一行，文字写在 B:H 合并格里。
+    /// 第二行及之后的来源 PI：写在 B:H 合并格里，合并区内及右端的竖线都不显示，
+    /// 只保留上下边线和左侧外框。
     /// </summary>
     private static void WriteSourcePiRow(
         IXLWorksheet ws, int excelRow, int prototypeExcelRow, string pi)
     {
+        const int startCol = 2;
         try
         {
-            ws.Range(prototypeExcelRow, 2, prototypeExcelRow, 8)
-                .CopyTo(ws.Cell(excelRow, 2));
+            ws.Range(prototypeExcelRow, startCol, prototypeExcelRow, 8)
+                .CopyTo(ws.Cell(excelRow, startCol));
         }
         catch
         {
@@ -821,27 +861,27 @@ public class CotractPiExcelService
         ws.Range(excelRow, 1, excelRow, 13).Clear(XLClearOptions.Contents);
         try
         {
-            ws.Range(excelRow, 2, excelRow, 8).Merge();
+            ws.Range(excelRow, startCol, excelRow, 8).Merge();
         }
         catch
         {
             // 已合并则跳过
         }
 
-        // 四边框照抄模板明细行 A 列的边框（同样的线型与颜色），
-        // 不手写黑色细线，否则比表格其它线明显更粗更黑。
-        var borderSource = ws.Cell(prototypeExcelRow, 1);
         var bottomSource = ws.Cell(prototypeExcelRow, 3);
-        for (var c = 2; c <= 8; c++)
+        for (var c = startCol; c <= 8; c++)
         {
             var target = ws.Cell(excelRow, c);
-            CopyBorderStyle(borderSource, target);
-            // A 列在这时没有被序号合并格包住，底边可能为空；用同排 C 格的底边补齐
+            CopyBorderStyle(ws.Cell(prototypeExcelRow, c), target);
             target.Style.Border.BottomBorder = bottomSource.Style.Border.BottomBorder;
             target.Style.Border.BottomBorderColor = bottomSource.Style.Border.BottomBorderColor;
+            if (c > startCol)
+                target.Style.Border.LeftBorder = XLBorderStyleValues.None;
+            // H/I 之间那条竖线也不要
+            target.Style.Border.RightBorder = XLBorderStyleValues.None;
         }
 
-        var cell = ws.Cell(excelRow, 2);
+        var cell = ws.Cell(excelRow, startCol);
         cell.Style.NumberFormat.Format = "@";
         cell.Value = "PI: " + pi;
         cell.Style.Alignment.WrapText = false;
@@ -850,13 +890,18 @@ public class CotractPiExcelService
         ws.Row(excelRow).Height = ws.Row(prototypeExcelRow).Height;
     }
 
+    /// <summary>
+    /// 把 Specs 按可见宽度拆成两行：第一行留在原 Specs 行，超出部分写到下方空白行。
+    /// 三个模板的 Specs 区都是 B:H 合并（约 66~71 个 Excel 列宽单位，实测可容纳
+    /// 约 105~110 个半角字符），阈值取 100 留余量，避免文字顶到 QTY 列被截断。
+    /// </summary>
     private static (string First, string Last) SplitSpecs(string? specs)
     {
         var content = Regex.Replace(specs ?? "", @"[\x00-\x1F\x7F]", "");
         var first = new StringBuilder();
         var last = new StringBuilder();
         var width = 0;
-        const int max = 170;
+        const int max = 100;
         foreach (var c in content)
         {
             var w = c > 127 ? 2 : 1;
