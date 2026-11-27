@@ -862,6 +862,7 @@
     private string _billClientNo = "";
     private string _lastBillFetched = "";
     private string _shipClientNo = "";
+    private string _lastShipFetched = "";
     private string _productClientNo = "";
     private int _shipIndex;
     private ZyqdCotractBaseModel? _selectedProduct;
@@ -1182,11 +1183,18 @@
         _billClientNo = _header.ClientNo ?? "";
         _lastBillFetched = CotractPiTypes.NormalizeClientNo(_billClientNo);
         _shipClientNo = _header.ClientNo ?? "";
+        _lastShipFetched = CotractPiTypes.NormalizeClientNo(_shipClientNo);
         _productClientNo = _header.ClientNo ?? "";
         _billDate = ParseDate(_header.BILL_TO_DATE) ?? DateTime.Today;
         _signDate = ParseDate(_header.var5);
         _etcDate = ParseDate(_header.var2);
-        _shipFeeAmt = double.TryParse(_header.var10, out var fee) && fee > 0 ? fee : null;
+        _shipFeeAmt = null;
+        if (CotractPiTypes.ShowShippingFee(_header.BILL_TO_FOB))
+        {
+            var fee = 0.0;
+            if (double.TryParse(_header.var10, out fee) && fee > 0)
+                _shipFeeAmt = fee;
+        }
         _insFeeAmt = CotractPiTypes.ShowInsurance(_header.BILL_TO_FOB)
                      && _header.Insurance_premium > 0
             ? _header.Insurance_premium
@@ -1354,12 +1362,26 @@
 
     private void OnNativeShipFee(ChangeEventArgs e)
     {
-        if (TryNum(e, out var n)) OnShipFeeChanged(n);
+        if (TryNum(e, out var n))
+        {
+            OnShipFeeChanged(n);
+            return;
+        }
+        // 用户清空运费时同步置空，保存校验才能拦住。
+        _shipFeeAmt = null;
+        RecalcTotals();
     }
 
     private void OnNativeInsurance(ChangeEventArgs e)
     {
-        if (TryNum(e, out var n)) OnInsuranceChanged(n);
+        if (TryNum(e, out var n))
+        {
+            OnInsuranceChanged(n);
+            return;
+        }
+        // 用户清空保险费时同步置空，保存校验才能拦住。
+        _insFeeAmt = null;
+        RecalcTotals();
     }
 
     private void OnNativeRatio(ChangeEventArgs e)
@@ -1475,10 +1497,14 @@
         var no = string.IsNullOrWhiteSpace(_shipClientNo) ? _billClientNo : _shipClientNo;
         no = CotractPiTypes.NormalizeClientNo(no);
         _shipClientNo = no;
+        var shipChanged = !string.Equals(no, _lastShipFetched, StringComparison.OrdinalIgnoreCase);
+        _lastShipFetched = no;
         if (no.Length == 0)
         {
             _shipOptions = [];
             _shipIndex = 0;
+            if (shipChanged)
+                _header.BILL_TO_PO_REF = "";
             return (false, 0, null);
         }
         try
@@ -1500,6 +1526,8 @@
             }
 
             _shipIndex = 0;
+            if (shipChanged)
+                _header.BILL_TO_PO_REF = "";
             ApplyShip(_shipOptions[0]);
             if (notify)
                 Notify.Show($"已获取收货地址 {_shipOptions.Count} 条", Severity.Success);
@@ -1531,9 +1559,14 @@
 
     private void OnShipIndexChanged(int idx)
     {
+        if (idx == _shipIndex) return;
         _shipIndex = idx;
         if (idx >= 0 && idx < _shipOptions.Count)
+        {
+            // 收货方换了，原收货方对应的 PO 号不再适用，必须重新填写。
+            _header.BILL_TO_PO_REF = "";
             ApplyShip(_shipOptions[idx]);
+        }
     }
 
     private void ApplyShip(CrmClientDto data)
@@ -1645,19 +1678,12 @@
         var v = (Conv(e) ?? "").Trim();
         _header.BILL_TO_FOB = v.Length == 0 ? null : v;
 
-        // 贸易方式变了：不再适用的费用清掉，避免旧值残留；
-        // 适用的费用保留用户已填的值，不主动写 0。
-        var fees = CotractPiTypes.ResolveFeeVisibility(_header.BILL_TO_FOB);
-        if (!fees.Ship)
-        {
-            _shipFeeAmt = null;
-            _header.var10 = "";
-        }
-        if (!fees.Insure)
-        {
-            _insFeeAmt = null;
-            _header.Insurance_premium = 0;
-        }
+        // 贸易方式变了：运费和保险费都按新方式重新手动填写。
+        // 不能沿用旧方式下隐藏的历史金额，也不主动写 0。
+        _shipFeeAmt = null;
+        _insFeeAmt = null;
+        _header.var10 = "";
+        _header.Insurance_premium = 0;
         RecalcTotals();
     }
 
@@ -1819,19 +1845,8 @@
         _header.var11 = "报关PI";
         _header.Cotract_PI_type = CotractPiTypes.ResolveTemplateType(_header.var6, _header.ClientNo);
         CotractPiTypes.ApplyCustomsPartyOverrides(_header, forceCustoms: true);
-        if (CotractPiTypes.IsJsConsignmentOrder(_header.var6))
-        {
-            // 寄售报关 PI 名称段 = JS21(原客户 PI 真实客户名)，用 ClientName_old 而非可能已被覆盖的 ClientName
-            _header.INVOICE_NO = await CotractPi.BuildInvoiceNoAsync(
-                _header.ClientNo,
-                _header.ClientName_old,
-                _header.var6,
-                _header.DocumentGuid);
-        }
-        else
-        {
-            _header.INVOICE_NO = CotractPiTypes.ApplyInvoicePrefix(_header.INVOICE_NO, _header.var6);
-        }
+        // 报关 PI 按自己的单据类型重新取名，源客户 PI 号只留在 var13/var15 供查看。
+        await RefreshInvoiceNoAsync(force: true);
 
         _invoiceEdited = false;
         RecalcTotals();

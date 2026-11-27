@@ -54,7 +54,8 @@ public class CotractPiExcelService
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
-        return EmbedFormulaCachedValues(ms.ToArray(), _formulaCache);
+        var bytes = EmbedFormulaCachedValues(ms.ToArray(), _formulaCache);
+        return RestoreImageRotation(bytes, path);
     }
 
     private static void ApplyInvoiceTitle(IXLWorksheet ws, bool english, string? orderType)
@@ -437,6 +438,7 @@ public class CotractPiExcelService
         cell.Style.Alignment.WrapText = false;
         cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
         cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        cell.Style.Font.FontColor = XLColor.Black;
     }
 
     private static int FindCompletionExcelRow(IXLWorksheet ws)
@@ -757,6 +759,126 @@ public class CotractPiExcelService
         doc.Save(w);
     }
 
+    private static bool IsDrawingXml(string name)
+        => name.StartsWith("xl/drawings/drawing", StringComparison.OrdinalIgnoreCase)
+           && name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+           && !name.Contains("/_rels/", StringComparison.OrdinalIgnoreCase);
+
+    private static string DrawingRelsName(string drawingName)
+    {
+        var slash = drawingName.LastIndexOf('/');
+        var dir = slash >= 0 ? drawingName[..slash] : "";
+        var file = slash >= 0 ? drawingName[(slash + 1)..] : drawingName;
+        return $"{dir}/_rels/{file}.rels";
+    }
+
+    private static Dictionary<string, string> ReadDrawingRels(ZipArchive zip, string relsName)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var entry = zip.GetEntry(relsName);
+        if (entry is null) return result;
+        XDocument doc;
+        using (var s = entry.Open())
+            doc = XDocument.Load(s);
+        XNamespace pkg = "http://schemas.openxmlformats.org/package/2006/relationships";
+        foreach (var rel in doc.Descendants(pkg + "Relationship"))
+        {
+            var id = (string?)rel.Attribute("Id");
+            var target = (string?)rel.Attribute("Target");
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(target))
+                result[id] = target;
+        }
+        return result;
+    }
+
+    private static Dictionary<string, string> ReadTemplateImageRotations(string templatePath)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var fs = new FileStream(templatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
+        XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+        foreach (var entry in zip.Entries.Where(e => IsDrawingXml(e.FullName)))
+        {
+            var rels = ReadDrawingRels(zip, DrawingRelsName(entry.FullName));
+            if (rels.Count == 0) continue;
+            XDocument doc;
+            using (var s = entry.Open())
+                doc = XDocument.Load(s);
+            foreach (var pic in doc.Descendants(xdr + "pic"))
+            {
+                var embed = (string?)pic.Descendants(a + "blip").FirstOrDefault()?.Attribute(r + "embed");
+                if (string.IsNullOrWhiteSpace(embed) || !rels.TryGetValue(embed, out var target))
+                    continue;
+                var rot = (string?)pic.Descendants(a + "xfrm").FirstOrDefault()?.Attribute("rot");
+                if (!string.IsNullOrWhiteSpace(rot))
+                    result[target] = rot;
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// ClosedXML 0.105 保存图片时会丢掉模板 a:xfrm/@rot（印章角度）。
+    /// 按图片资源路径把模板里的 rot 补回导出文件，避免导出后印章角度变化。
+    /// </summary>
+    private static byte[] RestoreImageRotation(byte[] xlsx, string templatePath)
+    {
+        if (xlsx.Length == 0) return xlsx;
+        try
+        {
+            var rotations = ReadTemplateImageRotations(templatePath);
+            if (rotations.Count == 0) return xlsx;
+
+            using var output = new MemoryStream();
+            output.Write(xlsx);
+            output.Position = 0;
+            using (var zip = new ZipArchive(output, ZipArchiveMode.Update, leaveOpen: true))
+            {
+                XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+                XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+                XNamespace r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+                foreach (var name in zip.Entries.Where(e => IsDrawingXml(e.FullName)).Select(e => e.FullName).ToList())
+                {
+                    var rels = ReadDrawingRels(zip, DrawingRelsName(name));
+                    if (rels.Count == 0) continue;
+                    var entry = zip.GetEntry(name);
+                    if (entry is null) continue;
+                    XDocument doc;
+                    using (var s = entry.Open())
+                        doc = XDocument.Load(s);
+
+                    var changed = false;
+                    foreach (var pic in doc.Descendants(xdr + "pic"))
+                    {
+                        var embed = (string?)pic.Descendants(a + "blip").FirstOrDefault()?.Attribute(r + "embed");
+                        if (string.IsNullOrWhiteSpace(embed) || !rels.TryGetValue(embed, out var target))
+                            continue;
+                        if (!rotations.TryGetValue(target, out var rot))
+                            continue;
+                        var xfrm = pic.Descendants(a + "xfrm").FirstOrDefault();
+                        if (xfrm is null) continue;
+                        xfrm.SetAttributeValue("rot", rot);
+                        changed = true;
+                    }
+                    if (!changed) continue;
+                    entry.Delete();
+                    var neu = zip.CreateEntry(name);
+                    using var w = neu.Open();
+                    doc.Save(w);
+                }
+            }
+            return output.ToArray();
+        }
+        catch
+        {
+            return xlsx;
+        }
+    }
+
     private static double ParseNum(string? s)
         => double.TryParse(s, out var n) ? n : 0;
 
@@ -796,6 +918,7 @@ public class CotractPiExcelService
         cell.Value = "PI: " + source;
         cell.Style.Alignment.WrapText = false;
         cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+        cell.Style.Font.Bold = true;
     }
 
     /// <summary>
@@ -825,33 +948,29 @@ public class CotractPiExcelService
     private static int InsertedPiRowCount(IReadOnlyCollection<(int Index, string Pi)> groups)
         => groups.Count - (groups.Any(g => g.Index == 0) ? 1 : 0);
 
-    /// <summary>第一条来源 PI 直接写在表头行 B:H，不插新行。</summary>
+    /// <summary>第一条来源 PI 直接写在表头行 A 列，不插新行。</summary>
     private static void WriteHeaderPi(IXLWorksheet ws, int headerExcelRow, string pi)
     {
-        var cell = ws.Cell(headerExcelRow, 2);
-        // A/B 之间的竖线明细行本来就有，表头行补上同样的左边框
-        var borderSource = ws.Cell(headerExcelRow + 1, 1);
-        cell.Style.Border.LeftBorder = borderSource.Style.Border.RightBorder;
-        cell.Style.Border.LeftBorderColor = borderSource.Style.Border.RightBorderColor;
+        var cell = ws.Cell(headerExcelRow, 1);
         cell.Style.NumberFormat.Format = "@";
         cell.Value = "PI: " + pi;
         cell.Style.Alignment.WrapText = false;
         cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
         cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        cell.Style.Font.Bold = true;
     }
 
     /// <summary>
-    /// 第二行及之后的来源 PI：写在 B:H 合并格里，合并区内及右端的竖线都不显示，
+    /// 第二行及之后的来源 PI：写在 A 列，靠左加粗；A:H 内不显示竖线，
     /// 只保留上下边线和左侧外框。
     /// </summary>
     private static void WriteSourcePiRow(
         IXLWorksheet ws, int excelRow, int prototypeExcelRow, string pi)
     {
-        const int startCol = 2;
         try
         {
-            ws.Range(prototypeExcelRow, startCol, prototypeExcelRow, 8)
-                .CopyTo(ws.Cell(excelRow, startCol));
+            ws.Range(prototypeExcelRow, 2, prototypeExcelRow, 8)
+                .CopyTo(ws.Cell(excelRow, 2));
         }
         catch
         {
@@ -859,34 +978,31 @@ public class CotractPiExcelService
         }
 
         ws.Range(excelRow, 1, excelRow, 13).Clear(XLClearOptions.Contents);
-        try
-        {
-            ws.Range(excelRow, startCol, excelRow, 8).Merge();
-        }
-        catch
-        {
-            // 已合并则跳过
-        }
 
         var bottomSource = ws.Cell(prototypeExcelRow, 3);
-        for (var c = startCol; c <= 8; c++)
+        var first = ws.Cell(excelRow, 1);
+        CopyBorderStyle(ws.Cell(prototypeExcelRow, 1), first);
+        first.Style.Border.BottomBorder = bottomSource.Style.Border.BottomBorder;
+        first.Style.Border.BottomBorderColor = bottomSource.Style.Border.BottomBorderColor;
+        first.Style.Border.RightBorder = XLBorderStyleValues.None;
+
+        for (var c = 2; c <= 8; c++)
         {
             var target = ws.Cell(excelRow, c);
             CopyBorderStyle(ws.Cell(prototypeExcelRow, c), target);
             target.Style.Border.BottomBorder = bottomSource.Style.Border.BottomBorder;
             target.Style.Border.BottomBorderColor = bottomSource.Style.Border.BottomBorderColor;
-            if (c > startCol)
-                target.Style.Border.LeftBorder = XLBorderStyleValues.None;
+            target.Style.Border.LeftBorder = XLBorderStyleValues.None;
             // H/I 之间那条竖线也不要
             target.Style.Border.RightBorder = XLBorderStyleValues.None;
         }
 
-        var cell = ws.Cell(excelRow, startCol);
-        cell.Style.NumberFormat.Format = "@";
-        cell.Value = "PI: " + pi;
-        cell.Style.Alignment.WrapText = false;
-        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
-        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        first.Style.NumberFormat.Format = "@";
+        first.Value = "PI: " + pi;
+        first.Style.Alignment.WrapText = false;
+        first.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+        first.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        first.Style.Font.Bold = true;
         ws.Row(excelRow).Height = ws.Row(prototypeExcelRow).Height;
     }
 

@@ -177,21 +177,15 @@ public class CotractPiService
             if (percent <= 0) percent = 1;
         }
 
-        string? customsInvoice = null;
-        if (!isCi && CotractPiTypes.IsJsConsignmentOrder(targetType))
-        {
-            // 寄售报关 PI 名称段 = JS21(原客户 PI 的真实客户名)，由 InvoiceNamePart 动态拼接
-            customsInvoice = await BuildInvoiceNoAsync(
-                rows[0].ClientNo,
-                rows[0].ClientName,
-                targetType,
-                excludeDocumentGuid: null,
-                ct);
-        }
-        else if (!isCi && unique.Count > 1)
-        {
-            customsInvoice = CotractPiTypes.ApplyInvoicePrefix(unique[0].INVOICE_NO, targetType);
-        }
+        // 客户CI/报关PI按自己的单据类型重新取名，不沿用源客户PI的发票号。
+        // 源单号只写入 var13/var15 供查看，不参与取名；寄售报关 PI 的名称段
+        // 仍由 InvoiceNamePart 按 JS21(真实客户名) 动态拼接。
+        var derivedInvoice = await BuildInvoiceNoAsync(
+            rows[0].ClientNo,
+            rows[0].ClientName,
+            targetType,
+            excludeDocumentGuid: null,
+            ct);
 
         string? mergedPo = null;
         if (!isCi && unique.Count > 1)
@@ -230,14 +224,8 @@ public class CotractPiService
             row.percent = percent;
             row.Cotract_PI_type = CotractPiTypes.ResolveTemplateType(targetType, row.ClientNo);
             if (!isCi)
-            {
                 CotractPiTypes.ApplyCustomsPartyOverrides(row);
-                row.INVOICE_NO = customsInvoice ?? CotractPiTypes.ApplyInvoicePrefix(row.INVOICE_NO, targetType);
-            }
-            else
-            {
-                row.INVOICE_NO = CotractPiTypes.ApplyInvoicePrefix(row.INVOICE_NO, targetType);
-            }
+            row.INVOICE_NO = derivedInvoice;
         }
 
         return (rows, null);
